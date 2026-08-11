@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="The Argonauts">
 <title>The Argonauts - BNI Ahmedabad</title>
 <script src="/config.js"></script>
+<script src="/vendor/exceljs.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
@@ -3014,23 +3015,23 @@ function renderUpload(){
     <div class="card"><div class="card-t">Region Membership Dues Report</div>
       <div class="dropz" onclick="document.getElementById('duesFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">ðŸ“„</div>
-        <div style="font-size:14px;font-weight:600;">Upload Region Membership Dues .xls</div>
-        <div class="tm mt2">Auto-filters to your 9 chapters</div>
+        <div style="font-size:14px;font-weight:600;">Upload Members Due Excel</div>
+        <div class="tm mt2">Supports .xlsx, with legacy .xls XML fallback</div>
         <input type="file" id="duesFile" accept=".xls,.xlsx" onchange="handleDuesUpload(this)">
       </div><div id="duesStatus" class="tm mt2"></div>
     </div>
     <div class="card"><div class="card-t">Traffic Light Report</div>
       <div class="dropz" onclick="document.getElementById('tlrFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">ðŸš¦</div>
-        <div style="font-size:14px;font-weight:600;">Upload Traffic Light Report .xls</div>
-        <div class="tm mt2">Upload East or Atilius separately â€” merges automatically</div>
-        <input type="file" id="tlrFile" accept=".xls,.xlsx" onchange="handleTLRUpload(this)">
+        <div style="font-size:14px;font-weight:600;">Upload Traffic Light Report PDF</div>
+        <div class="tm mt2">PDF rows merge with existing chapter scores automatically</div>
+        <input type="file" id="tlrFile" accept=".pdf" onchange="handleTLRUpload(this)">
       </div><div id="tlrStatus" class="tm mt2"></div>
     </div>
     <div class="card"><div class="card-t">ðŸ¥‹ Length of Membership Report (Miyagi Sync)</div>
       <div class="dropz" onclick="document.getElementById('lomFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">ðŸ“</div>
-        <div style="font-size:14px;font-weight:600;">Upload Region Length of Membership Report .xls</div>
+        <div style="font-size:14px;font-weight:600;">Upload Miyagi / 1YRC Excel</div>
         <div class="tm mt2">Auto-adds members under 12 months, auto-graduates at 12mo, auto-drops if missing from reports</div>
         <input type="file" id="lomFile" accept=".xls,.xlsx" onchange="handleLOMUpload(this)">
       </div><div id="lomStatus" class="tm mt2"></div>
@@ -3049,56 +3050,266 @@ function renderUpload(){
     </div>`:''}`;
 }
 
-function handleDuesUpload(input){
+function uploadScopeChapters(){
+  var scoped=(typeof myChapters==='function'?myChapters():[]).filter(Boolean);
+  if(scoped.length)return scoped;
+  return S.chapters&&S.chapters.length?S.chapters.map(function(c){return c.name;}):MY_CHAPTERS;
+}
+
+function reportChapterNames(){
+  return S.chapters&&S.chapters.length?S.chapters.map(function(c){return c.name;}):MY_CHAPTERS;
+}
+
+function cleanCellValue(v){
+  if(v===null||v===undefined)return'';
+  if(v instanceof Date)return toIsoDate(v);
+  if(typeof v==='object'){
+    if(v.text!==undefined)return cleanCellValue(v.text);
+    if(v.result!==undefined)return cleanCellValue(v.result);
+    if(v.richText)return v.richText.map(function(x){return x.text||'';}).join('');
+    if(v.hyperlink&&v.text)return cleanCellValue(v.text);
+  }
+  return String(v).replace(/\s+/g,' ').trim();
+}
+
+function normalizeHeader(v){
+  return cleanCellValue(v).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function decodeXmlText(v){
+  return String(v||'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+}
+
+function toIsoDate(v){
+  if(!v)return'';
+  if(v instanceof Date&&!isNaN(v.getTime())){
+    return new Date(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())).toISOString().split('T')[0];
+  }
+  if(typeof v==='number'&&!isNaN(v)){
+    var dNum=new Date(Math.round((v-25569)*86400*1000));
+    return dNum.toISOString().split('T')[0];
+  }
+  var s=cleanCellValue(v);
+  if(!s)return'';
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.split('T')[0];
+  var m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){
+    var yr=m[3].length===2?'20'+m[3]:m[3];
+    return yr+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  }
+  var months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',sept:'09',oct:'10',nov:'11',dec:'12'};
+  m=s.toLowerCase().match(/^(\d{1,2})\s+([a-z]{3,9})\s+(\d{2,4})$/);
+  if(m){
+    var yr2=m[3].length===2?'20'+m[3]:m[3];
+    var mon=months[m[2].slice(0,3)]||months[m[2]];
+    if(mon)return yr2+'-'+mon+'-'+m[1].padStart(2,'0');
+  }
+  var parsed=new Date(s);
+  if(!isNaN(parsed.getTime()))return parsed.toISOString().split('T')[0];
+  return s;
+}
+
+async function readExcelRows(file){
+  if(!window.ExcelJS)throw new Error('Excel parser did not load');
+  var buf=await file.arrayBuffer();
+  var wb=new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  var ws=wb.worksheets[0];
+  if(!ws)throw new Error('No worksheet found');
+  var rows=[];
+  var colCount=ws.actualColumnCount||ws.columnCount||20;
+  ws.eachRow({includeEmpty:false},function(row){
+    var cells=[];
+    for(var i=1;i<=colCount;i++)cells.push(cleanCellValue(row.getCell(i).value));
+    rows.push(cells);
+  });
+  return rows;
+}
+
+function readTextFile(file){
+  return new Promise(function(resolve,reject){
+    var r=new FileReader();
+    r.onload=function(e){resolve(e.target.result||'');};
+    r.onerror=function(){reject(r.error||new Error('Could not read file'));};
+    r.readAsText(file);
+  });
+}
+
+async function readPdfText(file){
+  var pdfjs=window.pdfjsLib;
+  if(!pdfjs){
+    pdfjs=await import('/vendor/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdf.worker.min.mjs';
+    window.pdfjsLib=pdfjs;
+  }
+  var data=new Uint8Array(await file.arrayBuffer());
+  var pdf=await pdfjs.getDocument({data:data}).promise;
+  var lines=[];
+  for(var p=1;p<=pdf.numPages;p++){
+    var page=await pdf.getPage(p);
+    var text=await page.getTextContent();
+    var items=text.items.map(function(it){
+      return{x:it.transform[4],y:Math.round(it.transform[5]),str:it.str};
+    }).filter(function(it){return it.str&&it.str.trim();});
+    items.sort(function(a,b){return b.y-a.y||a.x-b.x;});
+    var groups=[];
+    items.forEach(function(it){
+      var g=groups.find(function(row){return Math.abs(row.y-it.y)<=3;});
+      if(!g){g={y:it.y,items:[]};groups.push(g);}
+      g.items.push(it);
+    });
+    groups.sort(function(a,b){return b.y-a.y;}).forEach(function(g){
+      g.items.sort(function(a,b){return a.x-b.x;});
+      lines.push(g.items.map(function(it){return it.str.trim();}).join(' ').replace(/\s+/g,' ').trim());
+    });
+  }
+  return lines.join('\n');
+}
+
+function findHeaderRow(rows,words){
+  for(var i=0;i<Math.min(rows.length,40);i++){
+    var hs=rows[i].map(normalizeHeader);
+    var matches=words.filter(function(w){return hs.some(function(h){return h.indexOf(w)>=0;});}).length;
+    if(matches>=Math.min(2,words.length))return i;
+  }
+  return -1;
+}
+
+function colIndex(headers,candidates){
+  var hs=headers.map(normalizeHeader);
+  for(var c=0;c<candidates.length;c++){
+    var needle=normalizeHeader(candidates[c]);
+    var idx=hs.findIndex(function(h){return h===needle||h.indexOf(needle)>=0||needle.indexOf(h)>=0&&h.length>2;});
+    if(idx>=0)return idx;
+  }
+  return -1;
+}
+
+function cellAt(row,idx){return idx>=0?cleanCellValue(row[idx]):'';}
+
+function matchChapterName(raw){
+  var s=cleanCellValue(raw).split('>').pop().replace(/^BNI\s+/i,'').trim();
+  var lc=s.toLowerCase();
+  var found=reportChapterNames().find(function(ch){
+    var c=ch.toLowerCase();
+    return lc===c||lc.indexOf(c)>=0||c.indexOf(lc)>=0;
+  });
+  return found||s;
+}
+
+function filterRowsToScope(rows){
+  var scope=uploadScopeChapters();
+  return rows.filter(function(m){
+    return scope.some(function(ch){
+      var a=(m.chapter||'').toLowerCase(),b=ch.toLowerCase();
+      return a===b||a.indexOf(b)>=0||b.indexOf(a)>=0;
+    });
+  }).map(function(m){
+    var match=scope.find(function(ch){
+      var a=(m.chapter||'').toLowerCase(),b=ch.toLowerCase();
+      return a===b||a.indexOf(b)>=0||b.indexOf(a)>=0;
+    });
+    if(match)m.chapter=match;
+    return m;
+  });
+}
+
+async function handleDuesUpload(input){
   const file=input.files[0];if(!file)return;
-  const st=document.getElementById('duesStatus');st.textContent='â³ Parsing...';
-  const r=new FileReader();
-  r.onload=async e=>{
-    const members=parseDues(e.target.result);
-    const filtered=members.filter(m=>MY_CHAPTERS.some(ch=>m.chapter.toLowerCase().includes(ch.toLowerCase())||ch.toLowerCase()===m.chapter.toLowerCase()));
-    filtered.forEach(m=>{const match=MY_CHAPTERS.find(ch=>m.chapter.toLowerCase().includes(ch.toLowerCase()));if(match)m.chapter=match;});
+  const st=document.getElementById('duesStatus');st.textContent='Parsing...';
+  try{
+    var members=[];
+    try{members=parseDuesRows(await readExcelRows(file));}
+    catch(xlsxErr){members=parseDuesLegacy(await readTextFile(file));}
+    const filtered=filterRowsToScope(members).filter(function(m){return m.name&&m.chapter&&m.dueDate;});
     try{await db.collection('meta').doc('dues').set({members:filtered,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
       logActivity('dues_report_uploaded',{memberCount:filtered.length});
-      st.textContent=`âœ… ${filtered.length} members across ${[...new Set(filtered.map(m=>m.chapter))].length} chapters synced`;toast('Dues synced');}
+      st.textContent=`Uploaded ${filtered.length} members across ${[...new Set(filtered.map(m=>m.chapter))].length} chapters`;toast('Dues synced');}
     catch(err){st.textContent='âŒ '+err.message;}
-  };r.readAsText(file);
+  }catch(err){st.textContent='Could not parse dues report: '+err.message;}
 }
-function parseDues(text){
+
+function parseDuesRows(rows){
+  var members=[];
+  var hi=findHeaderRow(rows,['chapter','name','due']);
+  if(hi>=0){
+    var h=rows[hi];
+    var iChapter=colIndex(h,['Chapter Name','Chapter']);
+    var iFirst=colIndex(h,['First Name','First']);
+    var iLast=colIndex(h,['Last Name','Last']);
+    var iName=colIndex(h,['Member Name','Member','Name']);
+    var iIndustry=colIndex(h,['Industry','Classification','Category','Profession']);
+    var iType=colIndex(h,['Membership Type','Member Type','Type']);
+    var iStatus=colIndex(h,['Status']);
+    var iDue=colIndex(h,['Renewal Due','Due Date','Renewal Date','Expiry Date','Paid Through','Membership Due']);
+    rows.slice(hi+1).forEach(function(row){
+      var chapter=matchChapterName(cellAt(row,iChapter));
+      var name=iName>=0?cellAt(row,iName):(cellAt(row,iFirst)+' '+cellAt(row,iLast)).trim();
+      var status=cellAt(row,iStatus)||'Active';
+      var dueDate=toIsoDate(cellAt(row,iDue));
+      if(chapter&&name&&dueDate&&(iStatus<0||/active/i.test(status))){
+        members.push({chapter:chapter,name:name,industry:cellAt(row,iIndustry),type:cellAt(row,iType),status:status,dueDate:dueDate});
+      }
+    });
+    return members;
+  }
+  rows.forEach(function(cells){
+    if(cells[0]&&cells[0].indexOf('>')>=0&&cells[5]==='Active'&&cells[6]){
+      members.push({chapter:matchChapterName(cells[0]),name:(cells[1]+' '+cells[2]).trim(),industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
+    }
+  });
+  return members;
+}
+
+function parseDuesLegacy(text){
   const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];const members=[];
   rows.forEach(row=>{
-    const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(m=>m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim());
+    const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(m=>decodeXmlText(m[1]));
     if(!cells.length)return;
     if(cells[0]&&cells[0].includes('>')&&cells[5]==='Active'&&cells[6]){
-      const chapterRaw=cells[0].split('>').pop().trim().replace(/^BNI\s+/i,'');
       const name=(cells[1]+' '+cells[2]).trim();
-      members.push({chapter:chapterRaw,name,industry:cells[3],type:cells[4],status:cells[5],dueDate:(function(d){
-        if(!d)return'';
-        // Handle ISO: 2026-07-01T... -> 2026-07-01
-        if(d.match(/^\d{4}-\d{2}-\d{2}/))return d.split('T')[0];
-        // Handle human: 1 Jul 2026 -> 2026-07-01
-        var months={Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-        var parts=d.trim().split(' ');
-        if(parts.length>=3){var day=parts[0].padStart(2,'0');var mon=months[parts[1]]||'01';var yr=parts[2];return yr+'-'+mon+'-'+day;}
-        return d;
-      })(cells[6])});
+      members.push({chapter:matchChapterName(cells[0]),name,industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
     }
   });return members;
 }
-function handleTLRUpload(input){
+
+async function handleTLRUpload(input){
   const file=input.files[0];if(!file)return;
-  const st=document.getElementById('tlrStatus');st.textContent='â³ Parsing...';
-  const r=new FileReader();
-  r.onload=async e=>{
-    const newRows=parseTLR(e.target.result);
+  const st=document.getElementById('tlrStatus');st.textContent='Parsing PDF...';
+  try{
+    const newRows=parseTLRText(await readPdfText(file));
+    if(!newRows.length)throw new Error('No chapter rows found in PDF');
     const merged=[...S.tlrData];
     newRows.forEach(nr=>{const idx=merged.findIndex(er=>er.name.toLowerCase()===nr.name.toLowerCase()||nr.name.toLowerCase().includes(er.name.toLowerCase().replace('bni ',''))||er.name.toLowerCase().includes(nr.name.toLowerCase().replace('bni ','')));if(idx>=0)merged[idx]=nr;else merged.push(nr);});
     try{await db.collection('meta').doc('tlr').set({rows:merged,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
       logActivity('tlr_report_uploaded',{chaptersUpdated:newRows.length});
-      st.textContent=`âœ… ${newRows.length} chapters updated, ${merged.length} total`;toast('TLR merged & synced');}
+      st.textContent=`Uploaded ${newRows.length} chapters, ${merged.length} total`;toast('TLR merged & synced');}
     catch(err){st.textContent='âŒ '+err.message;}
-  };r.readAsText(file);
+  }catch(err){st.textContent='Could not parse TLR PDF: '+err.message;}
 }
-function parseTLR(text){const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];const results=[];let hdr=false;rows.forEach(row=>{const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(m=>m[1].trim());if(!cells.length)return;if(cells[0]==='Chapter Name'){hdr=true;return;}if(hdr&&cells[0]&&cells.length>=9)results.push({name:cells[0],chapterSize:cells[1],memberGrowth:cells[2],retention:cells[3],referrals:cells[4],visitors:cells[5],conversion:cells[6],absenteeism:cells[7],score:cells[8]});});return results;}
+
+function parseTLRText(text){
+  var lines=String(text||'').split(/\r?\n/).map(function(l){return l.replace(/\s+/g,' ').trim();}).filter(Boolean);
+  var chapters=reportChapterNames().sort(function(a,b){return b.length-a.length;});
+  var results=[];
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i];
+    var chapter=chapters.find(function(ch){return line.toLowerCase().indexOf(ch.toLowerCase())>=0;});
+    if(!chapter)continue;
+    var combined=line;
+    var nums=(combined.match(/[-+]?\d+(?:\.\d+)?%?/g)||[]);
+    for(var j=1;j<=2&&nums.length<8&&lines[i+j];j++){
+      combined+=' '+lines[i+j];
+      nums=(combined.match(/[-+]?\d+(?:\.\d+)?%?/g)||[]);
+    }
+    nums=nums.map(function(n){return n.replace('%','');}).filter(function(n){return n!=='';});
+    if(nums.length<8)continue;
+    nums=nums.slice(-8);
+    if(results.some(function(r){return r.name===chapter;}))continue;
+    results.push({name:chapter,chapterSize:nums[0],memberGrowth:nums[1],retention:nums[2],referrals:nums[3],visitors:nums[4],conversion:nums[5],absenteeism:nums[6],score:nums[7]});
+  }
+  return results;
+}
 
 async function importHistorical(){
   const btn=document.getElementById('importBtn');const st=document.getElementById('importStatus');
@@ -4621,48 +4832,125 @@ function miyagiId(chapter,name){
 
 function parseLengthMonths(s){
   if(!s)return null;
+  if(typeof s==='number'&&!isNaN(s))return Math.round(s);
+  s=String(s).toLowerCase();
   var m=/(\d+)\s*years?\s*\((\d+)\s*months?\)/.exec(s);
   if(m)return parseInt(m[1])*12+parseInt(m[2]);
+  m=/(\d+)\s*years?\s*(?:and\s*)?(\d+)?\s*months?/.exec(s);
+  if(m)return parseInt(m[1])*12+(parseInt(m[2]||'0')||0);
+  m=/(\d+)\s*months?/.exec(s);
+  if(m)return parseInt(m[1]);
   return null;
 }
 
+function monthsSinceDate(s){
+  var iso=toIsoDate(s);
+  if(!iso||!/^\d{4}-\d{2}-\d{2}$/.test(iso))return null;
+  var start=new Date(iso+'T00:00:00');
+  var today=new Date(new Date().toISOString().split('T')[0]+'T00:00:00');
+  if(isNaN(start.getTime()))return null;
+  var months=(today.getFullYear()-start.getFullYear())*12+(today.getMonth()-start.getMonth());
+  if(today.getDate()<start.getDate())months--;
+  return Math.max(0,months);
+}
+
 // â”€â”€ LENGTH OF MEMBERSHIP REPORT UPLOAD & PARSE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function handleLOMUpload(input){
+async function handleLOMUpload(input){
   const file=input.files[0];if(!file)return;
-  const st=document.getElementById('lomStatus');if(st)st.textContent='â³ Parsing...';
-  const r=new FileReader();
-  r.onload=async function(e){
-    const rows=parseLOM(e.target.result);
+  const st=document.getElementById('lomStatus');if(st)st.textContent='Parsing...';
+  try{
+    var rows=[];
+    try{rows=parseLOMRows(await readExcelRows(file));}
+    catch(xlsxErr){rows=parseLOMLegacy(await readTextFile(file));}
+    rows=filterRowsToScope(rows).filter(function(r){return r.chapter&&r.name;});
     try{
       await db.collection('meta').doc('lengthOfMembership').set({rows:rows,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
       S.lomData=rows;
       logActivity('length_of_membership_uploaded',{memberCount:rows.length});
-      if(st)st.textContent='âœ… '+rows.length+' members parsed';
+      if(st)st.textContent='Uploaded '+rows.length+' members';
       toast('Length of Membership synced');
       await syncMiyagiMembers(rows);
     }catch(err){if(st)st.textContent='âŒ '+err.message;}
-  };
-  r.readAsText(file);
+  }catch(err){if(st)st.textContent='Could not parse Miyagi report: '+err.message;}
 }
 
-function parseLOM(text){
-  const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];
-  const results=[];let hdr=false;
-  rows.forEach(function(row){
-    const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(function(m){return m[1].trim();});
-    if(!cells.length)return;
-    if(cells[0]==='Chapter Name'){hdr=true;return;}
-    if(hdr&&cells.length>=7&&cells[0]){
+function parseLOMRows(rows){
+  var results=[];
+  var hi=findHeaderRow(rows,['chapter','name','length']);
+  if(hi>=0){
+    var h=rows[hi];
+    var iChapter=colIndex(h,['Chapter Name','Chapter']);
+    var iFirst=colIndex(h,['First Name','First']);
+    var iLast=colIndex(h,['Last Name','Last']);
+    var iName=colIndex(h,['Member Name','Member','Name']);
+    var iCumLen=colIndex(h,['Cumulative Length','Total Length','Length of Membership']);
+    var iCumStart=colIndex(h,['Cumulative Start','Original Start','Start Date']);
+    var iRecentLen=colIndex(h,['Recent Length','Current Length','Membership Length','Length']);
+    var iRecentStart=colIndex(h,['Recent Start','Join Date','Renewal Start','Start Date']);
+    rows.slice(hi+1).forEach(function(row){
+      var chapter=matchChapterName(cellAt(row,iChapter));
+      var firstName=cellAt(row,iFirst);
+      var lastName=cellAt(row,iLast);
+      var name=iName>=0?cellAt(row,iName):(firstName+' '+lastName).trim();
+      var recentLength=cellAt(row,iRecentLen);
+      var recentStart=toIsoDate(cellAt(row,iRecentStart)||cellAt(row,iCumStart));
+      var recentMonths=parseLengthMonths(recentLength);
+      if(recentMonths===null)recentMonths=monthsSinceDate(recentStart);
+      if(chapter&&name){
+        results.push({
+          chapter:chapter,
+          firstName:firstName,
+          lastName:lastName,
+          name:name,
+          cumulativeLength:cellAt(row,iCumLen),
+          cumulativeStart:toIsoDate(cellAt(row,iCumStart)),
+          recentLength:recentLength,
+          recentStart:recentStart,
+          recentMonths:recentMonths
+        });
+      }
+    });
+    return results;
+  }
+  rows.forEach(function(cells){
+    if(cells.length>=7&&cells[0]&&normalizeHeader(cells[0])!=='chapter name'){
+      var recentStart=toIsoDate(cells[6]);
+      var recentMonths=parseLengthMonths(cells[5]);
+      if(recentMonths===null)recentMonths=monthsSinceDate(recentStart);
       results.push({
-        chapter:cells[0],
+        chapter:matchChapterName(cells[0]),
         firstName:cells[1],
         lastName:cells[2],
         name:(cells[1]+' '+cells[2]).trim(),
         cumulativeLength:cells[3],
-        cumulativeStart:cells[4]?cells[4].split('T')[0]:'',
+        cumulativeStart:toIsoDate(cells[4]),
         recentLength:cells[5],
-        recentStart:cells[6]?cells[6].split('T')[0]:'',
-        recentMonths:parseLengthMonths(cells[5])
+        recentStart:recentStart,
+        recentMonths:recentMonths
+      });
+    }
+  });
+  return results;
+}
+
+function parseLOMLegacy(text){
+  const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];
+  const results=[];let hdr=false;
+  rows.forEach(function(row){
+    const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(function(m){return decodeXmlText(m[1]);});
+    if(!cells.length)return;
+    if(cells[0]==='Chapter Name'){hdr=true;return;}
+    if(hdr&&cells.length>=7&&cells[0]){
+      results.push({
+        chapter:matchChapterName(cells[0]),
+        firstName:cells[1],
+        lastName:cells[2],
+        name:(cells[1]+' '+cells[2]).trim(),
+        cumulativeLength:cells[3],
+        cumulativeStart:toIsoDate(cells[4]),
+        recentLength:cells[5],
+        recentStart:toIsoDate(cells[6]),
+        recentMonths:parseLengthMonths(cells[5])!==null?parseLengthMonths(cells[5]):monthsSinceDate(cells[6])
       });
     }
   });
