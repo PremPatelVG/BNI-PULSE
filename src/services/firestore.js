@@ -1,7 +1,15 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../firebaseAdmin.js";
 
-const PUBLIC_MEMBER_FIELDS = ["name", "role", "chapter", "chapters"];
+const PUBLIC_MEMBER_FIELDS = [
+  "name",
+  "role",
+  "chapter",
+  "chapters",
+  "reportsTo",
+  "seniorDirectorId",
+  "areaDirectorId"
+];
 const META_DOCS = new Set([
   "branding",
   "chapterGoals",

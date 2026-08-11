@@ -12,7 +12,10 @@ function publicUser(id, data) {
     name: data.name,
     role: data.role,
     chapter: data.chapter || null,
-    chapters: data.chapters || []
+    chapters: data.chapters || [],
+    reportsTo: data.reportsTo || "",
+    seniorDirectorId: data.seniorDirectorId || "",
+    areaDirectorId: data.areaDirectorId || ""
   };
 }
 

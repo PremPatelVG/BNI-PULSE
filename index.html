@@ -174,7 +174,7 @@ textarea{resize:vertical;min-height:68px;}
 .s-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
 .s-row:last-child{border-bottom:none;}
 .role-tag{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700;}
-.role-tag.dc{background:#dbeafe;color:#1e40af;}.role-tag.sa{background:#dcfce7;color:#166534;}
+.role-tag.ad{background:#111827;color:#fff;}.role-tag.dc{background:#dbeafe;color:#1e40af;}.role-tag.cd{background:#dbeafe;color:#1e40af;}.role-tag.sa{background:#dcfce7;color:#166534;}
 .role-tag.viewer{background:#ede9fe;color:#5b21b6;}.role-tag.srdc{background:#fee2e2;color:#991b1b;}
 .dropz{border:2px dashed var(--border);border-radius:var(--r);padding:26px;text-align:center;cursor:pointer;transition:all .2s;}
 .dropz:hover{border-color:var(--navy);background:rgba(26,31,46,.03);}
@@ -239,7 +239,7 @@ textarea{resize:vertical;min-height:68px;}
     <div class="brand">
       <div class="b1">The <em>Argonauts</em></div>
       <div class="b2">BNI Ahmedabad</div>
-      <div class="b3">Senior Director Dashboard</div>
+      <div class="b3">Regional Leadership Dashboard</div>
     </div>
     <div class="fg"><label>Your Name</label>
       <select id="loginName"><option value="">â€” Select â€”</option></select>
@@ -397,28 +397,31 @@ async function seedData(){
     {name:'Lincoln',day:'Friday',tenure:'apr',order:9,target:55}
   ];
   const members=[
-    {name:'Heena Poriya',role:'dc',chapters:['Faustus','Crios'],chapter:'Faustus'},
+    {name:'Area Director 1',role:'ad',chapters:[],chapter:''},
+    {name:'Area Director 2',role:'ad',chapters:[],chapter:''},
+    {name:'Dinesh Sitlani',role:'srdc',chapters:['Faustus','Crios','Makarios','Atilius','Tyche','Obsidian','Ares','Prometheus','Lincoln'],chapter:'Faustus',reportsTo:'Area Director 1'},
+    {name:'Heena Poriya',role:'dc',chapters:['Faustus','Crios'],chapter:'Faustus',reportsTo:'Dinesh Sitlani'},
     {name:'Abhishek Sheth',role:'sa1',chapters:['Faustus'],chapter:'Faustus'},
     {name:'Harshil Shah',role:'sa2',chapters:['Faustus'],chapter:'Faustus'},
     {name:'Mitesh Patel',role:'sa1',chapters:['Crios'],chapter:'Crios'},
-    {name:'Anand Patel',role:'dc',chapters:['Makarios'],chapter:'Makarios'},
+    {name:'Anand Patel',role:'dc',chapters:['Makarios'],chapter:'Makarios',reportsTo:'Dinesh Sitlani'},
     {name:'Shreyas Kothari',role:'sa1',chapters:['Makarios'],chapter:'Makarios'},
     {name:'Ritesh Patel',role:'sa2',chapters:['Makarios'],chapter:'Makarios'},
-    {name:'Rrutul Shah',role:'dc',chapters:['Atilius'],chapter:'Atilius'},
+    {name:'Rrutul Shah',role:'dc',chapters:['Atilius'],chapter:'Atilius',reportsTo:'Dinesh Sitlani'},
     {name:'Harsh Vachhani',role:'sa1',chapters:['Atilius'],chapter:'Atilius'},
     {name:'Ravi Shah',role:'sa2',chapters:['Atilius'],chapter:'Atilius'},
-    {name:'Dr Vyomesh Shah',role:'dc',chapters:['Tyche'],chapter:'Tyche'},
+    {name:'Dr Vyomesh Shah',role:'dc',chapters:['Tyche'],chapter:'Tyche',reportsTo:'Dinesh Sitlani'},
     {name:'Karishma Shah',role:'sa1',chapters:['Tyche'],chapter:'Tyche'},
     {name:'Maunil Parikh',role:'sa2',chapters:['Tyche'],chapter:'Tyche'},
-    {name:'Dr Amit Patel',role:'dc',chapters:['Obsidian'],chapter:'Obsidian'},
+    {name:'Dr Amit Patel',role:'dc',chapters:['Obsidian'],chapter:'Obsidian',reportsTo:'Dinesh Sitlani'},
     {name:'Rohit Nair',role:'sa1',chapters:['Obsidian'],chapter:'Obsidian'},
-    {name:'Alpesh Shah',role:'dc',chapters:['Ares'],chapter:'Ares'},
+    {name:'Alpesh Shah',role:'dc',chapters:['Ares'],chapter:'Ares',reportsTo:'Dinesh Sitlani'},
     {name:'Divyang Adawadkar',role:'sa1',chapters:['Ares'],chapter:'Ares'},
     {name:'Ankit Karathia',role:'sa2',chapters:['Ares'],chapter:'Ares'},
-    {name:'Dinesh Sitlani',role:'dc',chapters:['Prometheus'],chapter:'Prometheus'},
+    {name:'Prometheus Chapter Director',role:'dc',chapters:['Prometheus'],chapter:'Prometheus',reportsTo:'Dinesh Sitlani'},
     {name:'Dr Rashmin Sadrani',role:'sa1',chapters:['Prometheus'],chapter:'Prometheus'},
     {name:'Jeet Shastri',role:'sa2',chapters:['Prometheus'],chapter:'Prometheus'},
-    {name:'Hardik Khamar',role:'dc',chapters:['Lincoln'],chapter:'Lincoln'},
+    {name:'Hardik Khamar',role:'dc',chapters:['Lincoln'],chapter:'Lincoln',reportsTo:'Dinesh Sitlani'},
     {name:'Parth Mandge',role:'sa1',chapters:['Lincoln'],chapter:'Lincoln'},
     {name:'Romit Nanavati',role:'sa2',chapters:['Lincoln'],chapter:'Lincoln'}
   ];
@@ -432,9 +435,9 @@ async function seedData(){
 async function buildLoginDD(){
   const snap=await db.collection('members').get();
   const sel=document.getElementById('loginName');
-  sel.innerHTML='<option value="">â€” Select Your Name â€”</option><option value="__srdc__">ðŸ‘‘ Dinesh Sitlani (Sr. DC)</option>';
+  sel.innerHTML='<option value="">-- Select Your Name --</option><option value="__srdc__">Dinesh Sitlani (Senior Director)</option>';
   const byChap={};
-  snap.forEach(d=>{const m={id:d.id,...d.data()};const ch=m.chapter||'Other';if(!byChap[ch])byChap[ch]=[];byChap[ch].push(m);});
+  snap.forEach(d=>{const m={id:d.id,...d.data()};const ch=m.chapter||(m.chapters&&m.chapters[0])||'Regional';if(!byChap[ch])byChap[ch]=[];byChap[ch].push(m);});
   Object.keys(byChap).sort().forEach(ch=>{
     const g=document.createElement('optgroup');g.label=ch;
     byChap[ch].forEach(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name+' ('+rl(m.role)+')';g.appendChild(o);});
@@ -463,7 +466,7 @@ async function doLogin(){
     const doc=await db.collection('members').doc(nv).get();
     if(!doc.exists||false && doc.data().pin!==pin){showLoginErr();return;}
     const m=doc.data();
-    S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter]};
+    S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
   }
   document.getElementById('loginPin').value='';
   document.getElementById('loginErr').classList.add('hidden');
@@ -484,10 +487,10 @@ function startApp(){
     }
   },100);
   const role=S.user.role;
-  const isSd=role==='srdc';
+  const isSd=['ad','srdc'].includes(role);
   const isViewer=role==='viewer';
-  const isDC=role==='dc'||role==='sa1'||role==='sa2';
-  document.getElementById('userChip').textContent=(isSd?'ðŸ‘‘ ':'')+S.user.name+' Â· Logout';
+  const isDC=['cd','dc','sa1','sa2'].includes(role);
+  document.getElementById('userChip').textContent=(isSd?'* ':'')+S.user.name+' - Logout';
   loadBranding();
   // Set active chapter for DC
   if(isDC) S.dcActiveChapter=S.user.chapters?.[0]||S.user.chapter;
@@ -499,9 +502,9 @@ function startApp(){
 
 function buildNav(){
   const role=S.user.role;
-  const isSd=role==='srdc';
+  const isSd=['ad','srdc'].includes(role);
   const isViewer=role==='viewer';
-  const isDC=['dc','sa1','sa2'].includes(role);
+  const isDC=['cd','dc','sa1','sa2'].includes(role);
   let tabs=[];
   if(isSd||isViewer){
     tabs=[
@@ -605,11 +608,16 @@ function popSelects(){
   if(mch2){mch2.innerHTML=S.chapters.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');}
 }
 
-function isSrdc(){return S.user?.role==='srdc';}
+function isAreaDirector(){return S.user?.role==='ad';}
+function isSeniorDirector(){return S.user?.role==='srdc';}
+function isSrdc(){return['ad','srdc'].includes(S.user?.role);}
 function isViewer(){return S.user?.role==='viewer';}
-function isDC(){return['dc','sa1','sa2'].includes(S.user?.role);}
+function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
+function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
+function roleClass(role){return role==='ad'?'ad':role==='srdc'?'srdc':isChapterDirectorRole(role)?'dc':role==='viewer'?'viewer':'sa';}
 function myChapters(){
-  if(isSrdc()||isViewer())return S.chapters.map(c=>c.name);
+  if(isAreaDirector()||isViewer())return S.chapters.map(c=>c.name);
+  if(isSeniorDirector())return S.user?.chapters?.length?S.user.chapters:S.chapters.map(c=>c.name);
   return S.user?.chapters||[S.user?.chapter];
 }
 
@@ -726,7 +734,7 @@ function renderDCOverview(el){
   const monthEntriesDC=getCascadedEntries(ch).filter(e=>e.date.startsWith(_currMonth));
   const mNet=monthEntriesDC.length?((+monthEntriesDC[monthEntriesDC.length-1].membersClose||0)-(+monthEntriesDC[0].membersStart||0)):0;
   const wNet=curr?((+curr.membersClose||0)-(+curr.membersStart||0)):0;
-  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&m.role==='dc');
+  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&isChapterDirectorRole(m.role));
   const sa1=S.members.find(m=>m.chapter===ch&&m.role==='sa1');
   const sa2=S.members.find(m=>m.chapter===ch&&m.role==='sa2');
   // Upcoming renewals count
@@ -793,7 +801,7 @@ function openDrill(ch){
   });
   const months=Object.keys(byM).sort();
   const lastE=entries[entries.length-1];
-  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&m.role==='dc');
+  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&isChapterDirectorRole(m.role));
   function barChart(field,color,label,isTYFCB){
     const vals=months.map(m=>byM[m][field]||0);const maxV=Math.max(...vals,1);
     return`<div class="chart-wrap"><div class="chart-title">${label}</div><div class="bar-chart">${months.map((m,i)=>{
@@ -1221,7 +1229,7 @@ function renderCallContent(){
     histBanner='<div style="background:rgba(244,162,97,.15);border:1px solid rgba(244,162,97,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#fbbf24;font-weight:600;">No data for selected week â€” showing last submitted: Week of '+fmtWeekChip(getWeekKey(curr.date))+'</div>';
   }
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(S.callChapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
-  const dc=chMems.find(m=>m.role==='dc');const sa1=chMems.find(m=>m.role==='sa1');const sa2=chMems.find(m=>m.role==='sa2');
+  const dc=chMems.find(m=>isChapterDirectorRole(m.role));const sa1=chMems.find(m=>m.role==='sa1');const sa2=chMems.find(m=>m.role==='sa2');
   const teamStr=[dc?'DC: '+dc.name:'',sa1?'SA1: '+sa1.name:'',sa2?'SA2: '+sa2.name:''].filter(Boolean).join(' Â· ');
   if(!curr){el.innerHTML='<div style="color:rgba(255,255,255,.4);padding:40px 16px;text-align:center;">No data yet for '+S.callChapter+'</div>';return;}
   const net=(+curr.inductions||0)-(+curr.drops||0);
@@ -1621,7 +1629,7 @@ function runSynopsis(){
   const chObj=S.chapters.find(c=>c.name===ch);
   const entries=fEntries(from,to,ch).sort((a,b)=>a.date.localeCompare(b.date));
   if(!entries.length){document.getElementById('reportContent').innerHTML='<div class="empty">No data for this chapter in this period</div>';return;}
-  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&m.role==='dc');
+  const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&isChapterDirectorRole(m.role));
   const sa1=S.members.find(m=>m.chapter===ch&&m.role==='sa1');
   const sa2=S.members.find(m=>m.chapter===ch&&m.role==='sa2');
   const first=entries[0],last=entries[entries.length-1];
@@ -1818,34 +1826,35 @@ async function importHistorical(){
 function renderSettings(){
   var el=document.getElementById('tab-settings');if(!el)return;
   var byChap={};
-  S.members.forEach(function(m){var ch=m.chapter||(m.chapters&&m.chapters[0])||'Other';if(!byChap[ch])byChap[ch]=[];byChap[ch].push(m);});
+  S.members.forEach(function(m){if(['ad','srdc','viewer'].includes(m.role))return;var ch=m.chapter||(m.chapters&&m.chapters[0])||'Other';if(!byChap[ch])byChap[ch]=[];byChap[ch].push(m);});
   var memHtml='';
   S.chapters.forEach(function(ch){
     var mems=byChap[ch.name]||[];if(!mems.length)return;
     memHtml+='<div style="margin-bottom:13px;"><div style="font-weight:800;font-size:13px;color:var(--navy);padding:5px 0 4px;border-bottom:1px solid var(--border);margin-bottom:2px;">'+ch.name+'</div>';
     mems.forEach(function(m){
-      memHtml+='<div class="s-row"><div><span style="font-weight:600">'+m.name+'</span> <span class="role-tag '+(m.role==='dc'?'dc':'sa')+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+(m.chapters||[m.chapter]).join(', ')+'</span></div>';
+      memHtml+='<div class="s-row"><div><span style="font-weight:600">'+m.name+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+(m.chapters||[m.chapter]).join(', ')+'</span>'+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+m.reportsTo+'</span>':'')+'</div>';
       memHtml+='<div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button>';
       memHtml+='<button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';
     });
     memHtml+='</div>';
   });
-  var viewers=S.members.filter(function(m){return m.role==='viewer';});
-  var viewerHtml=viewers.length?viewers.map(function(m){return '<div class="s-row"><div><span style="font-weight:600">'+m.name+'</span> <span class="role-tag viewer">Viewer</span></div><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button><button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';}).join(''):'<div class="tm" style="padding:8px 0;">No viewers added yet</div>';
+  var regional=S.members.filter(function(m){return ['ad','srdc','viewer'].includes(m.role);});
+  var regionalHtml=regional.length?regional.map(function(m){return '<div class="s-row"><div><span style="font-weight:600">'+m.name+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+((m.chapters&&m.chapters.length)?m.chapters.join(', '):'Whole Region')+'</span>'+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+m.reportsTo+'</span>':'')+'</div><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button><button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';}).join(''):'<div class="tm" style="padding:8px 0;">No regional accounts added yet</div>';
   var chapterListHtml=S.chapters.map(function(c){return '<div class="s-row"><div><span style="font-weight:700">'+c.name+'</span><span class="tm"> Â· '+c.day+' Â· Target: '+(c.target||'â€”')+'</span></div><button class="btn btn-secondary btn-sm" onclick="editChapter(this.dataset.id)" data-id="'+c.id+'">Edit</button></div>';}).join('');
   var h='';
-  h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Team Members & PINs</div><button class="btn btn-primary btn-sm" onclick="showMemberForm()">+ Add Person</button></div>';
+  h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Leadership Members & PINs</div><button class="btn btn-primary btn-sm" onclick="showMemberForm()">+ Add Person</button></div>';
   h+='<div id="memberList">'+(memHtml||'<div class="empty">No members</div>')+'</div></div>';
   h+='<div class="card hidden" id="memberFormCard">';
   h+='<div class="card-t" id="memberFormTitle">Add Member</div><input type="hidden" id="editMemberId">';
   h+='<div class="fgrid">';
   h+='<div class="fg"><label>Full Name</label><input type="text" id="mName"></div>';
-  h+='<div class="fg"><label>Role</label><select id="mRole" onchange="toggleChaptersField()"><option value="dc">DC</option><option value="sa1">SA1</option><option value="sa2">SA2</option><option value="viewer">Viewer</option></select></div>';
+  h+='<div class="fg"><label>Role</label><select id="mRole" onchange="toggleChaptersField()"><option value="ad">Area Director</option><option value="srdc">Senior Director</option><option value="dc">Chapter Director (CD/DC)</option><option value="sa1">SA1</option><option value="sa2">SA2</option><option value="viewer">Viewer</option></select></div>';
   h+='<div class="fg" id="singleChapField"><label>Chapter</label><select id="mChapter"></select></div>';
   h+='<div class="fg full hidden" id="multiChapField"><label>Chapters (hold Ctrl/Cmd for multiple)</label><select id="mChapters" multiple style="height:120px;"></select></div>';
+  h+='<div class="fg full"><label>Reports To</label><input type="text" id="mReportsTo" placeholder="Area Director or Senior Director name"></div>';
   h+='<div class="fg"><label>PIN (4-6 digits)</label><input type="password" id="mPin" maxlength="6" placeholder="...."></div>';
   h+='</div><div class="btn-row"><button class="btn btn-primary" onclick="saveMember()">Save</button><button class="btn btn-secondary" onclick="cancelMemberForm()">Cancel</button></div></div>';
-  h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Viewer Accounts</div></div><div>'+viewerHtml+'</div></div>';
+  h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Regional Accounts</div></div><div>'+regionalHtml+'</div></div>';
   h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Chapters</div><button class="btn btn-primary btn-sm" onclick="showChapterForm()">+ Add Chapter</button></div>';
   h+='<div id="chapterList">'+chapterListHtml+'</div></div>';
   h+='<div class="card hidden" id="chapterFormCard">';
@@ -1874,21 +1883,21 @@ function renderSettings(){
 
 function toggleChaptersField(){
   const role=document.getElementById('mRole')?.value;
-  const isViewer=role==='viewer';const isDC=role==='dc';
+  const isViewer=role==='viewer'||role==='ad';const isDC=role==='dc'||role==='srdc';
   document.getElementById('singleChapField')?.classList.toggle('hidden',isViewer);
   document.getElementById('multiChapField')?.classList.toggle('hidden',!isDC);
   if(isDC)document.getElementById('singleChapField')?.classList.add('hidden');
   else if(!isViewer)document.getElementById('singleChapField')?.classList.remove('hidden');
 }
 
-function showMemberForm(){show('memberFormCard');document.getElementById('memberFormTitle').textContent='Add Member';document.getElementById('editMemberId').value='';['mName','mPin'].forEach(id=>document.getElementById(id).value='');document.getElementById('mRole').value='dc';toggleChaptersField();}
+function showMemberForm(){show('memberFormCard');document.getElementById('memberFormTitle').textContent='Add Member';document.getElementById('editMemberId').value='';['mName','mPin','mReportsTo'].forEach(id=>document.getElementById(id).value='');document.getElementById('mRole').value='dc';toggleChaptersField();}
 function editMember(id){
   const m=S.members.find(x=>x.id===id);if(!m)return;
   show('memberFormCard');document.getElementById('memberFormTitle').textContent='Edit Member';
-  document.getElementById('editMemberId').value=id;document.getElementById('mName').value=m.name;
+  document.getElementById('editMemberId').value=id;document.getElementById('mName').value=m.name;document.getElementById('mReportsTo').value=m.reportsTo||'';
   document.getElementById('mRole').value=m.role;document.getElementById('mPin').value='';
   toggleChaptersField();
-  if(m.role==='dc'){const sel=document.getElementById('mChapters');if(sel){Array.from(sel.options).forEach(o=>o.selected=(m.chapters||[m.chapter]).includes(o.value));}}
+  if(m.role==='dc'||m.role==='srdc'){const sel=document.getElementById('mChapters');if(sel){Array.from(sel.options).forEach(o=>o.selected=(m.chapters||[m.chapter]).includes(o.value));}}
   else{const sel=document.getElementById('mChapter');if(sel)sel.value=m.chapter||'';}
 }
 async function saveMember(){
@@ -1896,12 +1905,13 @@ async function saveMember(){
   const name=document.getElementById('mName').value.trim();
   const pin=document.getElementById('mPin').value.trim();
   const role=document.getElementById('mRole').value;
+  const reportsTo=document.getElementById('mReportsTo')?.value.trim()||'';
   if(!name){toast('Name required');return;}if(!id&&(!pin||pin.length<4)){toast('PIN must be 4+ digits');return;}
   let chapters=[],chapter='';
-  if(role==='viewer'){chapters=[];chapter='';}
-  else if(role==='dc'){const sel=document.getElementById('mChapters');chapters=sel?Array.from(sel.selectedOptions).map(o=>o.value):[];chapter=chapters[0]||'';}
+  if(role==='viewer'||role==='ad'){chapters=[];chapter='';}
+  else if(role==='dc'||role==='srdc'){const sel=document.getElementById('mChapters');chapters=sel?Array.from(sel.selectedOptions).map(o=>o.value):[];chapter=chapters[0]||'';}
   else{chapter=document.getElementById('mChapter')?.value||'';chapters=[chapter];}
-  const data={name,role,chapter,chapters};if(pin)data.pin=pin;
+  const data={name,role,chapter,chapters,reportsTo};if(pin)data.pin=pin;
   await db.collection('members').doc(id||('m'+Date.now())).set(data,{merge:!!id});
   logActivity('member_saved',{memberName:name,role:role,chapter:chapter});
   hide('memberFormCard');toast('Saved');
@@ -2004,7 +2014,7 @@ function tlrColor(v){if(v===null||v===undefined||v==='')return'#9CA3AF';if(v>=70
 function fmtD(s){if(!s)return'â€”';return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'});}
 function fmtM(s){if(!s)return'â€”';return new Date(s+'-01').toLocaleDateString('en-IN',{month:'short',year:'2-digit'});}
 function fmtL(n){n=+n||0;if(n>=10000000)return(n/10000000).toFixed(1)+'Cr';if(n>=100000)return(n/100000).toFixed(1)+'L';if(n>=1000)return Math.round(n/1000)+'K';return n+'';}
-function rl(r){return r==='srdc'?'Sr. DC':r==='dc'?'DC':r==='sa1'?'SA1':r==='sa2'?'SA2':r==='viewer'?'Viewer':r||'';}
+function rl(r){return r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':r==='sa1'?'SA1':r==='sa2'?'SA2':r==='viewer'?'Viewer':r||'';}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function show(id){document.getElementById(id)?.classList.remove('hidden');}
 function hide(id){document.getElementById(id)?.classList.add('hidden');}
@@ -2800,7 +2810,7 @@ function renderSDReport(){
   var totalMembers=0; var totalJul=0; var totalAug=0;
   S.chapters.forEach(function(ch){
     var latest=latestPerChap[ch.name];
-    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='dc';});
+    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&isChapterDirectorRole(m.role);});
     var tlrRow=S.tlrData.find(function(r){return r.name.toLowerCase().includes(ch.name.toLowerCase())||ch.name.toLowerCase().includes(r.name.toLowerCase().replace('bni ',''));});
     var tlr=tlrRow?+tlrRow.score:null;
     var julRen=(S.duesData||[]).filter(function(m){if(m.chapter!==ch.name)return false;var k=m.chapter+'_'+m.name+'_'+m.dueDate;if(S.renewalsDone[k])return false;return m.dueDate.startsWith('2026-07');}).length;
@@ -2956,7 +2966,7 @@ function exportSDReport(month){
   var weekKeys=Object.keys(weekKeySet).sort();
   var hdr=['Chapter','DC'].concat(weekKeys.reduce(function(a,_,i){return a.concat(['Wk'+(i+1)+' Add','Wk'+(i+1)+' Drop','Wk'+(i+1)+' Net']);},[])).concat(['Mo Add','Mo Drop','Mo Net']).join(',');
   var rows=S.chapters.map(function(ch){
-    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='dc';});
+    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&isChapterDirectorRole(m.role);});
     var weekData=weekKeys.map(function(wk){var r=getWeekTueFri(wk);var e=monthEntries.find(function(x){return x.chapter===ch.name&&x.date>=r.tue&&x.date<=r.fri;});return e?{add:+e.inductions||0,drop:+e.drops||0}:{add:0,drop:0};});
     var totAdd=weekData.reduce(function(s,w){return s+w.add;},0);
     var totDrop=weekData.reduce(function(s,w){return s+w.drop;},0);
@@ -3064,7 +3074,7 @@ function renderGoalsTab(){
     var members=latest?+latest.membersClose||0:0;
     var band=getBand(members);
     var g=goals[ch.name]||{};
-    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='dc';});
+    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&isChapterDirectorRole(m.role);});
     var sa1=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='sa1';});
     var sa2=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='sa2';});
     var isSubmitted=!!(g.inductions||g.netAdd||g.targetBand);
@@ -3120,7 +3130,7 @@ function exportGoalsExcel(){
     var members=latest?+latest.membersClose||0:0;
     var band=getBand(members);
     var g=goals[ch.name]||{};
-    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='dc';});
+    var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&isChapterDirectorRole(m.role);});
     var sa1=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='sa1';});
     var sa2=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&m.role==='sa2';});
     var submitted=!!(g.inductions||g.netAdd||g.targetBand)?'Submitted':'Pending';

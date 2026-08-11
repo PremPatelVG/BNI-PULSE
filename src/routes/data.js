@@ -49,7 +49,7 @@ router.get("/chapters", async (req, res, next) => {
   }
 });
 
-router.post("/chapters", requireRole("srdc"), async (req, res, next) => {
+router.post("/chapters", requireRole("ad", "srdc"), async (req, res, next) => {
   try {
     const data = req.body || {};
     if (!data.name) return res.status(400).json({ error: "Chapter name is required" });
@@ -70,10 +70,35 @@ router.get("/members", async (req, res, next) => {
   }
 });
 
-router.post("/members", requireRole("srdc"), async (req, res, next) => {
+router.get("/hierarchy", async (req, res, next) => {
+  try {
+    const [members, chapters] = await Promise.all([
+      listCollection("members"),
+      listCollection("chapters", { field: "order" })
+    ]);
+    const publicMembers = members.map(member => ({ id: member.id, ...stripPrivateMember(member) }));
+    const isChapterDirector = role => role === "dc" || role === "cd";
+
+    res.json({
+      areaDirectors: publicMembers.filter(member => member.role === "ad"),
+      seniorDirectors: publicMembers.filter(member => member.role === "srdc"),
+      chapterDirectors: publicMembers.filter(member => isChapterDirector(member.role)),
+      chapters: chapters.map(chapter => ({
+        ...chapter,
+        seniorDirector: publicMembers.find(member => member.role === "srdc" && (member.chapters || []).includes(chapter.name)) || null,
+        chapterDirector: publicMembers.find(member => isChapterDirector(member.role) && (member.chapters || [member.chapter]).includes(chapter.name)) || null
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/members", requireRole("ad", "srdc"), async (req, res, next) => {
   try {
     const { id, pin, ...member } = req.body || {};
     if (!member.name) return res.status(400).json({ error: "Member name is required" });
+    if (member.role === "cd") member.role = "dc";
     if (pin) member.pinHash = await bcrypt.hash(pin, 12);
     const docId = id || `m${Date.now()}`;
     await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
@@ -84,7 +109,7 @@ router.post("/members", requireRole("srdc"), async (req, res, next) => {
   }
 });
 
-router.delete("/members/:id", requireRole("srdc"), async (req, res, next) => {
+router.delete("/members/:id", requireRole("ad", "srdc"), async (req, res, next) => {
   try {
     await getDb().collection("members").doc(req.params.id).delete();
     await writeActivity(req.user, "member_deleted", { memberId: req.params.id });
@@ -138,7 +163,7 @@ router.get("/meta/:docId", async (req, res, next) => {
   }
 });
 
-router.put("/meta/:docId", requireRole("srdc"), async (req, res, next) => {
+router.put("/meta/:docId", requireRole("ad", "srdc"), async (req, res, next) => {
   try {
     const meta = await setMetaDoc(req.params.docId, req.body || {}, true);
     await writeActivity(req.user, "meta_saved", { docId: req.params.docId });

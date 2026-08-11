@@ -2,6 +2,18 @@
 
 BNI Pulse is a single-service deployment for the BNI Argonauts dashboard. It serves the existing frontend and adds a Node/Express backend for authentication, Firestore access, runtime Firebase config, and deployment health checks.
 
+## Role hierarchy
+
+The app now supports a regional leadership hierarchy:
+
+- `ad`: Area Director. Region-level access across every chapter.
+- `srdc`: Senior Director. Oversees assigned Chapter Directors and chapters.
+- `dc`: Chapter Director. This is the shared CD/DC role used for chapter ownership.
+- `sa1` / `sa2`: Chapter support roles.
+- `viewer`: Read-only regional view.
+
+Members can include `chapters`, `chapter`, and `reportsTo` fields. The UI treats CD and DC as the same role and stores it as `dc`.
+
 ## Run locally
 
 ```bash
@@ -38,6 +50,7 @@ Optional:
 - `POST /api/auth/login`: login with `{ "memberId": "...", "pin": "..." }`.
 - `GET /api/auth/me`: validate a bearer token.
 - `GET /api/bootstrap`: load dashboard data.
+- `GET /api/hierarchy`: load Area Directors, Senior Directors, Chapter Directors, and chapter ownership.
 - `GET /api/chapters`, `POST /api/chapters`
 - `GET /api/members`, `POST /api/members`, `DELETE /api/members/:id`
 - `GET /api/weekly-data`, `PUT /api/weekly-data/:chapter/:date`, `DELETE /api/weekly-data/:chapter/:date`
