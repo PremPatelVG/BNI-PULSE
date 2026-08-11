@@ -19,7 +19,7 @@ The current seed hierarchy is based on `SRDC & DC CHAPTER WSIE.xlsx`:
 - 62 chapters
 - 9 Senior Directors
 - 55 unique Chapter Directors / DCs
-- 2 placeholder Area Directors, pending final names
+- 2 Area Directors: Yash Vasant and Snehal Patel
 
 ## Run locally
 
