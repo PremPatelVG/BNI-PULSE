@@ -3197,6 +3197,17 @@ function matchChapterName(raw){
   return found||s;
 }
 
+function cleanMemberNameForChapter(name,chapter){
+  var s=cleanCellValue(name);
+  if(!s)return'';
+  if(chapter){
+    var ch=chapter.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    s=s.replace(new RegExp('[_\\-\\s]+BNI\\s*'+ch+'$','i'),'');
+    s=s.replace(new RegExp('[_\\-\\s]+'+ch+'$','i'),'');
+  }
+  return s.replace(/\s+/g,' ').trim();
+}
+
 function filterRowsToScope(rows){
   var scope=uploadScopeChapters();
   return rows.filter(function(m){
@@ -4877,31 +4888,36 @@ async function handleLOMUpload(input){
 function parseLOMRows(rows){
   var results=[];
   var hi=findHeaderRow(rows,['chapter','name','length']);
+  if(hi<0)hi=findHeaderRow(rows,['chapter','name','start']);
   if(hi>=0){
     var h=rows[hi];
     var iChapter=colIndex(h,['Chapter Name','Chapter']);
     var iFirst=colIndex(h,['First Name','First']);
     var iLast=colIndex(h,['Last Name','Last']);
-    var iName=colIndex(h,['Member Name','Member','Name']);
+    var iName=colIndex(h,['Full Name','Member Name','Member','Name']);
+    var iStatus=colIndex(h,['Membership Status','Status']);
     var iCumLen=colIndex(h,['Cumulative Length','Total Length','Length of Membership']);
     var iCumStart=colIndex(h,['Cumulative Start','Original Start','Start Date']);
     var iRecentLen=colIndex(h,['Recent Length','Current Length','Membership Length','Length']);
-    var iRecentStart=colIndex(h,['Recent Start','Join Date','Renewal Start','Start Date']);
+    var iRecentStart=colIndex(h,['Recent Start','Join Date','Induction Date','Renewal Start','Start Date']);
     rows.slice(hi+1).forEach(function(row){
       var chapter=matchChapterName(cellAt(row,iChapter));
       var firstName=cellAt(row,iFirst);
       var lastName=cellAt(row,iLast);
-      var name=iName>=0?cellAt(row,iName):(firstName+' '+lastName).trim();
+      var firstLast=(firstName+' '+lastName).trim();
+      var name=cleanMemberNameForChapter(firstLast||cellAt(row,iName),chapter);
+      var status=cellAt(row,iStatus)||'Active';
       var recentLength=cellAt(row,iRecentLen);
       var recentStart=toIsoDate(cellAt(row,iRecentStart)||cellAt(row,iCumStart));
       var recentMonths=parseLengthMonths(recentLength);
       if(recentMonths===null)recentMonths=monthsSinceDate(recentStart);
-      if(chapter&&name){
+      if(chapter&&name&&(iStatus<0||/active/i.test(status))){
         results.push({
           chapter:chapter,
           firstName:firstName,
           lastName:lastName,
           name:name,
+          status:status,
           cumulativeLength:cellAt(row,iCumLen),
           cumulativeStart:toIsoDate(cellAt(row,iCumStart)),
           recentLength:recentLength,
