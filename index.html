@@ -3242,6 +3242,34 @@ function filterRowsToScope(rows){
   });
 }
 
+function sameChapterName(a,b){
+  a=(a||'').toLowerCase();b=(b||'').toLowerCase();
+  return a===b||a.indexOf(b)>=0||b.indexOf(a)>=0;
+}
+
+function dueMemberKey(m){
+  return[(m.chapter||'').toLowerCase(),(m.name||'').toLowerCase().replace(/\s+/g,' ').trim(),m.dueDate||''].join('|');
+}
+
+function uniqueDuesMembers(rows){
+  var seen={};
+  return(rows||[]).filter(function(m){
+    var key=dueMemberKey(m);
+    if(seen[key])return false;
+    seen[key]=true;
+    return true;
+  });
+}
+
+function mergeDuesUpload(existing,incoming){
+  incoming=uniqueDuesMembers(incoming||[]);
+  var uploadedChapters=[...new Set(incoming.map(function(m){return m.chapter;}).filter(Boolean))];
+  var preserved=(existing||[]).filter(function(m){
+    return !uploadedChapters.some(function(ch){return sameChapterName(m.chapter,ch);});
+  });
+  return uniqueDuesMembers(preserved.concat(incoming));
+}
+
 async function handleDuesUpload(input){
   const file=input.files[0];if(!file)return;
   const st=document.getElementById('duesStatus');st.textContent='Parsing...';
@@ -3250,9 +3278,13 @@ async function handleDuesUpload(input){
     try{members=parseDuesRows(await readExcelRows(file));}
     catch(xlsxErr){members=parseDuesLegacy(await readTextFile(file));}
     const filtered=filterRowsToScope(members).filter(function(m){return m.name&&m.chapter&&m.dueDate;});
-    try{await db.collection('meta').doc('dues').set({members:filtered,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
-      logActivity('dues_report_uploaded',{memberCount:filtered.length});
-      st.textContent=`Uploaded ${filtered.length} members across ${[...new Set(filtered.map(m=>m.chapter))].length} chapters`;toast('Dues synced');}
+    const chapterCount=[...new Set(filtered.map(function(m){return m.chapter;}))].length;
+    if(!filtered.length)throw new Error('No matching chapter rows found for your upload scope');
+    const merged=mergeDuesUpload(S.duesData,filtered);
+    try{await db.collection('meta').doc('dues').set({members:merged,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name,lastUploadChapters:[...new Set(filtered.map(function(m){return m.chapter;}))]});
+      S.duesData=merged;
+      logActivity('dues_report_uploaded',{memberCount:filtered.length,chapterCount:chapterCount,totalMembers:merged.length});
+      st.textContent=`Uploaded ${filtered.length} members across ${chapterCount} chapter${chapterCount>1?'s':''}. Other chapter dues preserved.`;toast('Dues synced');}
     catch(err){st.textContent='âŒ '+err.message;}
   }catch(err){st.textContent='Could not parse dues report: '+err.message;}
 }
@@ -3265,7 +3297,7 @@ function parseDuesRows(rows){
     var iChapter=colIndex(h,['Chapter Name','Chapter']);
     var iFirst=colIndex(h,['First Name','First']);
     var iLast=colIndex(h,['Last Name','Last']);
-    var iName=colIndex(h,['Member Name','Member','Name']);
+    var iName=colIndex(h,['Full Name','Member Name','Member','Name']);
     var iIndustry=colIndex(h,['Industry','Classification','Category','Profession']);
     var iType=colIndex(h,['Membership Type','Member Type','Type']);
     var iStatus=colIndex(h,['Status']);
