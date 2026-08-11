@@ -2540,7 +2540,16 @@ function renderCallContent(){
   // TLR improvements
   const tlrRow=S.tlrData.find(r=>r.name.toLowerCase().includes(S.callChapter.toLowerCase())||S.callChapter.toLowerCase().includes(r.name.toLowerCase().replace('bni ','')));
   let improveHTML='';
-  if(tlrRow){const rows=[];TLR_PARAMS.forEach(p=>{const v=parseFloat(tlrRow[p.key]);if(isNaN(v))return;let cur=0;if(p.lower){if(v<=p.bounds[2])cur=15;else if(v<=p.bounds[1])cur=10;else if(v<=p.bounds[0])cur=5;}else{if(p.bounds[2]&&v>=p.bounds[2])cur=p.maxPts;else if(v>=p.bounds[1])cur=10;else if(v>=p.bounds[0])cur=5;}const atMax=cur>=p.maxPts;if(atMax){rows.push('<div class="improve-item"><span class="improve-param" style="color:#4ade80;">âœ… '+p.label+': '+p.fmt(v)+'</span><span style="color:#4ade80;font-size:11px;font-weight:600;">'+cur+'/'+p.maxPts+' pts</span></div>');}else{const next=p.lower?p.bounds.find(b=>v>b):p.bounds.find(b=>v<b);rows.push('<div class="improve-item"><span class="improve-param">'+p.label+': '+p.fmt(v)+'</span><span class="improve-gap">â†’ needs '+(next!==undefined?p.fmt(next):'higher')+' ('+cur+'â†’'+(cur+5)+'pts)</span></div>');}});improveHTML='<div class="tlr-improve"><div class="improve-title">ðŸ“ˆ TLR PARAMETER BREAKDOWN</div>'+rows.join('')+'</div>';}
+  if(tlrRow&&tlrRow.pdfFormat==='chapter_member_tlr'){
+    const rows=[
+      ['Score',tlrRow.score],
+      ['Members',tlrRow.chapterSize||''],
+      ['Green / Amber / Red',[(tlrRow.greenPct||'')+'%',(tlrRow.amberPct||'')+'%',(tlrRow.redPct||'')+'%'].join(' / ')],
+      ['Referrals',tlrRow.lastMonthReferrals?tlrRow.lastMonthReferrals+' last month':''],
+      ['Visitors',tlrRow.lastMonthVisitors?tlrRow.lastMonthVisitors+' last month':'']
+    ].filter(function(r){return r[1]!==''&&r[1]!==undefined;}).map(function(r){return '<div class="improve-item"><span class="improve-param">'+r[0]+': '+r[1]+'</span></div>';});
+    improveHTML='<div class="tlr-improve"><div class="improve-title">TLR PDF SUMMARY '+(tlrRow.reportMonth?'('+tlrRow.reportMonth+')':'')+'</div>'+rows.join('')+'</div>';
+  }else if(tlrRow){const rows=[];TLR_PARAMS.forEach(p=>{const v=parseFloat(tlrRow[p.key]);if(isNaN(v))return;let cur=0;if(p.lower){if(v<=p.bounds[2])cur=15;else if(v<=p.bounds[1])cur=10;else if(v<=p.bounds[0])cur=5;}else{if(p.bounds[2]&&v>=p.bounds[2])cur=p.maxPts;else if(v>=p.bounds[1])cur=10;else if(v>=p.bounds[0])cur=5;}const atMax=cur>=p.maxPts;if(atMax){rows.push('<div class="improve-item"><span class="improve-param" style="color:#4ade80;">âœ… '+p.label+': '+p.fmt(v)+'</span><span style="color:#4ade80;font-size:11px;font-weight:600;">'+cur+'/'+p.maxPts+' pts</span></div>');}else{const next=p.lower?p.bounds.find(b=>v>b):p.bounds.find(b=>v<b);rows.push('<div class="improve-item"><span class="improve-param">'+p.label+': '+p.fmt(v)+'</span><span class="improve-gap">â†’ needs '+(next!==undefined?p.fmt(next):'higher')+' ('+cur+'â†’'+(cur+5)+'pts)</span></div>');}});improveHTML='<div class="tlr-improve"><div class="improve-title">ðŸ“ˆ TLR PARAMETER BREAKDOWN</div>'+rows.join('')+'</div>';}
   // Attendance per person
   const attKey=getWeekKey(curr.date);
   const attData=S.attendance[attKey]||{};
@@ -2747,6 +2756,14 @@ function renderTLR(){
   const myNames=S.chapters.map(c=>c.name.toLowerCase());
   const rows=S.tlrData.filter(r=>myNames.some(n=>r.name.toLowerCase().includes(n)||n.includes(r.name.toLowerCase().replace('bni ',''))));
   const show=rows.length?rows:S.tlrData;
+  const isPdfMode=show.some(function(r){return r.pdfFormat==='chapter_member_tlr';});
+  if(isPdfMode){
+    el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
+      <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Chapter</th><th>Month</th><th>Score</th><th>Members</th><th>Green</th><th>Amber</th><th>Red</th><th>Grey</th><th>Referrals</th><th>Visitors</th></tr></thead>
+      <tbody>${show.map(r=>{const s=+r.score||0;return`<tr><td style="font-weight:700">${r.name}</td><td>${r.reportMonth||'â€”'}</td><td><span class="pill ${tlrPillCls(s)}">${s||'â€”'}</span></td><td>${r.chapterSize||'â€”'}</td><td>${r.greenPct?r.greenPct+'%':'â€”'}</td><td>${r.amberPct?r.amberPct+'%':'â€”'}</td><td>${r.redPct?r.redPct+'%':'â€”'}</td><td>${r.greyPct?r.greyPct+'%':'â€”'}</td><td>${r.lastMonthReferrals||r.avgReferrals||'â€”'}</td><td>${r.lastMonthVisitors||r.avgVisitors||'â€”'}</td></tr>`;}).join('')}</tbody></table></div></div>
+      <div class="card"><div class="card-t">PDF TLR Notes</div><div class="tm">This report uses the chapter member traffic-light PDF format. Score is the current month average from the Six Month Score table. Members are counted from member detail pages. Color percentages, referrals, and visitors come from the chapter summary pages.</div></div>`;
+    return;
+  }
   el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
     <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Chapter</th><th>Score</th><th>Size</th><th>Growth</th><th>Retention</th><th>Referrals</th><th>Visitors</th><th>Conversion</th><th>Absent</th></tr></thead>
     <tbody>${show.map(r=>{const s=+r.score||0;return`<tr><td style="font-weight:700">${r.name}</td><td><span class="pill ${tlrPillCls(s)}">${s}</span></td><td>${Math.round(parseFloat(r.chapterSize)||0)}</td><td style="color:${parseFloat(r.memberGrowth)>=0?'var(--green)':'var(--red)'}">${Math.round(parseFloat(r.memberGrowth)||0)}%</td><td>${r.retention}%</td><td>${r.referrals}</td><td>${r.visitors}</td><td>${r.conversion}%</td><td>${r.absenteeism}%</td></tr>`;}).join('')}</tbody></table></div></div>
@@ -3025,7 +3042,7 @@ function renderUpload(){
         <div style="font-size:26px;margin-bottom:5px;">ðŸš¦</div>
         <div style="font-size:14px;font-weight:600;">Upload Traffic Light Report PDF</div>
         <div class="tm mt2">PDF rows merge with existing chapter scores automatically</div>
-        <input type="file" id="tlrFile" accept=".pdf" onchange="handleTLRUpload(this)">
+        <input type="file" id="tlrFile" accept=".pdf" multiple onchange="handleTLRUpload(this)">
       </div><div id="tlrStatus" class="tm mt2"></div>
     </div>
     <div class="card"><div class="card-t">ðŸ¥‹ Length of Membership Report (Miyagi Sync)</div>
@@ -3285,10 +3302,15 @@ function parseDuesLegacy(text){
 }
 
 async function handleTLRUpload(input){
-  const file=input.files[0];if(!file)return;
-  const st=document.getElementById('tlrStatus');st.textContent='Parsing PDF...';
+  const files=Array.from(input.files||[]);if(!files.length)return;
+  const st=document.getElementById('tlrStatus');st.textContent='Parsing '+files.length+' PDF'+(files.length>1?'s':'')+'...';
   try{
-    const newRows=parseTLRText(await readPdfText(file));
+    var newRows=[];
+    for(var fi=0;fi<files.length;fi++){
+      st.textContent='Parsing '+(fi+1)+'/'+files.length+': '+files[fi].name;
+      var rows=parseTLRText(await readPdfText(files[fi]),files[fi].name);
+      newRows=newRows.concat(rows);
+    }
     if(!newRows.length)throw new Error('No chapter rows found in PDF');
     const merged=[...S.tlrData];
     newRows.forEach(nr=>{const idx=merged.findIndex(er=>er.name.toLowerCase()===nr.name.toLowerCase()||nr.name.toLowerCase().includes(er.name.toLowerCase().replace('bni ',''))||er.name.toLowerCase().includes(nr.name.toLowerCase().replace('bni ','')));if(idx>=0)merged[idx]=nr;else merged.push(nr);});
@@ -3299,8 +3321,98 @@ async function handleTLRUpload(input){
   }catch(err){st.textContent='Could not parse TLR PDF: '+err.message;}
 }
 
-function parseTLRText(text){
+function numericTokens(line){
+  return(String(line||'').match(/[-+]?\d[\d,]*(?:\.\d+)?%?/g)||[]).map(function(v){return v.replace(/,/g,'').replace('%','');});
+}
+
+function percentForRow(lines,label){
+  var l=lines.find(function(x){return new RegExp('^'+label+'\\b','i').test(x);});
+  if(!l)return'';
+  var nums=numericTokens(l);
+  return nums.length?nums[nums.length-1]:'';
+}
+
+function firstMatch(lines,re,group){
+  for(var i=0;i<lines.length;i++){
+    var m=lines[i].match(re);
+    if(m)return m[group||1];
+  }
+  return'';
+}
+
+function countMemberTrafficPages(lines,chapter,region){
+  var seen={};
+  for(var i=1;i<lines.length;i++){
+    if(!/Absent\s+Referral/i.test(lines[i]))continue;
+    var prev=lines[i-1]||'';
+    if(/^Chapter\b/i.test(prev)||!prev.trim())continue;
+    var name=prev;
+    if(chapter)name=name.replace(new RegExp('\\b'+chapter.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','ig'),'');
+    if(region)name=name.replace(new RegExp('\\b'+region.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','ig'),'');
+    name=name.replace(/\bBNI\b/ig,'').replace(/\s+/g,' ').trim();
+    if(name&&name.length>1)seen[name.toLowerCase()]=true;
+  }
+  return Object.keys(seen).length;
+}
+
+function parseChapterTrafficLightPdf(lines,sourceFile){
+  var reportMonth=firstMatch(lines,/Report Issue Date\s+([A-Za-z]{3}-\d{4})/i,1)||firstMatch(lines,/Period\s+([A-Za-z]{3}-\d{4})/i,1);
+  var region=firstMatch(lines,/^Region\s+(.+)$/i,1);
+  var rawChapter=firstMatch(lines,/^Chapter\s+(?!Report\b|Meeting Day\b)(.+)$/i,1);
+  if(!rawChapter)return null;
+  var chapter=matchChapterName(rawChapter);
+  var scoreLine=lines.find(function(l){return /Member Name\s+Total\s+Average Per Month/i.test(l);})||'';
+  var scoreNums=numericTokens(scoreLine);
+  var score=scoreNums.length?scoreNums[scoreNums.length-1]:'';
+  if(!score)return null;
+
+  var refsLine=lines.find(function(l){return /Total Referrals\s+\d/i.test(l)&&numericTokens(l).length>=2;})||'';
+  var refsNums=numericTokens(refsLine);
+  var lastMonthReferrals=refsNums.length>=2?refsNums[0]:(refsNums[0]||'');
+  var sixMonthReferrals=refsNums.length>=2?refsNums[1]:'';
+  var avgRefs=firstMatch(lines,/Avg No of Referrals\s+([\d,]+)/i,1);
+  var lastMonthVisitors=firstMatch(lines,/No\. of Visitors\s+([\d,]+)/i,1);
+  var visitorMatches=[];
+  lines.forEach(function(l){
+    var re=/No\. of Visitors\s+([\d,]+)/ig,m;
+    while((m=re.exec(l)))visitorMatches.push(m[1].replace(/,/g,''));
+  });
+  var sixMonthVisitors=visitorMatches.length>1?visitorMatches[1]:'';
+  var avgVisitors=firstMatch(lines,/Avg No\. of Visitors\s+([\d,]+)/i,1);
+  var chapterSize=countMemberTrafficPages(lines,chapter,region);
+
+  return{
+    name:chapter,
+    score:score,
+    chapterSize:chapterSize||'',
+    memberGrowth:'',
+    retention:'',
+    referrals:avgRefs||lastMonthReferrals||'',
+    visitors:avgVisitors||lastMonthVisitors||'',
+    conversion:'',
+    absenteeism:'',
+    reportMonth:reportMonth,
+    region:region,
+    pdfFormat:'chapter_member_tlr',
+    sourceFile:sourceFile||'',
+    lastMonthReferrals:lastMonthReferrals,
+    sixMonthReferrals:sixMonthReferrals,
+    avgReferrals:avgRefs,
+    lastMonthVisitors:lastMonthVisitors,
+    sixMonthVisitors:sixMonthVisitors,
+    avgVisitors:avgVisitors,
+    greenPct:percentForRow(lines,'GREEN'),
+    amberPct:percentForRow(lines,'AMBER'),
+    redPct:percentForRow(lines,'RED'),
+    greyPct:percentForRow(lines,'GREY')
+  };
+}
+
+function parseTLRText(text,sourceFile){
   var lines=String(text||'').split(/\r?\n/).map(function(l){return l.replace(/\s+/g,' ').trim();}).filter(Boolean);
+  var chapterPdf=parseChapterTrafficLightPdf(lines,sourceFile);
+  if(chapterPdf)return[chapterPdf];
+
   var chapters=reportChapterNames().sort(function(a,b){return b.length-a.length;});
   var results=[];
   for(var i=0;i<lines.length;i++){
