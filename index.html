@@ -385,45 +385,1339 @@ async function logActivity(action,details){
 }
 
 async function seedData(){
-  const chapters=[
-    {name:'Faustus',day:'Tuesday',tenure:'apr',order:1,target:50},
-    {name:'Crios',day:'Tuesday',tenure:'apr',order:2,target:25},
-    {name:'Makarios',day:'Tuesday',tenure:'apr',order:3,target:120},
-    {name:'Atilius',day:'Tuesday',tenure:'apr',order:4,target:25},
-    {name:'Tyche',day:'Tuesday',tenure:'apr',order:5,target:50},
-    {name:'Obsidian',day:'Wednesday',tenure:'apr',order:6,target:40},
-    {name:'Ares',day:'Wednesday',tenure:'apr',order:7,target:40},
-    {name:'Prometheus',day:'Wednesday',tenure:'apr',order:8,target:110},
-    {name:'Lincoln',day:'Friday',tenure:'apr',order:9,target:55}
+  const chapters=  [
+      {
+          "name": "Acreseus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 1,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Niraj Goswami"
+      },
+      {
+          "name": "Alethia",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 2,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Punit Periwal"
+      },
+      {
+          "name": "Altimus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 3,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Anand Jhunjhunwala"
+      },
+      {
+          "name": "Anthropos",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 4,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Harsh Tanna"
+      },
+      {
+          "name": "Ares",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 5,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Alpesh Shah"
+      },
+      {
+          "name": "Artemisia",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 6,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Siddarth P Shahh"
+      },
+      {
+          "name": "Athena",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 7,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Harsh Desai"
+      },
+      {
+          "name": "Atilius",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 8,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Rutul Shah"
+      },
+      {
+          "name": "Atlas",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 9,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Nilay Shah"
+      },
+      {
+          "name": "Aurelius",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 10,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Arpita Shah"
+      },
+      {
+          "name": "BNI Aegeus",
+          "region": "Ahmedabad East",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 11,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Ruchi Shah"
+      },
+      {
+          "name": "BNI Aegon",
+          "region": "North Gujarat",
+          "team": "North Gujarat",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 12,
+          "target": 0,
+          "seniorDirector": "Nachiket Patel",
+          "chapterDirector": "Vidit Soni"
+      },
+      {
+          "name": "BNI Anatolius",
+          "region": "Ahmedabad East",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 13,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Mihir Parikh"
+      },
+      {
+          "name": "BNI Antonius",
+          "region": "North Gujarat",
+          "team": "North Gujarat",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 14,
+          "target": 0,
+          "seniorDirector": "Nachiket Patel",
+          "chapterDirector": "Sanket Patel"
+      },
+      {
+          "name": "BNI Aurus",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 15,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Vitragg Bhandaari"
+      },
+      {
+          "name": "BNI Calibos",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 16,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "APMS & Co."
+      },
+      {
+          "name": "BNI Crypto",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 17,
+          "target": 0,
+          "seniorDirector": "Rohan Saraf",
+          "chapterDirector": "Varteka Ssharmaa"
+      },
+      {
+          "name": "BNI Demetrius",
+          "region": "North Gujarat",
+          "team": "North Gujarat",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 18,
+          "target": 0,
+          "seniorDirector": "Nachiket Patel",
+          "chapterDirector": "Dhaval Darji"
+      },
+      {
+          "name": "BNI Diomedes",
+          "region": "North Gujarat",
+          "team": "North Gujarat",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 19,
+          "target": 0,
+          "seniorDirector": "Nachiket Patel",
+          "chapterDirector": "Rohit Dagli"
+      },
+      {
+          "name": "BNI Florentino",
+          "region": "Ahmedabad East",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 20,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Utpal Raval"
+      },
+      {
+          "name": "BNI Hera",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 21,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Mihir Parikh"
+      },
+      {
+          "name": "BNI Mythos",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 22,
+          "target": 0,
+          "seniorDirector": "Rohan Saraf",
+          "chapterDirector": "Dishit Parekh"
+      },
+      {
+          "name": "BNI Oliver",
+          "region": "Ahmedabad East",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 23,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Viraj Patel"
+      },
+      {
+          "name": "BNI Picasso",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 24,
+          "target": 0,
+          "seniorDirector": "Rohan Saraf",
+          "chapterDirector": "Tanisha Keswani"
+      },
+      {
+          "name": "BNI Roxanne",
+          "region": "Ahmedabad East",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 25,
+          "target": 0,
+          "seniorDirector": "Rohan Saraf",
+          "chapterDirector": "Rohan Saraf"
+      },
+      {
+          "name": "BNI Vitus",
+          "region": "Ahmedabad East",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 26,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Gaurang S Dave"
+      },
+      {
+          "name": "Colossus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 27,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Aatman Mehta."
+      },
+      {
+          "name": "Crios",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 28,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Heena Poriya"
+      },
+      {
+          "name": "Crixus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 29,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Shakeel Khimani"
+      },
+      {
+          "name": "Darius",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 30,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Nilesh Parmar"
+      },
+      {
+          "name": "Dominus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 31,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Honey Tilokani"
+      },
+      {
+          "name": "Eros",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 32,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Sukhdeep Singh"
+      },
+      {
+          "name": "Faustus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 33,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Heena Poriya"
+      },
+      {
+          "name": "Ganicus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 34,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Gurjotsingh Digwa"
+      },
+      {
+          "name": "Hades",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 35,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Sanket Gohil"
+      },
+      {
+          "name": "Helenus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 36,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Shakeel Khimani"
+      },
+      {
+          "name": "Hercules",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 37,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Amit Bharadva"
+      },
+      {
+          "name": "Kleon",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 38,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Saurin Sanghavi"
+      },
+      {
+          "name": "Kronos",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 39,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Vishakh Shah"
+      },
+      {
+          "name": "Lazarus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 40,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Manish Dave"
+      },
+      {
+          "name": "Lincoln",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 41,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Hardik Khamar"
+      },
+      {
+          "name": "Macedonias",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 42,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Rachit Pandya"
+      },
+      {
+          "name": "Magnus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 43,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Bhargav Shah"
+      },
+      {
+          "name": "Makarios",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 44,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Anand Patel."
+      },
+      {
+          "name": "Maximus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 45,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "Nikolaus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 46,
+          "target": 0,
+          "seniorDirector": "Rohan Saraf",
+          "chapterDirector": "Nimesh Patel"
+      },
+      {
+          "name": "Obsidian",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 47,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Dr. Amit Patel"
+      },
+      {
+          "name": "Odysseus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 48,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Harsh Desai"
+      },
+      {
+          "name": "Olympus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 49,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Oorvaksh Medora"
+      },
+      {
+          "name": "Osiris",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 50,
+          "target": 0,
+          "seniorDirector": "Viraj Patel",
+          "chapterDirector": "Vishakh Shah"
+      },
+      {
+          "name": "Perseus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 51,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Sneha Shah"
+      },
+      {
+          "name": "Petra",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 52,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Anant Agrawal"
+      },
+      {
+          "name": "Plutus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 53,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Sagar Vora"
+      },
+      {
+          "name": "Poseidon",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 54,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Vaibhav Kothari"
+      },
+      {
+          "name": "Prometheus",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 55,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Raphael",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 56,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Vitragg Bhandaari"
+      },
+      {
+          "name": "Romulus",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 57,
+          "target": 0,
+          "seniorDirector": "Aatman Mehta.",
+          "chapterDirector": "Digvijaysinh Rathod"
+      },
+      {
+          "name": "Rubens",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 58,
+          "target": 0,
+          "seniorDirector": "Harsh Tanna",
+          "chapterDirector": "Dr Palak Mehta"
+      },
+      {
+          "name": "Themis",
+          "region": "Ahmedabad West",
+          "team": "Trojans",
+          "day": "Thursday",
+          "tenure": "apr",
+          "order": 59,
+          "target": 0,
+          "seniorDirector": "Nilay Shah",
+          "chapterDirector": "Amit Bharadva"
+      },
+      {
+          "name": "Tyche",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Tuesday",
+          "tenure": "apr",
+          "order": 60,
+          "target": 0,
+          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+          "chapterDirector": "Vyomesh Shah"
+      },
+      {
+          "name": "Vinci",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Wednesday",
+          "tenure": "apr",
+          "order": 61,
+          "target": 0,
+          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+          "chapterDirector": "Zalak Vasavda"
+      },
+      {
+          "name": "Zenobia",
+          "region": "Ahmedabad West",
+          "team": "Spartans",
+          "day": "Friday",
+          "tenure": "apr",
+          "order": 62,
+          "target": 0,
+          "seniorDirector": "Oorvaksh Medora",
+          "chapterDirector": "Prabhat Vijh"
+      }
   ];
-  const members=[
-    {name:'Area Director 1',role:'ad',chapters:[],chapter:''},
-    {name:'Area Director 2',role:'ad',chapters:[],chapter:''},
-    {name:'Dinesh Sitlani',role:'srdc',chapters:['Faustus','Crios','Makarios','Atilius','Tyche','Obsidian','Ares','Prometheus','Lincoln'],chapter:'Faustus',reportsTo:'Area Director 1'},
-    {name:'Heena Poriya',role:'dc',chapters:['Faustus','Crios'],chapter:'Faustus',reportsTo:'Dinesh Sitlani'},
-    {name:'Abhishek Sheth',role:'sa1',chapters:['Faustus'],chapter:'Faustus'},
-    {name:'Harshil Shah',role:'sa2',chapters:['Faustus'],chapter:'Faustus'},
-    {name:'Mitesh Patel',role:'sa1',chapters:['Crios'],chapter:'Crios'},
-    {name:'Anand Patel',role:'dc',chapters:['Makarios'],chapter:'Makarios',reportsTo:'Dinesh Sitlani'},
-    {name:'Shreyas Kothari',role:'sa1',chapters:['Makarios'],chapter:'Makarios'},
-    {name:'Ritesh Patel',role:'sa2',chapters:['Makarios'],chapter:'Makarios'},
-    {name:'Rrutul Shah',role:'dc',chapters:['Atilius'],chapter:'Atilius',reportsTo:'Dinesh Sitlani'},
-    {name:'Harsh Vachhani',role:'sa1',chapters:['Atilius'],chapter:'Atilius'},
-    {name:'Ravi Shah',role:'sa2',chapters:['Atilius'],chapter:'Atilius'},
-    {name:'Dr Vyomesh Shah',role:'dc',chapters:['Tyche'],chapter:'Tyche',reportsTo:'Dinesh Sitlani'},
-    {name:'Karishma Shah',role:'sa1',chapters:['Tyche'],chapter:'Tyche'},
-    {name:'Maunil Parikh',role:'sa2',chapters:['Tyche'],chapter:'Tyche'},
-    {name:'Dr Amit Patel',role:'dc',chapters:['Obsidian'],chapter:'Obsidian',reportsTo:'Dinesh Sitlani'},
-    {name:'Rohit Nair',role:'sa1',chapters:['Obsidian'],chapter:'Obsidian'},
-    {name:'Alpesh Shah',role:'dc',chapters:['Ares'],chapter:'Ares',reportsTo:'Dinesh Sitlani'},
-    {name:'Divyang Adawadkar',role:'sa1',chapters:['Ares'],chapter:'Ares'},
-    {name:'Ankit Karathia',role:'sa2',chapters:['Ares'],chapter:'Ares'},
-    {name:'Prometheus Chapter Director',role:'dc',chapters:['Prometheus'],chapter:'Prometheus',reportsTo:'Dinesh Sitlani'},
-    {name:'Dr Rashmin Sadrani',role:'sa1',chapters:['Prometheus'],chapter:'Prometheus'},
-    {name:'Jeet Shastri',role:'sa2',chapters:['Prometheus'],chapter:'Prometheus'},
-    {name:'Hardik Khamar',role:'dc',chapters:['Lincoln'],chapter:'Lincoln',reportsTo:'Dinesh Sitlani'},
-    {name:'Parth Mandge',role:'sa1',chapters:['Lincoln'],chapter:'Lincoln'},
-    {name:'Romit Nanavati',role:'sa2',chapters:['Lincoln'],chapter:'Lincoln'}
+  const members=  [
+      {
+          "name": "Area Director 1",
+          "role": "ad",
+          "chapters": [],
+          "chapter": ""
+      },
+      {
+          "name": "Area Director 2",
+          "role": "ad",
+          "chapters": [],
+          "chapter": ""
+      },
+      {
+          "name": "Harsh Tanna",
+          "role": "srdc",
+          "chapter": "Acreseus",
+          "chapters": [
+              "Acreseus",
+              "Anthropos",
+              "BNI Vitus",
+              "Kleon",
+              "Lazarus",
+              "Magnus",
+              "Petra",
+              "Rubens"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Viraj Patel",
+          "role": "srdc",
+          "chapter": "Alethia",
+          "chapters": [
+              "Alethia",
+              "Artemisia",
+              "BNI Florentino",
+              "BNI Oliver",
+              "Kronos",
+              "Osiris"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Nilay Shah",
+          "role": "srdc",
+          "chapter": "Altimus",
+          "chapters": [
+              "Altimus",
+              "Atlas",
+              "Aurelius",
+              "BNI Anatolius",
+              "Ganicus",
+              "Hades",
+              "Hercules",
+              "Poseidon",
+              "Themis"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Vishvesh Glasses Pvt Ltd.",
+          "role": "srdc",
+          "chapter": "Ares",
+          "chapters": [
+              "Ares",
+              "Atilius",
+              "Crios",
+              "Faustus",
+              "Lincoln",
+              "Makarios",
+              "Obsidian",
+              "Prometheus",
+              "Tyche"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Aatman Mehta.",
+          "role": "srdc",
+          "chapter": "Athena",
+          "chapters": [
+              "Athena",
+              "BNI Aegeus",
+              "Colossus",
+              "Darius",
+              "Odysseus",
+              "Perseus",
+              "Romulus"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Nachiket Patel",
+          "role": "srdc",
+          "chapter": "BNI Aegon",
+          "chapters": [
+              "BNI Aegon",
+              "BNI Antonius",
+              "BNI Demetrius",
+              "BNI Diomedes"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Aesthetic Business Processes Pvt Ltd",
+          "role": "srdc",
+          "chapter": "BNI Aurus",
+          "chapters": [
+              "BNI Aurus",
+              "BNI Hera",
+              "Dominus",
+              "Macedonias",
+              "Maximus",
+              "Raphael",
+              "Vinci"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Oorvaksh Medora",
+          "role": "srdc",
+          "chapter": "BNI Calibos",
+          "chapters": [
+              "BNI Calibos",
+              "Crixus",
+              "Eros",
+              "Helenus",
+              "Olympus",
+              "Plutus",
+              "Zenobia"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Rohan Saraf",
+          "role": "srdc",
+          "chapter": "BNI Crypto",
+          "chapters": [
+              "BNI Crypto",
+              "BNI Mythos",
+              "BNI Picasso",
+              "BNI Roxanne",
+              "Nikolaus"
+          ],
+          "reportsTo": ""
+      },
+      {
+          "name": "Niraj Goswami",
+          "role": "dc",
+          "chapter": "Acreseus",
+          "chapters": [
+              "Acreseus"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Punit Periwal",
+          "role": "dc",
+          "chapter": "Alethia",
+          "chapters": [
+              "Alethia"
+          ],
+          "reportsTo": "Viraj Patel"
+      },
+      {
+          "name": "Anand Jhunjhunwala",
+          "role": "dc",
+          "chapter": "Altimus",
+          "chapters": [
+              "Altimus"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Harsh Tanna",
+          "role": "dc",
+          "chapter": "Anthropos",
+          "chapters": [
+              "Anthropos"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Alpesh Shah",
+          "role": "dc",
+          "chapter": "Ares",
+          "chapters": [
+              "Ares"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Siddarth P Shahh",
+          "role": "dc",
+          "chapter": "Artemisia",
+          "chapters": [
+              "Artemisia"
+          ],
+          "reportsTo": "Viraj Patel"
+      },
+      {
+          "name": "Harsh Desai",
+          "role": "dc",
+          "chapter": "Athena",
+          "chapters": [
+              "Athena",
+              "Odysseus"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Rutul Shah",
+          "role": "dc",
+          "chapter": "Atilius",
+          "chapters": [
+              "Atilius"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Nilay Shah",
+          "role": "dc",
+          "chapter": "Atlas",
+          "chapters": [
+              "Atlas"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Arpita Shah",
+          "role": "dc",
+          "chapter": "Aurelius",
+          "chapters": [
+              "Aurelius"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Ruchi Shah",
+          "role": "dc",
+          "chapter": "BNI Aegeus",
+          "chapters": [
+              "BNI Aegeus"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Vidit Soni",
+          "role": "dc",
+          "chapter": "BNI Aegon",
+          "chapters": [
+              "BNI Aegon"
+          ],
+          "reportsTo": "Nachiket Patel"
+      },
+      {
+          "name": "Mihir Parikh",
+          "role": "dc",
+          "chapter": "BNI Anatolius",
+          "chapters": [
+              "BNI Anatolius",
+              "BNI Hera"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Sanket Patel",
+          "role": "dc",
+          "chapter": "BNI Antonius",
+          "chapters": [
+              "BNI Antonius"
+          ],
+          "reportsTo": "Nachiket Patel"
+      },
+      {
+          "name": "Vitragg Bhandaari",
+          "role": "dc",
+          "chapter": "BNI Aurus",
+          "chapters": [
+              "BNI Aurus",
+              "Raphael"
+          ],
+          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "APMS & Co.",
+          "role": "dc",
+          "chapter": "BNI Calibos",
+          "chapters": [
+              "BNI Calibos"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      },
+      {
+          "name": "Varteka Ssharmaa",
+          "role": "dc",
+          "chapter": "BNI Crypto",
+          "chapters": [
+              "BNI Crypto"
+          ],
+          "reportsTo": "Rohan Saraf"
+      },
+      {
+          "name": "Dhaval Darji",
+          "role": "dc",
+          "chapter": "BNI Demetrius",
+          "chapters": [
+              "BNI Demetrius"
+          ],
+          "reportsTo": "Nachiket Patel"
+      },
+      {
+          "name": "Rohit Dagli",
+          "role": "dc",
+          "chapter": "BNI Diomedes",
+          "chapters": [
+              "BNI Diomedes"
+          ],
+          "reportsTo": "Nachiket Patel"
+      },
+      {
+          "name": "Utpal Raval",
+          "role": "dc",
+          "chapter": "BNI Florentino",
+          "chapters": [
+              "BNI Florentino"
+          ],
+          "reportsTo": "Viraj Patel"
+      },
+      {
+          "name": "Dishit Parekh",
+          "role": "dc",
+          "chapter": "BNI Mythos",
+          "chapters": [
+              "BNI Mythos"
+          ],
+          "reportsTo": "Rohan Saraf"
+      },
+      {
+          "name": "Viraj Patel",
+          "role": "dc",
+          "chapter": "BNI Oliver",
+          "chapters": [
+              "BNI Oliver"
+          ],
+          "reportsTo": "Viraj Patel"
+      },
+      {
+          "name": "Tanisha Keswani",
+          "role": "dc",
+          "chapter": "BNI Picasso",
+          "chapters": [
+              "BNI Picasso"
+          ],
+          "reportsTo": "Rohan Saraf"
+      },
+      {
+          "name": "Rohan Saraf",
+          "role": "dc",
+          "chapter": "BNI Roxanne",
+          "chapters": [
+              "BNI Roxanne"
+          ],
+          "reportsTo": "Rohan Saraf"
+      },
+      {
+          "name": "Gaurang S Dave",
+          "role": "dc",
+          "chapter": "BNI Vitus",
+          "chapters": [
+              "BNI Vitus"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Aatman Mehta.",
+          "role": "dc",
+          "chapter": "Colossus",
+          "chapters": [
+              "Colossus"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Heena Poriya",
+          "role": "dc",
+          "chapter": "Crios",
+          "chapters": [
+              "Crios",
+              "Faustus"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Shakeel Khimani",
+          "role": "dc",
+          "chapter": "Crixus",
+          "chapters": [
+              "Crixus",
+              "Helenus"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      },
+      {
+          "name": "Nilesh Parmar",
+          "role": "dc",
+          "chapter": "Darius",
+          "chapters": [
+              "Darius"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Honey Tilokani",
+          "role": "dc",
+          "chapter": "Dominus",
+          "chapters": [
+              "Dominus"
+          ],
+          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "Sukhdeep Singh",
+          "role": "dc",
+          "chapter": "Eros",
+          "chapters": [
+              "Eros"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      },
+      {
+          "name": "Gurjotsingh Digwa",
+          "role": "dc",
+          "chapter": "Ganicus",
+          "chapters": [
+              "Ganicus"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Sanket Gohil",
+          "role": "dc",
+          "chapter": "Hades",
+          "chapters": [
+              "Hades"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Amit Bharadva",
+          "role": "dc",
+          "chapter": "Hercules",
+          "chapters": [
+              "Hercules",
+              "Themis"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Saurin Sanghavi",
+          "role": "dc",
+          "chapter": "Kleon",
+          "chapters": [
+              "Kleon"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Vishakh Shah",
+          "role": "dc",
+          "chapter": "Kronos",
+          "chapters": [
+              "Kronos",
+              "Osiris"
+          ],
+          "reportsTo": "Viraj Patel"
+      },
+      {
+          "name": "Manish Dave",
+          "role": "dc",
+          "chapter": "Lazarus",
+          "chapters": [
+              "Lazarus"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Hardik Khamar",
+          "role": "dc",
+          "chapter": "Lincoln",
+          "chapters": [
+              "Lincoln"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Rachit Pandya",
+          "role": "dc",
+          "chapter": "Macedonias",
+          "chapters": [
+              "Macedonias"
+          ],
+          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "Bhargav Shah",
+          "role": "dc",
+          "chapter": "Magnus",
+          "chapters": [
+              "Magnus"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Anand Patel.",
+          "role": "dc",
+          "chapter": "Makarios",
+          "chapters": [
+              "Makarios"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Aesthetic Business Processes Pvt Ltd",
+          "role": "dc",
+          "chapter": "Maximus",
+          "chapters": [
+              "Maximus"
+          ],
+          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "Nimesh Patel",
+          "role": "dc",
+          "chapter": "Nikolaus",
+          "chapters": [
+              "Nikolaus"
+          ],
+          "reportsTo": "Rohan Saraf"
+      },
+      {
+          "name": "Dr. Amit Patel",
+          "role": "dc",
+          "chapter": "Obsidian",
+          "chapters": [
+              "Obsidian"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Oorvaksh Medora",
+          "role": "dc",
+          "chapter": "Olympus",
+          "chapters": [
+              "Olympus"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      },
+      {
+          "name": "Sneha Shah",
+          "role": "dc",
+          "chapter": "Perseus",
+          "chapters": [
+              "Perseus"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Anant Agrawal",
+          "role": "dc",
+          "chapter": "Petra",
+          "chapters": [
+              "Petra"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Sagar Vora",
+          "role": "dc",
+          "chapter": "Plutus",
+          "chapters": [
+              "Plutus"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      },
+      {
+          "name": "Vaibhav Kothari",
+          "role": "dc",
+          "chapter": "Poseidon",
+          "chapters": [
+              "Poseidon"
+          ],
+          "reportsTo": "Nilay Shah"
+      },
+      {
+          "name": "Vishvesh Glasses Pvt Ltd.",
+          "role": "dc",
+          "chapter": "Prometheus",
+          "chapters": [
+              "Prometheus"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Digvijaysinh Rathod",
+          "role": "dc",
+          "chapter": "Romulus",
+          "chapters": [
+              "Romulus"
+          ],
+          "reportsTo": "Aatman Mehta."
+      },
+      {
+          "name": "Dr Palak Mehta",
+          "role": "dc",
+          "chapter": "Rubens",
+          "chapters": [
+              "Rubens"
+          ],
+          "reportsTo": "Harsh Tanna"
+      },
+      {
+          "name": "Vyomesh Shah",
+          "role": "dc",
+          "chapter": "Tyche",
+          "chapters": [
+              "Tyche"
+          ],
+          "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+          "name": "Zalak Vasavda",
+          "role": "dc",
+          "chapter": "Vinci",
+          "chapters": [
+              "Vinci"
+          ],
+          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+          "name": "Prabhat Vijh",
+          "role": "dc",
+          "chapter": "Zenobia",
+          "chapters": [
+              "Zenobia"
+          ],
+          "reportsTo": "Oorvaksh Medora"
+      }
   ];
   const batch=db.batch();
   chapters.forEach(c=>batch.set(db.collection('chapters').doc(c.name),c));

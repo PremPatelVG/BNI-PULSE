@@ -14,6 +14,13 @@ The app now supports a regional leadership hierarchy:
 
 Members can include `chapters`, `chapter`, and `reportsTo` fields. The UI treats CD and DC as the same role and stores it as `dc`.
 
+The current seed hierarchy is based on `SRDC & DC CHAPTER WSIE.xlsx`:
+
+- 62 chapters
+- 9 Senior Directors
+- 55 unique Chapter Directors / DCs
+- 2 placeholder Area Directors, pending final names
+
 ## Run locally
 
 ```bash
