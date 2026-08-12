@@ -21,6 +21,24 @@ The current seed hierarchy is based on `SRDC & DC CHAPTER WSIE.xlsx`:
 - 55 unique Chapter Directors / DCs
 - 2 Area Directors: Yash Vasant and Snehal Patel
 
+## Import real hierarchy
+
+Use the workbook with columns `Chapter Region`, `Team`, `Chapter Name`, `SRDC`, `DC`, and `Meeting Day`.
+
+Dry run:
+
+```bash
+npm run import:hierarchy -- --file="C:/Users/Admin/Downloads/SRDC & DC CHAPTER WSIE.xlsx"
+```
+
+Import into Firestore:
+
+```bash
+npm run import:hierarchy -- --file="C:/Users/Admin/Downloads/SRDC & DC CHAPTER WSIE.xlsx" --write=true --default-pin=1234
+```
+
+Before running the write command, configure Firebase Admin credentials with `FIREBASE_SERVICE_ACCOUNT_BASE64` or `FIREBASE_SERVICE_ACCOUNT_PATH`. The importer writes `chapters` and `members`, stores imported PINs as bcrypt hashes, and keeps CD/DC as role `dc`.
+
 ## Run locally
 
 ```bash
@@ -30,6 +48,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+For a beginner-friendly Firebase setup walkthrough, see [docs/FIREBASE_BEGINNER_SETUP.md](docs/FIREBASE_BEGINNER_SETUP.md).
 
 ## Required deployment variables
 
@@ -67,15 +87,46 @@ The backend never returns member PINs. New member PINs sent through the API are 
 
 ## Deployment
 
-This repo includes a `Dockerfile` and `Procfile`, so it can deploy to common Node hosts such as Render, Railway, Fly.io, Heroku-style platforms, or any Docker host.
+This repo is now ready for Netlify with a static frontend and serverless backend.
 
 Build command:
 
 ```bash
-npm ci
+npm run build
 ```
 
-Start command:
+Publish directory:
+
+```text
+dist
+```
+
+Netlify Functions directory:
+
+```text
+netlify/functions
+```
+
+The frontend remains `index.html`. The secure backend runs through Netlify Functions:
+
+- `/config.js`
+- `/healthz`
+- `/api/*`
+
+Set production environment variables in Netlify, not in Git:
+
+- `NODE_ENV=production`
+- `APP_JWT_SECRET`
+- `FIREBASE_SERVICE_ACCOUNT_BASE64`
+- `FIREBASE_PROJECT_ID`
+- `PUBLIC_FIREBASE_API_KEY`
+- `PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `PUBLIC_FIREBASE_PROJECT_ID`
+- `PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `PUBLIC_FIREBASE_APP_ID`
+
+Local Express development still works:
 
 ```bash
 npm start

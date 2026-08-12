@@ -9,3 +9,5 @@ yarn-error.log*
 .DS_Store
 coverage/
 dist/
+firebase-service-account-base64.txt
+.netlify/
