@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import admin from "firebase-admin";
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { config } from "./config.js";
 
 function readServiceAccount() {
@@ -15,27 +16,25 @@ function readServiceAccount() {
   return null;
 }
 
-let initialized = false;
-
 export function getFirebaseAdmin() {
-  if (!initialized) {
+  if (!getApps().length) {
     const serviceAccount = readServiceAccount();
     if (serviceAccount) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
         projectId: config.firebase.projectId || serviceAccount.project_id
       });
     } else {
-      admin.initializeApp({
+      initializeApp({
         projectId: config.firebase.projectId || undefined
       });
     }
-    initialized = true;
   }
 
-  return admin;
+  return getApps()[0];
 }
 
 export function getDb() {
-  return getFirebaseAdmin().firestore();
+  getFirebaseAdmin();
+  return getFirestore();
 }
