@@ -11,6 +11,11 @@ fs.mkdirSync(distDir, { recursive: true });
 
 fs.copyFileSync(path.join(rootDir, "index.html"), path.join(distDir, "index.html"));
 
+const localTlrPath = path.join(rootDir, "local-tlr-data.json");
+if (fs.existsSync(localTlrPath)) {
+  fs.copyFileSync(localTlrPath, path.join(distDir, "local-tlr-data.json"));
+}
+
 const vendorDir = path.join(rootDir, "vendor");
 if (fs.existsSync(vendorDir)) {
   fs.cpSync(vendorDir, path.join(distDir, "vendor"), { recursive: true });

@@ -1,10 +1,10 @@
-# Firebase Beginner Setup Guide for BNI Pulse
+# Firebase Beginner Setup Guide for BNI CHAPTER PULSE
 
-This guide shows how to create your own Firebase project, connect it to BNI Pulse, and import the Director/Senior Director chapter hierarchy.
+This guide shows how to create your own Firebase project, connect it to BNI CHAPTER PULSE, and import the Director/Senior Director chapter hierarchy.
 
 ## What Firebase Will Store
 
-BNI Pulse uses Firebase Firestore as the database.
+BNI CHAPTER PULSE uses Firebase Firestore as the database.
 
 It will store:
 
@@ -28,7 +28,7 @@ It will not store plain text PINs.
 3. Project name:
 
    ```text
-   BNI Pulse
+   BNI CHAPTER PULSE
    ```
 
 4. Google Analytics can be disabled for now.
@@ -53,7 +53,7 @@ The web app config is public and is used by the dashboard frontend.
 3. App nickname:
 
    ```text
-   BNI Pulse Web
+   BNI CHAPTER PULSE Web
    ```
 
 4. Do not enable Firebase Hosting here yet.
@@ -128,7 +128,7 @@ The backend scripts need private Firebase Admin credentials.
 For local setup, use the file path in `.env`:
 
 ```env
-FIREBASE_SERVICE_ACCOUNT_PATH=C:/Users/Admin/Downloads/bni-pulse-service-account.json
+FIREBASE_SERVICE_ACCOUNT_PATH=C:/Users/Admin/Downloads/bni-chapter-pulse-service-account.json
 ```
 
 Important: do not commit the service account JSON file to GitHub.
@@ -223,7 +223,7 @@ For deployment, do not use `FIREBASE_SERVICE_ACCOUNT_PATH`. A hosted server cann
 Instead, convert the service account JSON into base64:
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\Users\Admin\Downloads\bni-pulse-service-account.json"))
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\Users\Admin\Downloads\bni-chapter-pulse-service-account.json"))
 ```
 
 Copy the output and set it as:

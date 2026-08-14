@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="The Argonauts">
-<title>The Argonauts - BNI Ahmedabad</title>
+<meta name="apple-mobile-web-app-title" content="BNI CHAPTER PULSE">
+<title>BNI CHAPTER PULSE</title>
 <script src="/config.js"></script>
 <script src="/vendor/exceljs.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -17,6 +17,7 @@
 body{font-family:Calibri, Arial, sans-serif;background:var(--surface);color:var(--text);min-height:100vh;}
 .loader{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff;gap:12px;}
 .loader-t1{font-size:32px;font-weight:900;letter-spacing:-.5px;}.loader-t1 em{color:var(--red);font-style:normal;}
+.brand-bni{color:var(--red);font-weight:900;}
 .loader-t2{font-size:11px;opacity:.4;letter-spacing:2px;text-transform:uppercase;}
 .spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
@@ -221,8 +222,8 @@ textarea{resize:vertical;min-height:68px;}
 </head>
 <body>
 <div class="loader" id="loaderScreen">
-  <div class="loader-t1">The <em>Argonauts</em></div>
-  <div class="loader-t2">BNI Ahmedabad</div>
+  <div class="loader-t1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+  <div class="loader-t2">Regional Leadership Dashboard</div>
   <div class="spin"></div>
 </div>
 
@@ -233,13 +234,13 @@ textarea{resize:vertical;min-height:68px;}
     <div id="loginSVLogoWrap" style="background:#fff;border-radius:12px;padding:8px 14px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:none;"><img id="loginSVLogo" src="" alt="Sicilian Ventures" style="max-height:56px;max-width:130px;object-fit:contain;display:block;"></div>
   </div>
   <div class="login-box">
-    <!-- Argonauts logo above form -->
+    <!-- Chapter Pulse logo above form -->
     <div class="login-arg-logo">
       <img id="loginArgLogo" src="" alt="" style="max-height:96px;max-width:220px;object-fit:contain;display:none;">
     </div>
     <div class="brand">
-      <div class="b1">The <em>Argonauts</em></div>
-      <div class="b2">BNI Ahmedabad</div>
+      <div class="b1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+      <div class="b2">Regional Leadership Dashboard</div>
       <div class="b3">Regional Leadership Dashboard</div>
     </div>
     <div class="fg"><label>Your Name</label>
@@ -259,8 +260,8 @@ textarea{resize:vertical;min-height:68px;}
     <div class="hdr-brand" style="display:flex;align-items:center;">
       <img id="hdrArgLogo" src="" alt="" class="hdr-logo" style="display:none;">
       <div>
-        <div class="h1">The <em>Argonauts</em></div>
-        <div class="h2">BNI Ahmedabad</div>
+        <div class="h1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+        <div class="h2">Regional Leadership Dashboard</div>
       </div>
     </div>
     <div class="hdr-r">
@@ -296,8 +297,15 @@ const TLR_PARAMS=[
   {key:'absenteeism',label:'Absenteeism',bounds:[12,10,5],maxPts:15,fmt:v=>parseFloat(v).toFixed(2)+'%',lower:true}
 ];
 
-let S={user:null,tab:'overview',callChapter:null,callWeek:null,ovWeek:null,sdReportWeek:null,chapters:[],members:[],weeklyData:[],duesData:[],tlrData:[],attendance:{},renewalsDone:{},monthlyTargets:{},chapterGoals:{},visitorPipeline:[],pipelineFilterChapter:'',pipelineFilterStage:'',miyagiMembers:[],lomData:[],miyagiFilterChapter:'',miyagiFilterBelt:'',miyagiFilterStatus:'active',unsubs:[],visSel:[],dcActiveChapter:null,
+let S={user:null,tab:'overview',callChapter:null,callWeek:null,ovWeek:null,sdReportWeek:null,chapters:[],members:[],weeklyData:[],duesData:[],tlrData:[],attendance:{},renewalsDone:{},monthlyTargets:{},chapterGoals:{},visitorPipeline:[],pipelineFilterChapter:'',pipelineFilterStage:'',miyagiMembers:[],lomData:[],miyagiFilterChapter:'',miyagiFilterBelt:'',miyagiFilterStatus:'active',unsubs:[],visSel:[],dcActiveChapter:null,localPreview:false,adOverviewChapterFilter:'',adOverviewSeniorFilter:'',adRetentionWindow:12,renewalWindowDays:90,adNetWindowDays:90,adNetWindowRange:'90d',
   activityLog:[],activityLogFilterChapter:'',activityLogFilterAction:'',activityLogShowAll:false,srCallDay:'Friday'};
+
+const AREA_DIRECTOR_TOTAL_SCORE_TARGET=4404;
+const AREA_DIRECTOR_SUPPORT_YEAR_TARGET=696;
+const AREA_DIRECTOR_SUPPORT_QUARTER_COUNT=4;
+const AREA_DIRECTOR_SUPPORT_QUARTER_TARGET=174;
+const MONTH_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PREVIEW_MEMBER_PIN='1234';
 
 // WEEK HELPERS ──
 function getWeekTueFri(dateStr){
@@ -337,7 +345,16 @@ function getWeeks(){
 // BOOT ──
 async function boot(){
   try{loadBranding();}catch(e){console.warn('Branding load failed:',e);}
-  if(new URLSearchParams(location.search).get('preview')==='srdc'){
+  var previewMode=new URLSearchParams(location.search).get('preview');
+  if(previewMode==='tlr'){
+    await startLocalTlrPreview();
+    return;
+  }
+  if(previewMode==='login'){
+    await startLocalLoginPreview();
+    return;
+  }
+  if(previewMode==='srdc'){
     startSrdcPreview();
     return;
   }
@@ -375,20 +392,15 @@ async function boot(){
   }
 }
 
-// TEAM_ID: hardcoded to 'argonauts' for now. Every activityLog write is tagged with this
+// TEAM_ID: hardcoded to 'bni_chapter_pulse' for now. Every activityLog write is tagged with this
 // so that when the region build adds real multi-team scoping, existing log data already
 // carries a team field and doesn't need a backfill migration.
-const TEAM_ID='argonauts';
-
-// Master override PIN: hardcoded emergency Sr. DC login, bypasses whatever srPin is
-// currently set in Firestore (meta/config). Exists for lockout recovery only.
-// NOTE: this is client-side JS - anyone viewing page source can read this constant.
-// That's an accepted tradeoff until the region build's Firebase Authentication replaces PIN login.
-const MASTER_OVERRIDE_PIN='CHANGE_ME';
+const TEAM_ID='bni_chapter_pulse';
 
 // Generic activity logger. Call after any state-changing action. Never blocks or throws
 // into the caller - logging failures are swallowed so they can't break the actual save.
 async function logActivity(action,details){
+  if(isOfflinePreviewParam()||isLocalPreviewMode())return;
   try{
     await db.collection('activityLog').add({
       team:TEAM_ID,
@@ -403,1345 +415,1255 @@ async function logActivity(action,details){
 }
 
 let SEED_LOGIN_MEMBERS=[];
+let SEED_CHAPTERS=[];
 async function seedData(write=true){
   const chapters=  [
       {
-          "name": "Acreseus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 1,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Niraj Goswami"
+            "name": "Acreseus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 1,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Niraj Goswami"
       },
       {
-          "name": "Alethia",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 2,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Punit Periwal"
+            "name": "Alethia",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 2,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Punit Periwal"
       },
       {
-          "name": "Altimus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 3,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Anand Jhunjhunwala"
+            "name": "Altimus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 3,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Anand Jhunjhunwala"
       },
       {
-          "name": "Anthropos",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 4,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Harsh Tanna"
+            "name": "Anthropos",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 4,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Harsh Tanna"
       },
       {
-          "name": "Ares",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 5,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Alpesh Shah"
+            "name": "Ares",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 5,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Alpesh Shah"
       },
       {
-          "name": "Artemisia",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 6,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Siddarth P Shahh"
+            "name": "Artemisia",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 6,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Siddarth P Shahh"
       },
       {
-          "name": "Athena",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 7,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Harsh Desai"
+            "name": "Athena",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 7,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Harsh Desai"
       },
       {
-          "name": "Atilius",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 8,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Rutul Shah"
+            "name": "Atilius",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 8,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Rutul Shah"
       },
       {
-          "name": "Atlas",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 9,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Nilay Shah"
+            "name": "Atlas",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 9,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Nilay Shah"
       },
       {
-          "name": "Aurelius",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 10,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Arpita Shah"
+            "name": "Aurelius",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 10,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Arpita Shah"
       },
       {
-          "name": "BNI Aegeus",
-          "region": "Ahmedabad East",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 11,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Ruchi Shah"
+            "name": "BNI Aegeus",
+            "region": "Ahmedabad East",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 11,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Ruchi Shah"
       },
       {
-          "name": "BNI Aegon",
-          "region": "North Gujarat",
-          "team": "North Gujarat",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 12,
-          "target": 0,
-          "seniorDirector": "Nachiket Patel",
-          "chapterDirector": "Vidit Soni"
+            "name": "BNI Anatolius",
+            "region": "Ahmedabad East",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 12,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Mihir Parikh"
       },
       {
-          "name": "BNI Anatolius",
-          "region": "Ahmedabad East",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 13,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Mihir Parikh"
+            "name": "BNI Aurus",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 13,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Vitragg Bhandaari"
       },
       {
-          "name": "BNI Antonius",
-          "region": "North Gujarat",
-          "team": "North Gujarat",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 14,
-          "target": 0,
-          "seniorDirector": "Nachiket Patel",
-          "chapterDirector": "Sanket Patel"
+            "name": "BNI Calibos",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 14,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "APMS & Co."
       },
       {
-          "name": "BNI Aurus",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 15,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Vitragg Bhandaari"
+            "name": "BNI Crypto",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 15,
+            "target": 0,
+            "seniorDirector": "Rohan Saraf",
+            "chapterDirector": "Varteka Ssharmaa"
       },
       {
-          "name": "BNI Calibos",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 16,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "APMS & Co."
+            "name": "BNI Florentino",
+            "region": "Ahmedabad East",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 16,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Utpal Raval"
       },
       {
-          "name": "BNI Crypto",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 17,
-          "target": 0,
-          "seniorDirector": "Rohan Saraf",
-          "chapterDirector": "Varteka Ssharmaa"
+            "name": "BNI Hera",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 17,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Mihir Parikh"
       },
       {
-          "name": "BNI Demetrius",
-          "region": "North Gujarat",
-          "team": "North Gujarat",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 18,
-          "target": 0,
-          "seniorDirector": "Nachiket Patel",
-          "chapterDirector": "Dhaval Darji"
+            "name": "BNI Mythos",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 18,
+            "target": 0,
+            "seniorDirector": "Rohan Saraf",
+            "chapterDirector": "Dishit Parekh"
       },
       {
-          "name": "BNI Diomedes",
-          "region": "North Gujarat",
-          "team": "North Gujarat",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 19,
-          "target": 0,
-          "seniorDirector": "Nachiket Patel",
-          "chapterDirector": "Rohit Dagli"
+            "name": "BNI Oliver",
+            "region": "Ahmedabad East",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 19,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Viraj Patel"
       },
       {
-          "name": "BNI Florentino",
-          "region": "Ahmedabad East",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 20,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Utpal Raval"
+            "name": "BNI Picasso",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 20,
+            "target": 0,
+            "seniorDirector": "Rohan Saraf",
+            "chapterDirector": "Tanisha Keswani"
       },
       {
-          "name": "BNI Hera",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 21,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Mihir Parikh"
+            "name": "BNI Roxanne",
+            "region": "Ahmedabad East",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 21,
+            "target": 0,
+            "seniorDirector": "Rohan Saraf",
+            "chapterDirector": "Rohan Saraf"
       },
       {
-          "name": "BNI Mythos",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 22,
-          "target": 0,
-          "seniorDirector": "Rohan Saraf",
-          "chapterDirector": "Dishit Parekh"
+            "name": "BNI Vitus",
+            "region": "Ahmedabad East",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 22,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Gaurang S Dave"
       },
       {
-          "name": "BNI Oliver",
-          "region": "Ahmedabad East",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 23,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Viraj Patel"
+            "name": "Colossus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 23,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Aatman Mehta."
       },
       {
-          "name": "BNI Picasso",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 24,
-          "target": 0,
-          "seniorDirector": "Rohan Saraf",
-          "chapterDirector": "Tanisha Keswani"
+            "name": "Crios",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 24,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Heena Poriya"
       },
       {
-          "name": "BNI Roxanne",
-          "region": "Ahmedabad East",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 25,
-          "target": 0,
-          "seniorDirector": "Rohan Saraf",
-          "chapterDirector": "Rohan Saraf"
+            "name": "Crixus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 25,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Shakeel Khimani"
       },
       {
-          "name": "BNI Vitus",
-          "region": "Ahmedabad East",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 26,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Gaurang S Dave"
+            "name": "Darius",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 26,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Nilesh Parmar"
       },
       {
-          "name": "Colossus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 27,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Aatman Mehta."
+            "name": "Dominus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 27,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Honey Tilokani"
       },
       {
-          "name": "Crios",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 28,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Heena Poriya"
+            "name": "Eros",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 28,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Sukhdeep Singh"
       },
       {
-          "name": "Crixus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 29,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Shakeel Khimani"
+            "name": "Faustus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 29,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Heena Poriya"
       },
       {
-          "name": "Darius",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 30,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Nilesh Parmar"
+            "name": "Ganicus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 30,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Gurjotsingh Digwa"
       },
       {
-          "name": "Dominus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 31,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Honey Tilokani"
+            "name": "Hades",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 31,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Sanket Gohil"
       },
       {
-          "name": "Eros",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 32,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Sukhdeep Singh"
+            "name": "Helenus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 32,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Shakeel Khimani"
       },
       {
-          "name": "Faustus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 33,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Heena Poriya"
+            "name": "Hercules",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 33,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Amit Bharadva"
       },
       {
-          "name": "Ganicus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 34,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Gurjotsingh Digwa"
+            "name": "Kleon",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 34,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Saurin Sanghavi"
       },
       {
-          "name": "Hades",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 35,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Sanket Gohil"
+            "name": "Kronos",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 35,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Vishakh Shah"
       },
       {
-          "name": "Helenus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 36,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Shakeel Khimani"
+            "name": "Lazarus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 36,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Manish Dave"
       },
       {
-          "name": "Hercules",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 37,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Amit Bharadva"
+            "name": "Lincoln",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 37,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Hardik Khamar"
       },
       {
-          "name": "Kleon",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 38,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Saurin Sanghavi"
+            "name": "Macedonias",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 38,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Rachit Pandya"
       },
       {
-          "name": "Kronos",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 39,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Vishakh Shah"
+            "name": "Magnus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 39,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Bhargav Shah"
       },
       {
-          "name": "Lazarus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 40,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Manish Dave"
+            "name": "Makarios",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 40,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Anand Patel."
       },
       {
-          "name": "Lincoln",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 41,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Hardik Khamar"
+            "name": "Maximus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 41,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Aesthetic Business Processes Pvt Ltd"
       },
       {
-          "name": "Macedonias",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 42,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Rachit Pandya"
+            "name": "Nikolaus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 42,
+            "target": 0,
+            "seniorDirector": "Rohan Saraf",
+            "chapterDirector": "Nimesh Patel"
       },
       {
-          "name": "Magnus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 43,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Bhargav Shah"
+            "name": "Obsidian",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 43,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Dr. Amit Patel"
       },
       {
-          "name": "Makarios",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 44,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Anand Patel."
+            "name": "Odysseus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 44,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Harsh Desai"
       },
       {
-          "name": "Maximus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 45,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Aesthetic Business Processes Pvt Ltd"
+            "name": "Olympus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 45,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Oorvaksh Medora"
       },
       {
-          "name": "Nikolaus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 46,
-          "target": 0,
-          "seniorDirector": "Rohan Saraf",
-          "chapterDirector": "Nimesh Patel"
+            "name": "Osiris",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 46,
+            "target": 0,
+            "seniorDirector": "Viraj Patel",
+            "chapterDirector": "Vishakh Shah"
       },
       {
-          "name": "Obsidian",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 47,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Dr. Amit Patel"
+            "name": "Perseus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 47,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Sneha Shah"
       },
       {
-          "name": "Odysseus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 48,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Harsh Desai"
+            "name": "Petra",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 48,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Anant Agrawal"
       },
       {
-          "name": "Olympus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 49,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Oorvaksh Medora"
+            "name": "Plutus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 49,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Sagar Vora"
       },
       {
-          "name": "Osiris",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 50,
-          "target": 0,
-          "seniorDirector": "Viraj Patel",
-          "chapterDirector": "Vishakh Shah"
+            "name": "Poseidon",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 50,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Vaibhav Kothari"
       },
       {
-          "name": "Perseus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 51,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Sneha Shah"
+            "name": "Prometheus",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 51,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Vishvesh Glasses Pvt Ltd."
       },
       {
-          "name": "Petra",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 52,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Anant Agrawal"
+            "name": "Raphael",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 52,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Vitragg Bhandaari"
       },
       {
-          "name": "Plutus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 53,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Sagar Vora"
+            "name": "Romulus",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 53,
+            "target": 0,
+            "seniorDirector": "Aatman Mehta.",
+            "chapterDirector": "Digvijaysinh Rathod"
       },
       {
-          "name": "Poseidon",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 54,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Vaibhav Kothari"
+            "name": "Rubens",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 54,
+            "target": 0,
+            "seniorDirector": "Harsh Tanna",
+            "chapterDirector": "Dr Palak Mehta"
       },
       {
-          "name": "Prometheus",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 55,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Vishvesh Glasses Pvt Ltd."
+            "name": "Themis",
+            "region": "Ahmedabad West",
+            "team": "Trojans",
+            "day": "Thursday",
+            "tenure": "apr",
+            "order": 55,
+            "target": 0,
+            "seniorDirector": "Nilay Shah",
+            "chapterDirector": "Amit Bharadva"
       },
       {
-          "name": "Raphael",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 56,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Vitragg Bhandaari"
+            "name": "Tyche",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Tuesday",
+            "tenure": "apr",
+            "order": 56,
+            "target": 0,
+            "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
+            "chapterDirector": "Vyomesh Shah"
       },
       {
-          "name": "Romulus",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 57,
-          "target": 0,
-          "seniorDirector": "Aatman Mehta.",
-          "chapterDirector": "Digvijaysinh Rathod"
+            "name": "Vinci",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Wednesday",
+            "tenure": "apr",
+            "order": 57,
+            "target": 0,
+            "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
+            "chapterDirector": "Zalak Vasavda"
       },
       {
-          "name": "Rubens",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 58,
-          "target": 0,
-          "seniorDirector": "Harsh Tanna",
-          "chapterDirector": "Dr Palak Mehta"
-      },
-      {
-          "name": "Themis",
-          "region": "Ahmedabad West",
-          "team": "Trojans",
-          "day": "Thursday",
-          "tenure": "apr",
-          "order": 59,
-          "target": 0,
-          "seniorDirector": "Nilay Shah",
-          "chapterDirector": "Amit Bharadva"
-      },
-      {
-          "name": "Tyche",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Tuesday",
-          "tenure": "apr",
-          "order": 60,
-          "target": 0,
-          "seniorDirector": "Vishvesh Glasses Pvt Ltd.",
-          "chapterDirector": "Vyomesh Shah"
-      },
-      {
-          "name": "Vinci",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Wednesday",
-          "tenure": "apr",
-          "order": 61,
-          "target": 0,
-          "seniorDirector": "Aesthetic Business Processes Pvt Ltd",
-          "chapterDirector": "Zalak Vasavda"
-      },
-      {
-          "name": "Zenobia",
-          "region": "Ahmedabad West",
-          "team": "Spartans",
-          "day": "Friday",
-          "tenure": "apr",
-          "order": 62,
-          "target": 0,
-          "seniorDirector": "Oorvaksh Medora",
-          "chapterDirector": "Prabhat Vijh"
+            "name": "Zenobia",
+            "region": "Ahmedabad West",
+            "team": "Spartans",
+            "day": "Friday",
+            "tenure": "apr",
+            "order": 58,
+            "target": 0,
+            "seniorDirector": "Oorvaksh Medora",
+            "chapterDirector": "Prabhat Vijh"
       }
-  ];
+];
   const members=  [
       {
-          "name": "Yash Vasant",
-          "role": "ad",
-          "chapters": [],
-          "chapter": ""
-      },
-      {
-          "name": "Snehal Patel",
-          "role": "ad",
-          "chapters": [],
-          "chapter": ""
-      },
-      {
-          "name": "Harsh Tanna",
-          "role": "srdc",
-          "chapter": "Acreseus",
-          "chapters": [
-              "Acreseus",
-              "Anthropos",
-              "BNI Vitus",
-              "Kleon",
-              "Lazarus",
-              "Magnus",
-              "Petra",
-              "Rubens"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Viraj Patel",
-          "role": "srdc",
-          "chapter": "Alethia",
-          "chapters": [
-              "Alethia",
-              "Artemisia",
-              "BNI Florentino",
-              "BNI Oliver",
-              "Kronos",
-              "Osiris"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Nilay Shah",
-          "role": "srdc",
-          "chapter": "Altimus",
-          "chapters": [
-              "Altimus",
-              "Atlas",
-              "Aurelius",
-              "BNI Anatolius",
-              "Ganicus",
-              "Hades",
-              "Hercules",
-              "Poseidon",
-              "Themis"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Vishvesh Glasses Pvt Ltd.",
-          "role": "srdc",
-          "chapter": "Ares",
-          "chapters": [
-              "Ares",
-              "Atilius",
-              "Crios",
-              "Faustus",
-              "Lincoln",
-              "Makarios",
-              "Obsidian",
-              "Prometheus",
-              "Tyche"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Aatman Mehta.",
-          "role": "srdc",
-          "chapter": "Athena",
-          "chapters": [
-              "Athena",
-              "BNI Aegeus",
-              "Colossus",
-              "Darius",
-              "Odysseus",
-              "Perseus",
-              "Romulus"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Nachiket Patel",
-          "role": "srdc",
-          "chapter": "BNI Aegon",
-          "chapters": [
-              "BNI Aegon",
-              "BNI Antonius",
-              "BNI Demetrius",
-              "BNI Diomedes"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Aesthetic Business Processes Pvt Ltd",
-          "role": "srdc",
-          "chapter": "BNI Aurus",
-          "chapters": [
-              "BNI Aurus",
-              "BNI Hera",
-              "Dominus",
-              "Macedonias",
-              "Maximus",
-              "Raphael",
-              "Vinci"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Oorvaksh Medora",
-          "role": "srdc",
-          "chapter": "BNI Calibos",
-          "chapters": [
-              "BNI Calibos",
-              "Crixus",
-              "Eros",
-              "Helenus",
-              "Olympus",
-              "Plutus",
-              "Zenobia"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Rohan Saraf",
-          "role": "srdc",
-          "chapter": "BNI Crypto",
-          "chapters": [
-              "BNI Crypto",
-              "BNI Mythos",
-              "BNI Picasso",
-              "BNI Roxanne",
-              "Nikolaus"
-          ],
-          "reportsTo": ""
-      },
-      {
-          "name": "Niraj Goswami",
-          "role": "dc",
-          "chapter": "Acreseus",
-          "chapters": [
-              "Acreseus"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Punit Periwal",
-          "role": "dc",
-          "chapter": "Alethia",
-          "chapters": [
-              "Alethia"
-          ],
-          "reportsTo": "Viraj Patel"
-      },
-      {
-          "name": "Anand Jhunjhunwala",
-          "role": "dc",
-          "chapter": "Altimus",
-          "chapters": [
-              "Altimus"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Harsh Tanna",
-          "role": "dc",
-          "chapter": "Anthropos",
-          "chapters": [
-              "Anthropos"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Alpesh Shah",
-          "role": "dc",
-          "chapter": "Ares",
-          "chapters": [
-              "Ares"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Siddarth P Shahh",
-          "role": "dc",
-          "chapter": "Artemisia",
-          "chapters": [
-              "Artemisia"
-          ],
-          "reportsTo": "Viraj Patel"
-      },
-      {
-          "name": "Harsh Desai",
-          "role": "dc",
-          "chapter": "Athena",
-          "chapters": [
-              "Athena",
-              "Odysseus"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Rutul Shah",
-          "role": "dc",
-          "chapter": "Atilius",
-          "chapters": [
-              "Atilius"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Nilay Shah",
-          "role": "dc",
-          "chapter": "Atlas",
-          "chapters": [
-              "Atlas"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Arpita Shah",
-          "role": "dc",
-          "chapter": "Aurelius",
-          "chapters": [
-              "Aurelius"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Ruchi Shah",
-          "role": "dc",
-          "chapter": "BNI Aegeus",
-          "chapters": [
-              "BNI Aegeus"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Vidit Soni",
-          "role": "dc",
-          "chapter": "BNI Aegon",
-          "chapters": [
-              "BNI Aegon"
-          ],
-          "reportsTo": "Nachiket Patel"
-      },
-      {
-          "name": "Mihir Parikh",
-          "role": "dc",
-          "chapter": "BNI Anatolius",
-          "chapters": [
-              "BNI Anatolius",
-              "BNI Hera"
-          ],
-          "reportsTo": "Nilay Shah; Aesthetic Business Processes Pvt Ltd",
-          "chapterReportsTo": {
-              "BNI Anatolius": "Nilay Shah",
-              "BNI Hera": "Aesthetic Business Processes Pvt Ltd"
-          }
-      },
-      {
-          "name": "Sanket Patel",
-          "role": "dc",
-          "chapter": "BNI Antonius",
-          "chapters": [
-              "BNI Antonius"
-          ],
-          "reportsTo": "Nachiket Patel"
-      },
-      {
-          "name": "Vitragg Bhandaari",
-          "role": "dc",
-          "chapter": "BNI Aurus",
-          "chapters": [
-              "BNI Aurus",
-              "Raphael"
-          ],
-          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
-      },
-      {
-          "name": "APMS & Co.",
-          "role": "dc",
-          "chapter": "BNI Calibos",
-          "chapters": [
-              "BNI Calibos"
-          ],
-          "reportsTo": "Oorvaksh Medora"
-      },
-      {
-          "name": "Varteka Ssharmaa",
-          "role": "dc",
-          "chapter": "BNI Crypto",
-          "chapters": [
-              "BNI Crypto"
-          ],
-          "reportsTo": "Rohan Saraf"
-      },
-      {
-          "name": "Dhaval Darji",
-          "role": "dc",
-          "chapter": "BNI Demetrius",
-          "chapters": [
-              "BNI Demetrius"
-          ],
-          "reportsTo": "Nachiket Patel"
-      },
-      {
-          "name": "Rohit Dagli",
-          "role": "dc",
-          "chapter": "BNI Diomedes",
-          "chapters": [
-              "BNI Diomedes"
-          ],
-          "reportsTo": "Nachiket Patel"
-      },
-      {
-          "name": "Utpal Raval",
-          "role": "dc",
-          "chapter": "BNI Florentino",
-          "chapters": [
-              "BNI Florentino"
-          ],
-          "reportsTo": "Viraj Patel"
-      },
-      {
-          "name": "Dishit Parekh",
-          "role": "dc",
-          "chapter": "BNI Mythos",
-          "chapters": [
-              "BNI Mythos"
-          ],
-          "reportsTo": "Rohan Saraf"
-      },
-      {
-          "name": "Viraj Patel",
-          "role": "dc",
-          "chapter": "BNI Oliver",
-          "chapters": [
-              "BNI Oliver"
-          ],
-          "reportsTo": "Viraj Patel"
-      },
-      {
-          "name": "Tanisha Keswani",
-          "role": "dc",
-          "chapter": "BNI Picasso",
-          "chapters": [
-              "BNI Picasso"
-          ],
-          "reportsTo": "Rohan Saraf"
-      },
-      {
-          "name": "Rohan Saraf",
-          "role": "dc",
-          "chapter": "BNI Roxanne",
-          "chapters": [
-              "BNI Roxanne"
-          ],
-          "reportsTo": "Rohan Saraf"
-      },
-      {
-          "name": "Gaurang S Dave",
-          "role": "dc",
-          "chapter": "BNI Vitus",
-          "chapters": [
-              "BNI Vitus"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Aatman Mehta.",
-          "role": "dc",
-          "chapter": "Colossus",
-          "chapters": [
-              "Colossus"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Heena Poriya",
-          "role": "dc",
-          "chapter": "Crios",
-          "chapters": [
-              "Crios",
-              "Faustus"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Shakeel Khimani",
-          "role": "dc",
-          "chapter": "Crixus",
-          "chapters": [
-              "Crixus",
-              "Helenus"
-          ],
-          "reportsTo": "Oorvaksh Medora"
-      },
-      {
-          "name": "Nilesh Parmar",
-          "role": "dc",
-          "chapter": "Darius",
-          "chapters": [
-              "Darius"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Honey Tilokani",
-          "role": "dc",
-          "chapter": "Dominus",
-          "chapters": [
-              "Dominus"
-          ],
-          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
-      },
-      {
-          "name": "Sukhdeep Singh",
-          "role": "dc",
-          "chapter": "Eros",
-          "chapters": [
-              "Eros"
-          ],
-          "reportsTo": "Oorvaksh Medora"
-      },
-      {
-          "name": "Gurjotsingh Digwa",
-          "role": "dc",
-          "chapter": "Ganicus",
-          "chapters": [
-              "Ganicus"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Sanket Gohil",
-          "role": "dc",
-          "chapter": "Hades",
-          "chapters": [
-              "Hades"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Amit Bharadva",
-          "role": "dc",
-          "chapter": "Hercules",
-          "chapters": [
-              "Hercules",
-              "Themis"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Saurin Sanghavi",
-          "role": "dc",
-          "chapter": "Kleon",
-          "chapters": [
-              "Kleon"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Vishakh Shah",
-          "role": "dc",
-          "chapter": "Kronos",
-          "chapters": [
-              "Kronos",
-              "Osiris"
-          ],
-          "reportsTo": "Viraj Patel"
-      },
-      {
-          "name": "Manish Dave",
-          "role": "dc",
-          "chapter": "Lazarus",
-          "chapters": [
-              "Lazarus"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Hardik Khamar",
-          "role": "dc",
-          "chapter": "Lincoln",
-          "chapters": [
-              "Lincoln"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Rachit Pandya",
-          "role": "dc",
-          "chapter": "Macedonias",
-          "chapters": [
-              "Macedonias"
-          ],
-          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
-      },
-      {
-          "name": "Bhargav Shah",
-          "role": "dc",
-          "chapter": "Magnus",
-          "chapters": [
-              "Magnus"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Anand Patel.",
-          "role": "dc",
-          "chapter": "Makarios",
-          "chapters": [
-              "Makarios"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Aesthetic Business Processes Pvt Ltd",
-          "role": "dc",
-          "chapter": "Maximus",
-          "chapters": [
-              "Maximus"
-          ],
-          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
-      },
-      {
-          "name": "Nimesh Patel",
-          "role": "dc",
-          "chapter": "Nikolaus",
-          "chapters": [
-              "Nikolaus"
-          ],
-          "reportsTo": "Rohan Saraf"
-      },
-      {
-          "name": "Dr. Amit Patel",
-          "role": "dc",
-          "chapter": "Obsidian",
-          "chapters": [
-              "Obsidian"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Oorvaksh Medora",
-          "role": "dc",
-          "chapter": "Olympus",
-          "chapters": [
-              "Olympus"
-          ],
-          "reportsTo": "Oorvaksh Medora"
-      },
-      {
-          "name": "Sneha Shah",
-          "role": "dc",
-          "chapter": "Perseus",
-          "chapters": [
-              "Perseus"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Anant Agrawal",
-          "role": "dc",
-          "chapter": "Petra",
-          "chapters": [
-              "Petra"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Sagar Vora",
-          "role": "dc",
-          "chapter": "Plutus",
-          "chapters": [
-              "Plutus"
-          ],
-          "reportsTo": "Oorvaksh Medora"
-      },
-      {
-          "name": "Vaibhav Kothari",
-          "role": "dc",
-          "chapter": "Poseidon",
-          "chapters": [
-              "Poseidon"
-          ],
-          "reportsTo": "Nilay Shah"
-      },
-      {
-          "name": "Vishvesh Glasses Pvt Ltd.",
-          "role": "dc",
-          "chapter": "Prometheus",
-          "chapters": [
-              "Prometheus"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Digvijaysinh Rathod",
-          "role": "dc",
-          "chapter": "Romulus",
-          "chapters": [
-              "Romulus"
-          ],
-          "reportsTo": "Aatman Mehta."
-      },
-      {
-          "name": "Dr Palak Mehta",
-          "role": "dc",
-          "chapter": "Rubens",
-          "chapters": [
-              "Rubens"
-          ],
-          "reportsTo": "Harsh Tanna"
-      },
-      {
-          "name": "Vyomesh Shah",
-          "role": "dc",
-          "chapter": "Tyche",
-          "chapters": [
-              "Tyche"
-          ],
-          "reportsTo": "Vishvesh Glasses Pvt Ltd."
-      },
-      {
-          "name": "Zalak Vasavda",
-          "role": "dc",
-          "chapter": "Vinci",
-          "chapters": [
-              "Vinci"
-          ],
-          "reportsTo": "Aesthetic Business Processes Pvt Ltd"
-      },
-      {
-          "name": "Prabhat Vijh",
-          "role": "dc",
-          "chapter": "Zenobia",
-          "chapters": [
-              "Zenobia"
-          ],
-          "reportsTo": "Oorvaksh Medora"
+            "name": "Yash Vasant",
+            "role": "ad",
+            "chapters": [],
+            "chapter": ""
+      },
+      {
+            "name": "Snehal Patel",
+            "role": "ad",
+            "chapters": [],
+            "chapter": ""
+      },
+      {
+            "name": "Harsh Tanna",
+            "role": "srdc",
+            "chapter": "Acreseus",
+            "chapters": [
+                  "Acreseus",
+                  "Anthropos",
+                  "BNI Vitus",
+                  "Kleon",
+                  "Lazarus",
+                  "Magnus",
+                  "Petra",
+                  "Rubens"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Viraj Patel",
+            "role": "srdc",
+            "chapter": "Alethia",
+            "chapters": [
+                  "Alethia",
+                  "Artemisia",
+                  "BNI Florentino",
+                  "BNI Oliver",
+                  "Kronos",
+                  "Osiris"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Nilay Shah",
+            "role": "srdc",
+            "chapter": "Altimus",
+            "chapters": [
+                  "Altimus",
+                  "Atlas",
+                  "Aurelius",
+                  "BNI Anatolius",
+                  "Ganicus",
+                  "Hades",
+                  "Hercules",
+                  "Poseidon",
+                  "Themis"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Vishvesh Glasses Pvt Ltd.",
+            "role": "srdc",
+            "chapter": "Ares",
+            "chapters": [
+                  "Ares",
+                  "Atilius",
+                  "Crios",
+                  "Faustus",
+                  "Lincoln",
+                  "Makarios",
+                  "Obsidian",
+                  "Prometheus",
+                  "Tyche"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Aatman Mehta.",
+            "role": "srdc",
+            "chapter": "Athena",
+            "chapters": [
+                  "Athena",
+                  "BNI Aegeus",
+                  "Colossus",
+                  "Darius",
+                  "Odysseus",
+                  "Perseus",
+                  "Romulus"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Aesthetic Business Processes Pvt Ltd",
+            "role": "srdc",
+            "chapter": "BNI Aurus",
+            "chapters": [
+                  "BNI Aurus",
+                  "BNI Hera",
+                  "Dominus",
+                  "Macedonias",
+                  "Maximus",
+                  "Raphael",
+                  "Vinci"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Oorvaksh Medora",
+            "role": "srdc",
+            "chapter": "BNI Calibos",
+            "chapters": [
+                  "BNI Calibos",
+                  "Crixus",
+                  "Eros",
+                  "Helenus",
+                  "Olympus",
+                  "Plutus",
+                  "Zenobia"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Rohan Saraf",
+            "role": "srdc",
+            "chapter": "BNI Crypto",
+            "chapters": [
+                  "BNI Crypto",
+                  "BNI Mythos",
+                  "BNI Picasso",
+                  "BNI Roxanne",
+                  "Nikolaus"
+            ],
+            "reportsTo": ""
+      },
+      {
+            "name": "Niraj Goswami",
+            "role": "dc",
+            "chapter": "Acreseus",
+            "chapters": [
+                  "Acreseus"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Punit Periwal",
+            "role": "dc",
+            "chapter": "Alethia",
+            "chapters": [
+                  "Alethia"
+            ],
+            "reportsTo": "Viraj Patel"
+      },
+      {
+            "name": "Anand Jhunjhunwala",
+            "role": "dc",
+            "chapter": "Altimus",
+            "chapters": [
+                  "Altimus"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Harsh Tanna",
+            "role": "dc",
+            "chapter": "Anthropos",
+            "chapters": [
+                  "Anthropos"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Alpesh Shah",
+            "role": "dc",
+            "chapter": "Ares",
+            "chapters": [
+                  "Ares"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Siddarth P Shahh",
+            "role": "dc",
+            "chapter": "Artemisia",
+            "chapters": [
+                  "Artemisia"
+            ],
+            "reportsTo": "Viraj Patel"
+      },
+      {
+            "name": "Harsh Desai",
+            "role": "dc",
+            "chapter": "Athena",
+            "chapters": [
+                  "Athena",
+                  "Odysseus"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Rutul Shah",
+            "role": "dc",
+            "chapter": "Atilius",
+            "chapters": [
+                  "Atilius"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Nilay Shah",
+            "role": "dc",
+            "chapter": "Atlas",
+            "chapters": [
+                  "Atlas"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Arpita Shah",
+            "role": "dc",
+            "chapter": "Aurelius",
+            "chapters": [
+                  "Aurelius"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Ruchi Shah",
+            "role": "dc",
+            "chapter": "BNI Aegeus",
+            "chapters": [
+                  "BNI Aegeus"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Mihir Parikh",
+            "role": "dc",
+            "chapter": "BNI Anatolius",
+            "chapters": [
+                  "BNI Anatolius",
+                  "BNI Hera"
+            ],
+            "reportsTo": "Nilay Shah; Aesthetic Business Processes Pvt Ltd",
+            "chapterReportsTo": {
+                  "BNI Anatolius": "Nilay Shah",
+                  "BNI Hera": "Aesthetic Business Processes Pvt Ltd"
+            }
+      },
+      {
+            "name": "Vitragg Bhandaari",
+            "role": "dc",
+            "chapter": "BNI Aurus",
+            "chapters": [
+                  "BNI Aurus",
+                  "Raphael"
+            ],
+            "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+            "name": "APMS & Co.",
+            "role": "dc",
+            "chapter": "BNI Calibos",
+            "chapters": [
+                  "BNI Calibos"
+            ],
+            "reportsTo": "Oorvaksh Medora"
+      },
+      {
+            "name": "Varteka Ssharmaa",
+            "role": "dc",
+            "chapter": "BNI Crypto",
+            "chapters": [
+                  "BNI Crypto"
+            ],
+            "reportsTo": "Rohan Saraf"
+      },
+      {
+            "name": "Utpal Raval",
+            "role": "dc",
+            "chapter": "BNI Florentino",
+            "chapters": [
+                  "BNI Florentino"
+            ],
+            "reportsTo": "Viraj Patel"
+      },
+      {
+            "name": "Dishit Parekh",
+            "role": "dc",
+            "chapter": "BNI Mythos",
+            "chapters": [
+                  "BNI Mythos"
+            ],
+            "reportsTo": "Rohan Saraf"
+      },
+      {
+            "name": "Viraj Patel",
+            "role": "dc",
+            "chapter": "BNI Oliver",
+            "chapters": [
+                  "BNI Oliver"
+            ],
+            "reportsTo": "Viraj Patel"
+      },
+      {
+            "name": "Tanisha Keswani",
+            "role": "dc",
+            "chapter": "BNI Picasso",
+            "chapters": [
+                  "BNI Picasso"
+            ],
+            "reportsTo": "Rohan Saraf"
+      },
+      {
+            "name": "Rohan Saraf",
+            "role": "dc",
+            "chapter": "BNI Roxanne",
+            "chapters": [
+                  "BNI Roxanne"
+            ],
+            "reportsTo": "Rohan Saraf"
+      },
+      {
+            "name": "Gaurang S Dave",
+            "role": "dc",
+            "chapter": "BNI Vitus",
+            "chapters": [
+                  "BNI Vitus"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Aatman Mehta.",
+            "role": "dc",
+            "chapter": "Colossus",
+            "chapters": [
+                  "Colossus"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Heena Poriya",
+            "role": "dc",
+            "chapter": "Crios",
+            "chapters": [
+                  "Crios",
+                  "Faustus"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Shakeel Khimani",
+            "role": "dc",
+            "chapter": "Crixus",
+            "chapters": [
+                  "Crixus",
+                  "Helenus"
+            ],
+            "reportsTo": "Oorvaksh Medora"
+      },
+      {
+            "name": "Nilesh Parmar",
+            "role": "dc",
+            "chapter": "Darius",
+            "chapters": [
+                  "Darius"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Honey Tilokani",
+            "role": "dc",
+            "chapter": "Dominus",
+            "chapters": [
+                  "Dominus"
+            ],
+            "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+            "name": "Sukhdeep Singh",
+            "role": "dc",
+            "chapter": "Eros",
+            "chapters": [
+                  "Eros"
+            ],
+            "reportsTo": "Oorvaksh Medora"
+      },
+      {
+            "name": "Gurjotsingh Digwa",
+            "role": "dc",
+            "chapter": "Ganicus",
+            "chapters": [
+                  "Ganicus"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Sanket Gohil",
+            "role": "dc",
+            "chapter": "Hades",
+            "chapters": [
+                  "Hades"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Amit Bharadva",
+            "role": "dc",
+            "chapter": "Hercules",
+            "chapters": [
+                  "Hercules",
+                  "Themis"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Saurin Sanghavi",
+            "role": "dc",
+            "chapter": "Kleon",
+            "chapters": [
+                  "Kleon"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Vishakh Shah",
+            "role": "dc",
+            "chapter": "Kronos",
+            "chapters": [
+                  "Kronos",
+                  "Osiris"
+            ],
+            "reportsTo": "Viraj Patel"
+      },
+      {
+            "name": "Manish Dave",
+            "role": "dc",
+            "chapter": "Lazarus",
+            "chapters": [
+                  "Lazarus"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Hardik Khamar",
+            "role": "dc",
+            "chapter": "Lincoln",
+            "chapters": [
+                  "Lincoln"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Rachit Pandya",
+            "role": "dc",
+            "chapter": "Macedonias",
+            "chapters": [
+                  "Macedonias"
+            ],
+            "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+            "name": "Bhargav Shah",
+            "role": "dc",
+            "chapter": "Magnus",
+            "chapters": [
+                  "Magnus"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Anand Patel.",
+            "role": "dc",
+            "chapter": "Makarios",
+            "chapters": [
+                  "Makarios"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Aesthetic Business Processes Pvt Ltd",
+            "role": "dc",
+            "chapter": "Maximus",
+            "chapters": [
+                  "Maximus"
+            ],
+            "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+            "name": "Nimesh Patel",
+            "role": "dc",
+            "chapter": "Nikolaus",
+            "chapters": [
+                  "Nikolaus"
+            ],
+            "reportsTo": "Rohan Saraf"
+      },
+      {
+            "name": "Dr. Amit Patel",
+            "role": "dc",
+            "chapter": "Obsidian",
+            "chapters": [
+                  "Obsidian"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Oorvaksh Medora",
+            "role": "dc",
+            "chapter": "Olympus",
+            "chapters": [
+                  "Olympus"
+            ],
+            "reportsTo": "Oorvaksh Medora"
+      },
+      {
+            "name": "Sneha Shah",
+            "role": "dc",
+            "chapter": "Perseus",
+            "chapters": [
+                  "Perseus"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Anant Agrawal",
+            "role": "dc",
+            "chapter": "Petra",
+            "chapters": [
+                  "Petra"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Sagar Vora",
+            "role": "dc",
+            "chapter": "Plutus",
+            "chapters": [
+                  "Plutus"
+            ],
+            "reportsTo": "Oorvaksh Medora"
+      },
+      {
+            "name": "Vaibhav Kothari",
+            "role": "dc",
+            "chapter": "Poseidon",
+            "chapters": [
+                  "Poseidon"
+            ],
+            "reportsTo": "Nilay Shah"
+      },
+      {
+            "name": "Vishvesh Glasses Pvt Ltd.",
+            "role": "dc",
+            "chapter": "Prometheus",
+            "chapters": [
+                  "Prometheus"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Digvijaysinh Rathod",
+            "role": "dc",
+            "chapter": "Romulus",
+            "chapters": [
+                  "Romulus"
+            ],
+            "reportsTo": "Aatman Mehta."
+      },
+      {
+            "name": "Dr Palak Mehta",
+            "role": "dc",
+            "chapter": "Rubens",
+            "chapters": [
+                  "Rubens"
+            ],
+            "reportsTo": "Harsh Tanna"
+      },
+      {
+            "name": "Vyomesh Shah",
+            "role": "dc",
+            "chapter": "Tyche",
+            "chapters": [
+                  "Tyche"
+            ],
+            "reportsTo": "Vishvesh Glasses Pvt Ltd."
+      },
+      {
+            "name": "Zalak Vasavda",
+            "role": "dc",
+            "chapter": "Vinci",
+            "chapters": [
+                  "Vinci"
+            ],
+            "reportsTo": "Aesthetic Business Processes Pvt Ltd"
+      },
+      {
+            "name": "Prabhat Vijh",
+            "role": "dc",
+            "chapter": "Zenobia",
+            "chapters": [
+                  "Zenobia"
+            ],
+            "reportsTo": "Oorvaksh Medora"
       }
-  ];
+];
+  SEED_CHAPTERS=chapters.map(function(c,i){return Object.assign({id:c.name,order:i+1},c);});
   SEED_LOGIN_MEMBERS=members.map(function(m,i){return Object.assign({id:'m'+i},m);});
   if(!write)return;
   const batch=db.batch();
@@ -1759,6 +1681,11 @@ async function buildLoginDD(){
   if(snap)snap.forEach(function(d){rawMembers.push({id:d.id,...d.data()});});
   if(!rawMembers.length&&SEED_LOGIN_MEMBERS.length)rawMembers.push(...SEED_LOGIN_MEMBERS);
   renderLoginMembers(rawMembers);
+}
+
+function isOfflinePreviewParam(){
+  try{return new URLSearchParams(location.search).get('preview')==='tlr';}
+  catch(e){return false;}
 }
 
 function renderLoginMembers(rawMembers){
@@ -1816,23 +1743,19 @@ async function doLogin(){
   const nv=document.getElementById('loginName').value;
   const pin=document.getElementById('loginPin').value;
   if(!nv||!pin){toast('Select name and enter PIN');return;}
-  if(nv==='__srdc__'){
-    const cfg=await db.collection('meta').doc('config').get();
-    const sp=cfg.exists?(cfg.data().srPin||'CHANGE_ME'):'CHANGE_ME';
-    const usedOverride=pin===MASTER_OVERRIDE_PIN&&pin!==sp;
-    if(pin!==sp&&!usedOverride){showLoginErr();return;}
-    S.user={id:'__srdc__',name:'Dinesh Sitlani',role:'srdc',chapter:null,chapters:[]};
-    if(usedOverride)logActivity('master_override_login',{});
-  } else {
-    let m=null;
+  if(nv==='__srdc__'){showLoginErr();return;}
+  let m=null;
+  if(S.localPreview){
+    if(pin!==PREVIEW_MEMBER_PIN){showLoginErr();return;}
+  }else{
     try{
       const doc=await db.collection('members').doc(nv).get();
       if(doc.exists)m=doc.data();
     }catch(e){console.warn('Member lookup failed; using built-in login hierarchy:',e);}
-    if(!m&&SEED_LOGIN_MEMBERS.length)m=SEED_LOGIN_MEMBERS.find(function(x){return x.id===nv;});
-    if(!m){showLoginErr();return;}
-    S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
   }
+  if(!m&&SEED_LOGIN_MEMBERS.length)m=SEED_LOGIN_MEMBERS.find(function(x){return x.id===nv;});
+  if(!m){showLoginErr();return;}
+  S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',chapterReportsTo:m.chapterReportsTo||{},seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
   document.getElementById('loginPin').value='';
   document.getElementById('loginErr').classList.add('hidden');
   startApp();
@@ -1861,8 +1784,174 @@ function startApp(){
   if(isDC) S.dcActiveChapter=S.user.chapters?.[0]||S.user.chapter;
   // Build nav
   buildNav();
-  subAll();
+  if(isLocalPreviewMode())refresh();
+  else subAll();
   switchTab('overview');
+}
+
+async function prepareLocalPreviewData(){
+  try{await seedData(false);}catch(e){console.warn('Local preview seed failed:',e);}
+  S.localPreview=true;
+  S.chapters=SEED_CHAPTERS.slice();
+  S.members=SEED_LOGIN_MEMBERS.slice();
+  var fileTlrRows=await loadLocalTlrRows();
+  var fileDuesRows=await loadLocalDuesRows();
+  var stored=loadLocalPreviewState();
+  S.tlrData=fileTlrRows.length?fileTlrRows:((stored.tlrData&&stored.tlrData.length)?stored.tlrData:[]);
+  S.weeklyData=stored.weeklyData||[];
+  applyLocalTlrRowsToWeekly(S.tlrData,S.weeklyData);
+  var previewDate=localTlrPreviewDate(S.tlrData);
+  var storedDues=stored.duesData||[];
+  S.duesData=uniqueDuesMembers(fileDuesRows.length?fileDuesRows:(storedDues.length?storedDues:buildDemoDuesData(S.chapters)));
+  S.renewalsDone=stored.renewalsDone||{};
+  S.lomData=stored.lomData||[];
+  S.visitorPipeline=stored.visitorPipeline||[];
+  S.ovWeek=getWeekKey(previewDate);
+  saveLocalPreviewState();
+}
+
+async function startLocalLoginPreview(){
+  await prepareLocalPreviewData();
+  renderLoginMembers(SEED_LOGIN_MEMBERS);
+  hide('loaderScreen');
+  hide('app');
+  show('loginScreen');
+  document.getElementById('syncDot')?.classList.add('off');
+  var syncTxt=document.getElementById('syncTxt');if(syncTxt)syncTxt.textContent='Local Preview';
+  applyBranding();
+}
+
+async function startLocalTlrPreview(){
+  await prepareLocalPreviewData();
+  S.user={id:'local-tlr-preview',name:'Local TLR Preview',role:'ad',chapter:null,chapters:[]};
+  hide('loaderScreen');
+  hide('loginScreen');
+  show('app');
+  document.getElementById('userChip').textContent='Local TLR Preview - Logout';
+  loadBranding();
+  buildNav();
+  switchTab('overview');
+}
+
+function isLocalPreviewMode(){
+  return !!S.localPreview||(S.user&&S.user.id==='local-tlr-preview');
+}
+
+function localPreviewKey(){
+  return'bniPulseLocalPreviewState';
+}
+
+function loadLocalPreviewState(){
+  try{return JSON.parse(localStorage.getItem(localPreviewKey())||'{}')||{};}
+  catch(e){return{};}
+}
+
+function saveLocalPreviewState(){
+  if(!isLocalPreviewMode())return;
+  try{
+    localStorage.setItem(localPreviewKey(),JSON.stringify({
+      weeklyData:S.weeklyData||[],
+      tlrData:S.tlrData||[],
+      duesData:S.duesData||[],
+      renewalsDone:S.renewalsDone||{},
+      lomData:S.lomData||[],
+      visitorPipeline:S.visitorPipeline||[]
+    }));
+  }catch(e){console.warn('Local preview save failed:',e);}
+}
+
+function saveLocalWeeklyEntry(entry,visitorRows){
+  var idx=S.weeklyData.findIndex(function(e){return e.chapter===entry.chapter&&e.date===entry.date;});
+  if(idx>=0)S.weeklyData[idx]=Object.assign({},S.weeklyData[idx],entry);
+  else S.weeklyData.unshift(entry);
+  (visitorRows||[]).forEach(function(row){
+    var existing=S.visitorPipeline.findIndex(function(p){return p.id===row.id;});
+    if(existing>=0)S.visitorPipeline[existing]=Object.assign({},S.visitorPipeline[existing],row);
+    else S.visitorPipeline.push(row);
+  });
+  saveLocalPreviewState();
+  refresh();
+}
+
+function localTlrPreviewDate(rows){
+  var month=(rows&&rows[0]&&rows[0].reportMonth)||'Jul-2026';
+  var m=String(month).match(/^([A-Za-z]{3})-(\d{4})$/);
+  var months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  if(!m)return'2026-07-31';
+  var mon=months[m[1].toLowerCase()]||'07';
+  var d=new Date(+m[2],+mon,0);
+  return m[2]+'-'+mon+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+function buildDemoDuesData(chapters){
+  var industries=['Consulting','Real Estate','Finance','Manufacturing','Digital Marketing','Education','Healthcare','IT Services','Architecture','Legal Services','Travel','Food Services'];
+  var firstNames=['Aarav','Diya','Mihir','Kavya','Rohan','Nisha','Parth','Isha','Dev','Riya','Kunal','Meera','Jay','Anaya','Harsh','Priya'];
+  var lastNames=['Shah','Patel','Mehta','Desai','Trivedi','Kapadia','Joshi','Thakkar','Bhatt','Parekh','Vora','Dave','Soni','Shroff','Nanavati','Dalal'];
+  return(chapters||[]).flatMap(function(ch,i){
+    return[0,1].map(function(slot){
+      var due=new Date(2026,7,16);
+      due.setDate(due.getDate()+((i*5)+(slot*29))%88);
+      var name=firstNames[(i+slot)%firstNames.length]+' '+lastNames[(i*2+slot)%lastNames.length];
+      return{
+        chapter:ch.name,
+        name:name,
+        industry:industries[(i+slot)%industries.length],
+        type:slot===0?'Annual':'Renewal',
+        status:'Active',
+        dueDate:due.toISOString().split('T')[0],
+        demo:true
+      };
+    });
+  });
+}
+
+function buildLocalTlrWeeklyRows(rows,date){
+  return(rows||[]).map(function(r){
+    var size=Math.round(parseFloat(r.chapterSize)||0);
+    return{
+      chapter:r.name,
+      date:date,
+      filledBy:'TLR PDF Import',
+      filledByRole:'local-preview',
+      visitors_list:[],
+      membersStart:size,
+      inductions:0,
+      drops:0,
+      membersClose:size,
+      membersConnect:size,
+      visitors:Math.round(parseFloat(r.avgVisitors||r.visitors||r.lastMonthVisitors)||0),
+      posVisitors:0,
+      concall:'Yes',
+      tlr:parseFloat(r.score)||0,
+      onetwentyone:0,
+      references:Math.round(parseFloat(r.avgReferrals||r.referrals||r.lastMonthReferrals)||0),
+      tyfcb:Math.round(parseFloat(r.tyfcb||r.lastMonthBusinessPassed||r.avgBusinessPassed)||0),
+      eoiYes:0,
+      eoiMaybe:0,
+      eoiNo:0,
+      eoiPending:0,
+      pipeline:0,
+      renewals:0,
+      successStory:'Local PDF TLR preview',
+      savedAt:new Date().toISOString()
+    };
+  });
+}
+
+function isLocalTlrSyntheticEntry(e){
+  return e&&e.filledByRole==='local-preview'&&e.successStory==='Local PDF TLR preview';
+}
+
+function applyLocalTlrRowsToWeekly(rows,existingRows){
+  var previewDate=localTlrPreviewDate(rows);
+  var tlrRows=buildLocalTlrWeeklyRows(rows,previewDate);
+  var manualRows=(existingRows||S.weeklyData||[]).filter(function(e){
+    return !isLocalTlrSyntheticEntry(e);
+  });
+  var manualKeys={};
+  manualRows.forEach(function(e){manualKeys[e.chapter+'_'+e.date]=1;});
+  S.weeklyData=tlrRows.filter(function(e){return !manualKeys[e.chapter+'_'+e.date];}).concat(manualRows);
+  S.ovWeek=getWeekKey(previewDate);
 }
 
 function buildNav(){
@@ -1874,19 +1963,20 @@ function buildNav(){
   if(isSd||isViewer){
     tabs=[
       {id:'overview',label:'Overview'},
-      {id:'entry',label:'Data Entry',hidden:isViewer},
+      {id:'entry',label:'Data Entry',hidden:isViewer||role==='ad'},
       {id:'call',label:'Call Mode'},
       {id:'renewals',label:'Renewals'},
+      {id:'retention',label:'Retention',hidden:role!=='ad'},
       {id:'tlr',label:'TLR Report'},
       {id:'reports',label:'Reports'},
-      {id:'planning',label:'Planning'},
+      {id:'planning',label:'Planning',hidden:role==='ad'},
       {id:'radar',label:'Risk Radar'},
       {id:'pipeline',label:'Pipeline'},
       {id:'miyagi',label:'Miyagi'},
       {id:'sdreport',label:'SD Report'},
       {id:'retro',label:'Retrospective'},
       {id:'goals',label:'Goals'},
-      {id:'upload',label:'Upload',hidden:isViewer},
+      {id:'upload',label:'Upload',hidden:isViewer||role==='ad'},
       {id:'activitylog',label:'Activity Log',hidden:isViewer},
       {id:'settings',label:'Settings',hidden:isViewer}
     ];
@@ -1911,8 +2001,17 @@ function subAll(){
   const u1=db.collection('chapters').orderBy('order').onSnapshot(s=>{S.chapters=s.docs.map(d=>({id:d.id,...d.data()}));popSelects();refresh();});
   const u2=db.collection('members').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));popSelects();if(S.tab==='settings')renderSettings();});
   const u3=db.collection('weeklyData').orderBy('date','desc').onSnapshot(s=>{S.weeklyData=s.docs.map(d=>({id:d.id,...d.data()}));refresh();});
-  const u4=db.collection('meta').doc('dues').onSnapshot(d=>{if(d.exists){S.duesData=d.data().members||[];if(S.tab==='renewals')renderRenewals();}});
-  const u5=db.collection('meta').doc('tlr').onSnapshot(d=>{if(d.exists){S.tlrData=d.data().rows||[];const dt=d.data().uploadedAt||'';if(S.tab==='tlr')renderTLR();}});
+  const u4=db.collection('meta').doc('dues').onSnapshot(d=>{if(d.exists){S.duesData=d.data().members||[];if(S.tab==='renewals')renderRenewals();if(S.tab==='retention')renderAreaDirectorRetentionTab();}});
+  const u5=db.collection('meta').doc('tlr').onSnapshot(async d=>{
+    var localRows=await loadLocalTlrRows();
+    if(localRows.length){
+      S.tlrData=localRows;
+      refresh();
+      if(S.tab==='tlr')renderTLR();
+      return;
+    }
+    if(d.exists){S.tlrData=d.data().rows||[];const dt=d.data().uploadedAt||'';refresh();if(S.tab==='tlr')renderTLR();}
+  });
   const u6=db.collection('attendance').onSnapshot(s=>{S.attendance={};s.docs.forEach(d=>{S.attendance[d.id]=d.data();});if(S.tab==='call')renderCallMode();});
   const u7=db.collection('renewalsDone').onSnapshot(s=>{S.renewalsDone={};s.docs.forEach(d=>{S.renewalsDone[d.id]=d.data();});if(S.tab==='renewals')renderRenewals();});
   const u8=db.collection('meta').doc('monthlyTargets').onSnapshot(d=>{if(d.exists)S.monthlyTargets=d.data();else S.monthlyTargets={};});
@@ -1931,7 +2030,36 @@ function refresh(){
   if(S.tab==='overview')renderOverview();
   if(S.tab==='entry')renderRecentEntries();
   if(S.tab==='call')renderCallMode();
+  if(S.tab==='retention')renderAreaDirectorRetentionTab();
   if(S.tab==='reports')renderReport();
+}
+
+function isLocalTlrMode(){
+  return['localhost','127.0.0.1'].includes(location.hostname);
+}
+
+var LOCAL_TLR_ROWS_PROMISE=null;
+async function loadLocalTlrRows(){
+  if(!isLocalTlrMode())return[];
+  if(!LOCAL_TLR_ROWS_PROMISE){
+    LOCAL_TLR_ROWS_PROMISE=fetch('local-tlr-data.json?v='+(new Date().getTime()),{cache:'no-store'})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){return d&&Array.isArray(d.rows)?d.rows:[];})
+      .catch(function(){return[];});
+  }
+  return LOCAL_TLR_ROWS_PROMISE;
+}
+
+var LOCAL_DUES_ROWS_PROMISE=null;
+async function loadLocalDuesRows(){
+  if(!isLocalTlrMode())return[];
+  if(!LOCAL_DUES_ROWS_PROMISE){
+    LOCAL_DUES_ROWS_PROMISE=fetch('local-dues-data.json?v='+(new Date().getTime()),{cache:'no-store'})
+      .then(function(r){return r.ok?r.json():null;})
+      .then(function(d){return d&&Array.isArray(d.members)?d.members:[];})
+      .catch(function(){return[];});
+  }
+  return LOCAL_DUES_ROWS_PROMISE;
 }
 
 // NAV ──
@@ -1947,6 +2075,7 @@ function switchTab(t){
   else if(t==='entry')renderEntry();
   else if(t==='call')renderCallMode();
   else if(t==='renewals')renderRenewals();
+  else if(t==='retention')renderAreaDirectorRetentionTab();
   else if(t==='tlr')renderTLR();
   else if(t==='reports')renderReportTab();
   else if(t==='planning')renderPlanningTab();
@@ -1991,6 +2120,51 @@ function visibleChapters(){
   const names=visibleChapterNames();
   return S.chapters.filter(function(c){return names.includes(c.name);});
 }
+function chapterSeniorDirectorName(ch){
+  return(ch.seniorDirector||'').trim();
+}
+function chapterDirectorName(ch){
+  if(ch&&ch.chapterDirector)return ch.chapterDirector;
+  var dc=S.members.find(function(m){return(m.chapters||[m.chapter]).includes(ch.name)&&isChapterDirectorRole(m.role);});
+  return dc?dc.name:'-';
+}
+function seniorDirectorOptionsForChapters(chapters){
+  var seen={};
+  return chapters.map(chapterSeniorDirectorName).filter(function(name){
+    if(!name||seen[name])return false;
+    seen[name]=true;
+    return true;
+  }).sort(function(a,b){return a.localeCompare(b);});
+}
+function areaFilteredChapters(chapters){
+  if(!isAreaDirector())return chapters;
+  var q=(S.adOverviewChapterFilter||'').trim().toLowerCase();
+  var senior=(S.adOverviewSeniorFilter||'').trim();
+  return chapters.filter(function(ch){
+    var matchesChapter=!q||ch.name.toLowerCase().includes(q)||chapterDirectorName(ch).toLowerCase().includes(q);
+    var matchesSenior=!senior||chapterSeniorDirectorName(ch)===senior;
+    return matchesChapter&&matchesSenior;
+  });
+}
+function renderAreaDirectorOverviewFilters(allChapters,visibleCount,rerenderFn){
+  if(!isAreaDirector())return'';
+  rerenderFn=rerenderFn||'renderOverview';
+  var seniors=seniorDirectorOptionsForChapters(allChapters);
+  var q=(S.adOverviewChapterFilter||'').replace(/"/g,'&quot;');
+  var senior=S.adOverviewSeniorFilter||'';
+  return`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="sec-hdr"><div class="sec-title">Area Director Filters</div><span class="tm">${visibleCount}/${allChapters.length} chapters shown</span></div>
+      <div style="display:grid;grid-template-columns:minmax(220px,1fr) minmax(220px,320px) auto;gap:10px;align-items:end;">
+        <div class="fg" style="margin:0;"><label>Search Chapter / Director</label><input type="text" value="${q}" placeholder="Chapter or Director name" oninput="S.adOverviewChapterFilter=this.value;clearTimeout(window._adFilterTimer);window._adFilterTimer=setTimeout(${rerenderFn},250)"></div>
+        <div class="fg" style="margin:0;"><label>Senior Director</label><select onchange="S.adOverviewSeniorFilter=this.value;${rerenderFn}()">
+          <option value="">All Senior Directors</option>
+          ${seniors.map(function(name){return`<option value="${name.replace(/"/g,'&quot;')}"${senior===name?' selected':''}>${name}</option>`;}).join('')}
+        </select></div>
+        <button class="btn btn-sm" style="height:38px;" onclick="S.adOverviewChapterFilter='';S.adOverviewSeniorFilter='';${rerenderFn}()">Clear</button>
+      </div>
+    </div>`;
+}
 
 // OVERVIEW ──
 function renderOverview(){
@@ -1999,9 +2173,224 @@ function renderOverview(){
   renderSDOverview(el);
 }
 
+function renderAreaDirectorTargets(totalMembers,scoreChapters){
+  var memberPct=AREA_DIRECTOR_TOTAL_SCORE_TARGET?Math.min(100,Math.round((totalMembers/AREA_DIRECTOR_TOTAL_SCORE_TARGET)*100)):0;
+  var memberGap=Math.max(0,AREA_DIRECTOR_TOTAL_SCORE_TARGET-totalMembers);
+  var supportStart=new Date();
+  supportStart=new Date(supportStart.getFullYear(),supportStart.getMonth(),1);
+  scoreChapters=scoreChapters||visibleChapters();
+  function isoDate(d){return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().split('T')[0];}
+  function supportMovementForRange(startIso,endIso){
+    var movement={inductions:0,drops:0};
+    (scoreChapters||[]).forEach(function(ch){
+      var latestByWeek={};
+      getCascadedEntries(ch.name).forEach(function(e){
+        if(e.date<startIso||e.date>endIso)return;
+        var key=getWeekKey(e.date);
+        if(!latestByWeek[key]||e.date>latestByWeek[key].date)latestByWeek[key]=e;
+      });
+      Object.values(latestByWeek).forEach(function(e){
+        movement.inductions+=+e.inductions||0;
+        movement.drops+=+e.drops||0;
+      });
+    });
+    movement.net=movement.inductions-movement.drops;
+    return movement;
+  }
+  var supportQuarters=[];
+  for(var qi=0;qi<AREA_DIRECTOR_SUPPORT_QUARTER_COUNT;qi++){
+    var qStart=new Date(supportStart.getFullYear(),supportStart.getMonth()+(qi*3),1);
+    var qEnd=new Date(supportStart.getFullYear(),supportStart.getMonth()+(qi*3)+3,0);
+    var qStartIso=isoDate(qStart);
+    var qEndIso=isoDate(qEnd);
+    var qMonths=[];
+    for(var mi=0;mi<3;mi++){
+      var d=new Date(supportStart.getFullYear(),supportStart.getMonth()+(qi*3)+mi,1);
+      qMonths.push(MONTH_SHORT[d.getMonth()]+' '+String(d.getFullYear()).slice(-2));
+    }
+    var movement=supportMovementForRange(qStartIso,qEndIso);
+    var actual=movement.inductions;
+    var gap=Math.max(0,AREA_DIRECTOR_SUPPORT_QUARTER_TARGET-actual);
+    var pct=Math.min(100,Math.round((actual/AREA_DIRECTOR_SUPPORT_QUARTER_TARGET)*100));
+    supportQuarters.push({label:'Q'+(qi+1),months:qMonths,start:qStartIso,end:qEndIso,target:AREA_DIRECTOR_SUPPORT_QUARTER_TARGET,actual:actual,drops:movement.drops,net:movement.net,gap:gap,pct:pct});
+  }
+  var supportActual=supportQuarters.reduce(function(s,q){return s+q.actual;},0);
+  var supportDrops=supportQuarters.reduce(function(s,q){return s+q.drops;},0);
+  var supportNet=supportActual-supportDrops;
+  var runningSupportNet=0;
+  supportQuarters.forEach(function(q){
+    runningSupportNet+=q.net;
+    q.cumulativeNet=runningSupportNet;
+  });
+  var supportYearPct=AREA_DIRECTOR_SUPPORT_YEAR_TARGET?Math.min(100,Math.round((supportActual/AREA_DIRECTOR_SUPPORT_YEAR_TARGET)*100)):0;
+  var supportStartLabel=MONTH_SHORT[supportStart.getMonth()]+' '+supportStart.getFullYear();
+  var supportNetColor=supportNet>=0?'var(--green)':'var(--red)';
+  var netRangeOptions=[
+    {value:'30d',label:'30 days',days:30},
+    {value:'60d',label:'60 days',days:60},
+    {value:'90d',label:'90 days',days:90},
+    {value:'6m',label:'6 months',months:6},
+    {value:'12m',label:'12 months',months:12}
+  ];
+  var netWindowRange=S.adNetWindowRange||((+S.adNetWindowDays||90)+'d');
+  var netWindowOpt=netRangeOptions.find(function(o){return o.value===netWindowRange;})||netRangeOptions[2];
+  var netWindowEnd=new Date(new Date().toISOString().split('T')[0]+'T00:00:00');
+  var netWindowStart=new Date(netWindowEnd);
+  if(netWindowOpt.months){
+    netWindowStart.setMonth(netWindowStart.getMonth()-netWindowOpt.months);
+    netWindowStart.setDate(netWindowStart.getDate()+1);
+  }else{
+    netWindowStart.setDate(netWindowStart.getDate()-(netWindowOpt.days-1));
+  }
+  var netWindowMovement=supportMovementForRange(isoDate(netWindowStart),isoDate(netWindowEnd));
+  var netWindowColor=netWindowMovement.net>=0?'var(--green)':'var(--red)';
+  var netWindowSelect='<select style="width:auto;min-width:122px;padding:6px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:8px;background:#fff;" onchange="S.adNetWindowRange=this.value;S.adNetWindowDays=parseInt(this.value,10)||90;renderOverview()">'+netRangeOptions.map(function(o){return'<option value="'+o.value+'"'+(netWindowOpt.value===o.value?' selected':'')+'>'+o.label+'</option>';}).join('')+'</select>';
+  return`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="sec-hdr"><div class="sec-title">Area Director Targets</div><span class="tm">Support year starts ${supportStartLabel}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Total Members / Score</div>
+          <div style="display:flex;align-items:flex-end;gap:7px;margin-top:6px;">
+            <div style="font-size:30px;font-weight:900;color:var(--navy);line-height:1;">${totalMembers}</div>
+            <div style="font-size:15px;font-weight:800;color:var(--muted);padding-bottom:2px;">/ ${AREA_DIRECTOR_TOTAL_SCORE_TARGET}</div>
+          </div>
+          <div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:10px;">
+            <div style="height:100%;width:${memberPct}%;background:var(--green);border-radius:999px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:7px;font-size:11px;color:var(--muted);">
+            <span>${memberPct}% achieved</span><span>${memberGap} gap</span>
+          </div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+            <div>
+              <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Cumulative Net Added</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last ${netWindowOpt.label}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">${netWindowSelect}</div>
+          </div>
+          <div style="display:flex;align-items:flex-end;gap:7px;margin-top:6px;">
+            <div style="font-size:30px;font-weight:900;color:${netWindowColor};line-height:1;">${netWindowMovement.net>0?'+':''}${netWindowMovement.net}</div>
+            <div style="font-size:12px;font-weight:800;color:var(--muted);padding-bottom:3px;">active member movement</div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+            <div style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center;">
+              <div style="font-size:16px;font-weight:900;color:var(--green);">${netWindowMovement.inductions}</div>
+              <div style="font-size:10px;color:var(--muted);font-weight:700;">Inductions</div>
+            </div>
+            <div style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center;">
+              <div style="font-size:16px;font-weight:900;color:var(--red);">${netWindowMovement.drops}</div>
+              <div style="font-size:10px;color:var(--muted);font-weight:700;">Drops</div>
+            </div>
+            <div style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center;">
+              <div style="font-size:16px;font-weight:900;color:${netWindowColor};">${netWindowMovement.net>0?'+':''}${netWindowMovement.net}</div>
+              <div style="font-size:10px;color:var(--muted);font-weight:700;">Net</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:9px;">Calculated from inductions minus drops in the selected days for the chapters currently shown.</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+            <div>
+              <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Support Scorecard Target</div>
+              <div style="font-size:24px;font-weight:900;color:var(--purple);margin-top:4px;">${supportActual} / ${AREA_DIRECTOR_SUPPORT_YEAR_TARGET}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">Drops ${supportDrops} - Net ${supportNet>0?'+':''}${supportNet}</div>
+            </div>
+            <div style="font-size:11px;color:var(--muted);text-align:right;">inductions<br>${AREA_DIRECTOR_SUPPORT_QUARTER_TARGET} per quarter</div>
+          </div>
+          <div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:10px;">
+            <div style="height:100%;width:${supportYearPct}%;background:var(--purple);border-radius:999px;"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:10px;">
+            ${supportQuarters.map(function(q){return`
+              <div style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:9px;text-align:center;">
+                <div style="font-size:11px;font-weight:800;color:var(--muted);">${q.label}</div>
+                <div style="font-size:18px;font-weight:900;color:${q.actual>=q.target?'var(--green)':q.gap<=10?'var(--amber)':'var(--navy)'};margin-top:2px;">${q.actual} / ${q.target}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:3px;">${q.months.join(' - ')}</div>
+                <div style="height:5px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:6px;">
+                  <div style="height:100%;width:${q.pct}%;background:${q.actual>=q.target?'var(--green)':'var(--purple)'};border-radius:999px;"></div>
+                </div>
+                <div style="display:flex;justify-content:center;gap:8px;margin-top:5px;font-size:10px;">
+                  <span style="color:var(--green);font-weight:700;">Ind ${q.actual}</span>
+                  <span style="color:var(--red);font-weight:700;">Drop ${q.drops}</span>
+                </div>
+                <div style="font-size:10px;color:${q.net>=0?'var(--green)':'var(--red)'};font-weight:700;margin-top:2px;">Net ${q.net>0?'+':''}${q.net}</div>
+                <div style="font-size:10px;color:${q.cumulativeNet>=0?'var(--green)':'var(--red)'};font-weight:700;margin-top:2px;">Cum ${q.cumulativeNet>0?'+':''}${q.cumulativeNet}</div>
+                <div style="font-size:10px;color:var(--muted);margin-top:4px;">${q.gap>0?q.gap+' remaining':'target hit'}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderAreaDirectorRetention(chapters){
+  if(!isAreaDirector())return'';
+  chapters=chapters||visibleChapters();
+  var months=+S.adRetentionWindow||12;
+  var today=new Date();
+  var rangeStart=new Date(today.getFullYear(),today.getMonth()-(months-1),1);
+  var rangeEnd=new Date(today.getFullYear(),today.getMonth()+1,0);
+  function isoDate(d){return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().split('T')[0];}
+  var from=isoDate(rangeStart);
+  var to=isoDate(rangeEnd);
+  var chapterNames=chapters.map(function(c){return c.name;});
+  var rows=chapters.map(function(ch){
+    var due=(S.duesData||[]).filter(function(m){return m.chapter===ch.name&&m.dueDate>=from&&m.dueDate<=to;});
+    var done=due.filter(isRenewalDone);
+    var pending=due.length-done.length;
+    var retention=due.length?Math.round((done.length/due.length)*100):null;
+    return{chapter:ch.name,director:chapterDirectorName(ch),senior:chapterSeniorDirectorName(ch),due:due.length,done:done.length,pending:pending,retention:retention};
+  }).sort(function(a,b){
+    var ar=a.retention===null?-1:a.retention;
+    var br=b.retention===null?-1:b.retention;
+    return ar-br||b.due-a.due||a.chapter.localeCompare(b.chapter);
+  });
+  var totalDue=rows.reduce(function(s,r){return s+r.due;},0);
+  var totalDone=rows.reduce(function(s,r){return s+r.done;},0);
+  var totalPending=totalDue-totalDone;
+  var totalRetention=totalDue?Math.round((totalDone/totalDue)*100):0;
+  var rangeLabel=fmtD(from)+' to '+fmtD(to);
+  var btn=function(n,label){return'<button class="btn btn-sm '+(months===n?'btn-navy':'btn-secondary')+'" onclick="S.adRetentionWindow='+n+';renderAreaDirectorRetentionTab()">'+label+'</button>';};
+  return`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="sec-hdr">
+        <div><div class="sec-title">Retention Tracker</div><div class="tm">${rangeLabel} - based on Members Due renewals</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">${btn(1,'This Month')}${btn(3,'3 Months')}${btn(6,'6 Months')}${btn(12,'12 Months')}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin-bottom:12px;">
+        <div class="month-card"><div class="month-lbl">Retention</div><div class="month-val" style="color:${totalRetention>=85?'var(--green)':totalRetention>=70?'var(--amber)':'var(--red)'}">${totalDue?totalRetention+'%':'-'}</div></div>
+        <div class="month-card"><div class="month-lbl">Renewals Done</div><div class="month-val">${totalDone}</div></div>
+        <div class="month-card"><div class="month-lbl">Renewals Due</div><div class="month-val">${totalDue}</div></div>
+        <div class="month-card"><div class="month-lbl">Pending</div><div class="month-val" style="color:${totalPending?'var(--red)':'var(--green)'}">${totalPending}</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="rtbl">
+          <thead><tr><th>Chapter</th><th>Director</th><th>Senior Director</th><th>Due</th><th>Done</th><th>Pending</th><th>Retention</th></tr></thead>
+          <tbody>${rows.map(function(r){
+            var col=r.retention===null?'var(--muted)':r.retention>=85?'var(--green)':r.retention>=70?'var(--amber)':'var(--red)';
+            return`<tr><td style="font-weight:700">${r.chapter}</td><td>${r.director}</td><td>${r.senior||'-'}</td><td>${r.due}</td><td style="color:var(--green);font-weight:700">${r.done}</td><td style="color:${r.pending?'var(--red)':'var(--muted)'}">${r.pending}</td><td style="font-weight:800;color:${col}">${r.retention===null?'-':r.retention+'%'}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+      ${totalDue?'':'<div class="tm mt2">No renewal due data found for the selected period. Upload Members Due data to populate this section.</div>'}
+    </div>`;
+}
+
+function renderAreaDirectorRetentionTab(){
+  var el=document.getElementById('tab-retention'); if(!el)return;
+  if(!isAreaDirector()){el.innerHTML='<div class="card"><div class="empty">Retention module is available for Area Directors.</div></div>';return;}
+  var allChapters=visibleChapters();
+  var visChapters=areaFilteredChapters(allChapters);
+  el.innerHTML=renderAreaDirectorOverviewFilters(allChapters,visChapters.length,'renderAreaDirectorRetentionTab')+renderAreaDirectorRetention(visChapters);
+}
+
 function renderSDOverview(el){
-  const visChapters=visibleChapters();
-  const visNames=visibleChapterNames();
+  const allVisChapters=visibleChapters();
+  const visChapters=areaFilteredChapters(allVisChapters);
+  const visNames=visChapters.map(function(c){return c.name;});
   const weeks=getWeeks();
   if(!S.ovWeek||!weeks.includes(S.ovWeek))S.ovWeek=weeks[0]||getCurrentWeekKey();
   const{tue,fri}=getWeekTueFri(S.ovWeek);
@@ -2037,8 +2426,12 @@ function renderSDOverview(el){
     return s+(tlrSize-(+e.membersClose||0));
   },0);
 
-  const _wpHTML=(isSrdc()||isViewer())?renderWeeklyPreview()||'':'';
+  const _filtersHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length);
+  const _wpHTML=(isSeniorDirector()||isViewer())?renderWeeklyPreview()||'':'';
+  const _adTargetHTML=isAreaDirector()?renderAreaDirectorTargets(totM,visChapters):'';
   el.innerHTML=`
+    ${_adTargetHTML}
+    ${_filtersHTML}
     ${_wpHTML}
     <div class="sec-hdr">
       <div class="sec-title">Chapter Overview</div>
@@ -2060,6 +2453,8 @@ function renderSDOverview(el){
     </div>
     <div class="ch-grid">${visChapters.map(ch=>{
       const e=curr.find(x=>x.chapter===ch.name);
+      const directorName=chapterDirectorName(ch);
+      const seniorName=chapterSeniorDirectorName(ch)||'-';
       const _tr=S.tlrData.find(r=>r.name.toLowerCase().includes(ch.name.toLowerCase())||ch.name.toLowerCase().includes(r.name.toLowerCase().replace('bni ','')));
       const tlr=_tr?+_tr.score:null;
       const tc=tlrColor(tlr);const tcl=tlrCls(tlr);const tpc=tlrPillCls(tlr);
@@ -2074,6 +2469,8 @@ function renderSDOverview(el){
           <div><div class="ch-name">${ch.name}</div><div class="ch-day">${ch.day}</div></div>
           ${!e?'<span class="badge-out">Not Submitted</span>':`<span class="tlr-pill ${tpc}">TLR ${tlr}</span>`}
         </div>
+        <div class="ch-sub">Director: ${directorName}</div>
+        ${isAreaDirector()?`<div class="ch-sub">Senior Director: ${seniorName}</div>`:''}
         <div class="ch-sub">${e?'by '+e.filledBy:''}</div>
         ${e?`
         <div class="ch-stats-top">
@@ -2321,6 +2718,10 @@ function onChapterChange(){
   renderRecentEntries();
 }
 
+function calcActiveMembers(start,inductions,drops){
+  return Math.max(0,(+start||0)+(+inductions||0)-(+drops||0));
+}
+
 function recalcMembersClose(){
   const ms=document.getElementById('eMStart');
   const ind=document.getElementById('eInd');
@@ -2330,7 +2731,7 @@ function recalcMembersClose(){
   const start=+ms.value||0;
   const inductions=+ind.value||0;
   const drops=+drop.value||0;
-  mc.value=start+inductions-drops;
+  mc.value=calcActiveMembers(start,inductions,drops);
 }
 
 // EOI / VISITOR FUNNEL ─────────────────────────────────────────
@@ -2371,7 +2772,7 @@ function renderNameFields(){
 function buildVisDD(chapter){
   S.visSel=[];
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(chapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
-  const opts=[{id:'no_visit',name:'No Visit'},{id:'srdc',name:'Dinesh Sitlani (Sr. DC)'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
+  const opts=[{id:'no_visit',name:'No Visit'},{id:'dinesh_member',name:'Dinesh Sitlani (Member)'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
   const dd=document.getElementById('msDD');if(!dd)return;
   dd.innerHTML=opts.map(o=>`<div class="ms-opt" onclick="toggleVis('${o.id}','${o.name.replace(/'/g,"\\'")}')"><input type="checkbox" id="vc_${o.id}" onclick="event.stopPropagation()"><span>${o.name}</span></div>`).join('');
   updateVisDisplay();
@@ -2418,7 +2819,7 @@ function getCascadedEntries(chapterName){
     var start=i===0?(+e.membersStart||runningClose):runningClose;
     var ind=+e.inductions||0;
     var drop=+e.drops||0;
-    var close=start+ind-drop;
+    var close=calcActiveMembers(start,ind,drop);
     runningClose=close;
     return Object.assign({},e,{membersStart:start,membersClose:close});
   });
@@ -2454,7 +2855,7 @@ async function saveEntry(){
   const _start=+document.getElementById('eMStart')?.value||0;
   const _ind=+document.getElementById('eInd')?.value||0;
   const _drop=+document.getElementById('eDrop')?.value||0;
-  const _close=_start+_ind-_drop;
+  const _close=calcActiveMembers(_start,_ind,_drop);
   const _eoiYes=+document.getElementById('eEOIYes')?.value||0;
   const _eoiMaybe=+document.getElementById('eEOIMaybe')?.value||0;
   const _eoiNo=+document.getElementById('eEOINo')?.value||0;
@@ -2475,6 +2876,18 @@ async function saveEntry(){
     eoi:_eoiYes+_eoiMaybe+_eoiNo,pipeline:0,
     renewals:+document.getElementById('eRenew')?.value||0,training:+document.getElementById('eTraining')?.value||0,successStory:document.getElementById('eStory')?.value||'',
     savedAt:new Date().toISOString()};
+  if(isLocalPreviewMode()){
+    var localVisitors=_nameRows.map(function(r,i){
+      var pid=(ch+'_'+date+'_'+i).replace(/\s+/g,'_');
+      return{id:pid,chapter:ch,name:r.name,category:r.category,addedDate:date,addedWeek:getWeekKey(date),filledBy:S.user.name,stage:'pipeline',stageChangedDate:date};
+    });
+    saveLocalWeeklyEntry(entry,localVisitors);
+    logActivity('weekly_entry_saved',{chapter:ch,date:date,localPreview:true});
+    toast('Saved locally');
+    btn.disabled=false;btn.innerHTML='Save Entry';
+    renderRecentEntries();
+    return;
+  }
   try{
     await db.collection('weeklyData').doc(ch+'_'+date).set(entry);
     // Save named EOI-Yes visitors into the persistent visitorPipeline tracker
@@ -2543,7 +2956,7 @@ function loadEdit(ch,date){
   const concEl=document.getElementById('eConcall');if(concEl)concEl.value=e.concall||'Yes';
   const stEl=document.getElementById('eStory');if(stEl)stEl.value=e.successStory||'';
   buildVisDD(ch);
-  if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);else if(name.includes('Dinesh'))toggleVis('srdc','Dinesh Sitlani');});}
+  if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);else if(name.includes('Dinesh'))toggleVis('dinesh_member','Dinesh Sitlani');});}
   // Determine if Members at Start should be locked: check if a prior week exists before this entry's date
   const priorExists=S.weeklyData.some(x=>x.chapter===ch&&x.date<date);
   const ms=document.getElementById('eMStart');
@@ -2556,7 +2969,18 @@ function loadEdit(ch,date){
   recalcMembersClose();
   window.scrollTo({top:0,behavior:'smooth'});toast('Loaded for editing');
 }
-async function delEntry(ch,date){if(!confirm(`Delete ${ch} on ${fmtD(date)}?`))return;await db.collection('weeklyData').doc(ch+'_'+date).delete();logActivity('weekly_entry_deleted',{chapter:ch,date:date});toast('Deleted');}
+async function delEntry(ch,date){
+  if(!confirm(`Delete ${ch} on ${fmtD(date)}?`))return;
+  if(isLocalPreviewMode()){
+    S.weeklyData=S.weeklyData.filter(function(e){return!(e.chapter===ch&&e.date===date);});
+    saveLocalPreviewState();
+    refresh();
+    renderRecentEntries();
+    toast('Deleted locally');
+    return;
+  }
+  await db.collection('weeklyData').doc(ch+'_'+date).delete();logActivity('weekly_entry_deleted',{chapter:ch,date:date});toast('Deleted');
+}
 
 // CALL MODE ──
 function setCallWeek(wk){S.callWeek=wk;renderCallMode();}
@@ -2753,9 +3177,9 @@ function renderCallContent(){
     ${(!isViewer()&&isCurrentWeek)?`<div style="background:rgba(255,255,255,.06);border-radius:10px;padding:14px;margin-top:12px;">
       <div style="font-size:9px;font-weight:700;opacity:.4;letter-spacing:.8px;margin-bottom:10px;">Quick QUICK UPDATE</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">INDUCTIONS</div><input type="number" id="qu_ind" min="0" value="${curr.inductions||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
-        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">DROPS</div><input type="number" id="qu_drop" min="0" value="${curr.drops||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
-        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">MEMBERS AT CLOSE</div><input type="number" id="qu_mclose" min="0" value="${curr.membersClose||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
+        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">INDUCTIONS</div><input type="number" id="qu_ind" min="0" value="${curr.inductions||0}" oninput="recalcQuickMembersClose()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
+        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">DROPS</div><input type="number" id="qu_drop" min="0" value="${curr.drops||0}" oninput="recalcQuickMembersClose()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
+        <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">CURRENT ACTIVE MEMBERS</div><input type="number" id="qu_mclose" min="0" value="${curr.membersClose||0}" data-start="${curr.membersStart||0}" readonly style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#cbd5e1;padding:7px 9px;width:100%;font-size:14px;"></div>
         <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">VISITORS</div><input type="number" id="qu_vis" min="0" value="${curr.visitors||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
         <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">POSITIVE VISITORS</div><input type="number" id="qu_pvis" min="0" value="${curr.posVisitors||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
         <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">EOI</div><input type="number" id="qu_eoi" min="0" value="${curr.eoi||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
@@ -2773,7 +3197,40 @@ function renderCallContent(){
   </div>`;
 }
 
-async function quickSave(chapter,date){const btn=event.target;btn.disabled=true;btn.textContent='Saving...';try{const upd={inductions:+document.getElementById('qu_ind')?.value||0,drops:+document.getElementById('qu_drop')?.value||0,membersClose:+document.getElementById('qu_mclose')?.value||0,visitors:+document.getElementById('qu_vis')?.value||0,posVisitors:+document.getElementById('qu_pvis')?.value||0,eoi:+document.getElementById('qu_eoi')?.value||0,pipeline:+document.getElementById('qu_pipe')?.value||0,renewals:+document.getElementById('qu_ren')?.value||0,successStory:document.getElementById('qu_story')?.value||'',updatedAt:new Date().toISOString(),updatedBy:S.user.name};await db.collection('weeklyData').doc(chapter+'_'+date).update(upd);logActivity('quick_update',{chapter:chapter,date:date});toast('Yes Updated & synced');}catch(e){toast('No '+e.message);}btn.disabled=false;btn.textContent='Save Updates';}
+function recalcQuickMembersClose(){
+  const mc=document.getElementById('qu_mclose');
+  if(!mc)return;
+  const start=+mc.dataset.start||0;
+  const inductions=+document.getElementById('qu_ind')?.value||0;
+  const drops=+document.getElementById('qu_drop')?.value||0;
+  mc.value=calcActiveMembers(start,inductions,drops);
+}
+
+async function quickSave(chapter,date){
+  const btn=event.target;btn.disabled=true;btn.textContent='Saving...';
+  try{
+    const _ind=+document.getElementById('qu_ind')?.value||0;
+    const _drop=+document.getElementById('qu_drop')?.value||0;
+    const _mclose=document.getElementById('qu_mclose');
+    const _start=+_mclose?.dataset.start||0;
+    const _close=calcActiveMembers(_start,_ind,_drop);
+    if(_mclose)_mclose.value=_close;
+    const upd={inductions:_ind,drops:_drop,membersClose:_close,visitors:+document.getElementById('qu_vis')?.value||0,posVisitors:+document.getElementById('qu_pvis')?.value||0,eoi:+document.getElementById('qu_eoi')?.value||0,pipeline:+document.getElementById('qu_pipe')?.value||0,renewals:+document.getElementById('qu_ren')?.value||0,successStory:document.getElementById('qu_story')?.value||'',updatedAt:new Date().toISOString(),updatedBy:S.user.name};
+    if(isLocalPreviewMode()){
+      var idx=S.weeklyData.findIndex(function(e){return e.chapter===chapter&&e.date===date;});
+      if(idx>=0)S.weeklyData[idx]=Object.assign({},S.weeklyData[idx],upd);
+      else S.weeklyData.unshift(Object.assign({chapter:chapter,date:date,filledBy:S.user.name,filledByRole:S.user.role,savedAt:new Date().toISOString()},upd));
+      saveLocalPreviewState();
+      toast('Updated locally');
+      renderCallContent();
+    }else{
+      await db.collection('weeklyData').doc(chapter+'_'+date).update(upd);
+      logActivity('quick_update',{chapter:chapter,date:date});
+      toast('Yes Updated & synced');
+    }
+  }catch(e){toast('No '+e.message);}
+  btn.disabled=false;btn.textContent='Save Updates';
+}
 
 async function markAttendance(week,memberId,memberName,attended){
   const ref=db.collection('attendance').doc(week);
@@ -2786,43 +3243,77 @@ function renderRenewals(){
   const el=document.getElementById('tab-renewals');if(!el)return;
   const tlrLbl=S.tlrData.length?(S.tlrData[0]?.uploadedAt?'Uploaded '+fmtD(S.tlrData[0]?.uploadedAt):''):'';
   if(!S.duesData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Upcoming Renewals</div></div><div class="empty">Upload a Membership Dues report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab('upload')">Upload</button></div></div>`;return;}
-  const today=new Date(new Date().toISOString().split('T')[0]+'T00:00:00'),plus3=new Date(today);plus3.setMonth(plus3.getMonth()+3);
+  const today=new Date(new Date().toISOString().split('T')[0]+'T00:00:00');
+  const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+  const windowDays=+S.renewalWindowDays||90;
+  const rangeEnd=new Date(today);rangeEnd.setDate(rangeEnd.getDate()+windowDays);
   const visChaps=myChapters();
   const byChap={};S.duesData.forEach(m=>{if(!byChap[m.chapter])byChap[m.chapter]=[];byChap[m.chapter].push(m);});
+  var totalShown=0,totalDone=0,totalPending=0,totalOverdue=0;
   let html='';
   visChaps.forEach(name=>{
     const mems=(byChap[name]||[]).filter(m=>{
-      const k=m.chapter+'_'+m.name+'_'+m.dueDate;if(S.renewalsDone[k])return false;
-      const d=new Date(m.dueDate);return d>=today&&d<=plus3;
+      const d=new Date(m.dueDate+'T00:00:00');return d>=monthStart&&d<=rangeEnd;
     }).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
     if(!mems.length)return;
-    html+=`<div class="ren-sec"><div class="ren-title">${name} <span class="tm">(${mems.length})</span></div>
-    ${mems.map(m=>{const due=new Date(m.dueDate),days=Math.ceil((due-today)/86400000);
+    var chDone=mems.filter(isRenewalDone).length;
+    totalShown+=mems.length;totalDone+=chDone;totalPending+=mems.length-chDone;
+    html+=`<div class="ren-sec"><div class="ren-title">${name} <span class="tm">(${chDone}/${mems.length} complete)</span></div>
+    ${mems.map(m=>{const due=new Date(m.dueDate+'T00:00:00'),days=Math.ceil((due-today)/86400000);
+      const done=isRenewalDone(m);
+      if(!done&&days<0)totalOverdue++;
       const cls=days<=14?'ur':days<=30?'ua':'ug';
       return`<div class="ren-item"><div><div style="font-size:13px;font-weight:600;">${m.name}</div><div class="tm">${m.industry} - Due: ${fmtD(m.dueDate)}</div></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <span class="ub ${cls}">${days<=0?'OVERDUE':days+'d'}</span>
-        ${!isViewer()?`<button class="btn btn-green btn-sm" onclick="markRenewalDone('${m.chapter}','${encodeURIComponent(m.name)}','${m.dueDate}')">Done Done</button>`:''}
+        ${done?'<span class="ub ug" style="background:#dcfce7;color:#166534;">Complete</span>':'<span class="ub '+cls+'">'+(days<0?'OVERDUE':days===0?'TODAY':days+'d')+'</span>'}
+        ${!isViewer()&&!done?`<button class="btn btn-green btn-sm" onclick="markRenewalDone('${m.chapter}','${encodeURIComponent(m.name)}','${m.dueDate}')">Mark Done</button>`:''}
       </div></div>`;
     }).join('')}</div>`;
   });
-  el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Upcoming Renewals</div><span class="tm" id="duesLbl"></span></div>${html||'<div class="empty">No renewals in next 3 months </div>'}</div>`;
+  var rangeBtn=function(days){
+    return'<button class="btn btn-sm '+(windowDays===days?'btn-navy':'btn-secondary')+'" onclick="S.renewalWindowDays='+days+';renderRenewals()">'+days+' days</button>';
+  };
+  el.innerHTML=`<div class="card"><div class="sec-hdr"><div><div class="sec-title">Renewals</div><div class="tm">Showing this month and next ${windowDays} days${tlrLbl?' - '+tlrLbl:''}</div></div><span class="tm" id="duesLbl">${totalDone}/${totalShown} complete</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      ${rangeBtn(30)}${rangeBtn(60)}${rangeBtn(90)}
+    </div>
+    <div class="month-grid">
+      <div class="month-card"><div class="month-lbl">Total Due</div><div class="month-val">${totalShown}</div></div>
+      <div class="month-card"><div class="month-lbl">Complete</div><div class="month-val" style="color:var(--green);">${totalDone}</div></div>
+      <div class="month-card"><div class="month-lbl">Pending</div><div class="month-val" style="color:var(--amber);">${totalPending}</div></div>
+      <div class="month-card"><div class="month-lbl">Overdue</div><div class="month-val" style="color:var(--red);">${totalOverdue}</div></div>
+    </div>
+    ${html||'<div class="empty">No renewals found for this month and next 3 months.</div>'}</div>`;
 }
 
 async function setFeeCompliance(chapter,date,value){
   try{
-    await db.collection('weeklyData').doc(chapter+'_'+date).set({feeComplianceOk:value},{merge:true});
     var localEntry=S.weeklyData.find(function(e){return e.chapter===chapter&&e.date===date;});
-    if(localEntry)localEntry.feeComplianceOk=value;
-    logActivity('fee_compliance_toggled',{chapter:chapter,date:date,value:value});
-    toast('Yes Compliance status saved');
+    if(isLocalPreviewMode()){
+      if(localEntry)localEntry.feeComplianceOk=value;
+      else S.weeklyData.unshift({chapter:chapter,date:date,feeComplianceOk:value,filledBy:S.user.name,filledByRole:S.user.role,savedAt:new Date().toISOString()});
+      saveLocalPreviewState();
+      toast('Compliance status saved locally');
+    }else{
+      await db.collection('weeklyData').doc(chapter+'_'+date).set({feeComplianceOk:value},{merge:true});
+      if(localEntry)localEntry.feeComplianceOk=value;
+      logActivity('fee_compliance_toggled',{chapter:chapter,date:date,value:value});
+      toast('Yes Compliance status saved');
+    }
     renderCallContent();
   }catch(e){toast('No Save failed: '+e.message);}
 }
 
 async function markRenewalDone(chapter,nameEnc,dueDate){
   const name=decodeURIComponent(nameEnc);
-  const key=(chapter+'_'+name+'_'+dueDate).replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_-]/g,'_');
+  const key=renewalDoneKey(chapter,name,dueDate);
+  if(isLocalPreviewMode()){
+    S.renewalsDone[key]={chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()};
+    saveLocalPreviewState();
+    toast(`Yes ${name} renewal marked done locally`);
+    renderRenewals();
+    return;
+  }
   await db.collection('renewalsDone').doc(key).set({chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()});
   toast(`Yes ${name} renewal marked done`);
 }
@@ -2886,8 +3377,13 @@ function exportReport(){const tbl=document.querySelector('#reportContent table')
 function renderReport(){
   const typeEl=document.getElementById('reportType');if(!typeEl)return;
   const type=typeEl.value;
-  const today=new Date().toISOString().split('T')[0];
-  const tma=new Date();tma.setMonth(tma.getMonth()-3);const tmaStr=tma.toISOString().split('T')[0];
+  var today=new Date().toISOString().split('T')[0];
+  var tma=new Date();tma.setMonth(tma.getMonth()-3);var tmaStr=tma.toISOString().split('T')[0];
+  if(isLocalPreviewMode()&&S.ovWeek){
+    var previewRange=getWeekTueFri(S.ovWeek);
+    tmaStr=previewRange.tue;
+    today=previewRange.fri;
+  }
   const isSd=isSrdc()||isViewer();
   const chOpts=visibleChapters().map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
   const chFilter=isSd?`<div class="fg"><label>Chapter</label><select id="rChap"><option value="">All Chapters</option>${chOpts}</select></div>`:'';
@@ -3008,7 +3504,34 @@ function runComplianceReport(){
   showExportBtn();
   document.getElementById('reportContent').innerHTML=`<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th>${weekKeys.map(wk=>`<th style="white-space:nowrap;font-size:10px;">${fmtWeekChip(wk)}</th>`).join('')}<th>Rate</th></tr></thead><tbody>${visChaps.map(ch=>{const{sub}={sub:weekKeys.map(wk=>{const{tue,fri}=getWeekTueFri(wk);return entries.some(e=>e.chapter===ch.name&&e.date>=tue&&e.date<=fri);})};const sub2=weekKeys.map(wk=>{const{tue,fri}=getWeekTueFri(wk);return entries.some(e=>e.chapter===ch.name&&e.date>=tue&&e.date<=fri);});const rate=weekKeys.length>0?Math.round(sub2.filter(Boolean).length/weekKeys.length*100):0;return'<tr><td style="font-weight:600">'+ch.name+'</td>'+sub2.map(s=>'<td style="text-align:center">'+( s?'Yes':'-')+'</td>').join('')+'<td><span class="pill '+(rate>=80?'pg':rate>=50?'pa':'pr')+'">'+rate+'%</span></td></tr>';}).join('')}</tbody></table></div>`;}
 
-function runScorecard(){const{from,to}=gF();const entries=fEntries(from,to,'');const visChaps=visibleChapters();const data=visChaps.map(ch=>{const chE=entries.filter(e=>e.chapter===ch.name);if(!chE.length)return{name:ch.name,weeks:0,netAdd:0,avgTLR:0,totRefs:0,totTYFCB:0,totVis:0,convRate:0};const netAdd=chE.reduce((s,e)=>s+(+e.inductions||0)-(+e.drops||0),0);const tlrE=chE.filter(e=>+e.tlr>0);const avgTLR=tlrE.length?Math.round(tlrE.reduce((s,e)=>s+(+e.tlr||0),0)/tlrE.length):0;const totRefs=chE.reduce((s,e)=>s+(+e.references||0),0);const totTYFCB=chE.reduce((s,e)=>s+(+e.tyfcb||0),0);const totVis=chE.reduce((s,e)=>s+(+e.visitors||0),0);const convE=chE.filter(e=>e.conversionPct!==undefined&&e.conversionPct!==null);const convRate=convE.length?Math.round(convE.reduce((s,e)=>s+(+e.conversionPct||0),0)/convE.length):0;return{name:ch.name,weeks:chE.length,netAdd,avgTLR,totRefs,totTYFCB,totVis,convRate};}).sort((a,b)=>b.netAdd-a.netAdd);showExportBtn();document.getElementById('reportContent').innerHTML=`<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Weeks</th><th>Net Add</th><th>Avg TLR</th><th>References</th><th>TYFCB</th><th>Visitors</th><th>Conv%</th></tr></thead><tbody>${data.map((r,i)=>`<tr><td style="font-weight:700">${i===0?'🥇 ':i===1?'🥈 ':i===2?'🥉 ':''}${r.name}</td><td>${r.weeks}</td><td style="color:${r.netAdd>=0?'var(--green)':'var(--red)'}"><strong>${r.netAdd>0?'+':''}${r.netAdd}</strong></td><td><span class="pill ${tlrPillCls(r.avgTLR)}">${r.avgTLR||'-'}</span></td><td>${r.totRefs}</td><td>Rs.${fmtL(r.totTYFCB)}</td><td>${r.totVis}</td><td style="color:${r.convRate>=30?'var(--green)':r.convRate>=15?'var(--amber)':'var(--red)'}">${r.convRate}%</td></tr>`).join('')}</tbody></table></div>`;}
+function runScorecard(){
+  const{from,to}=gF();
+  const entries=fScorecardEntries(from,to);
+  const visChaps=visibleChapters();
+  function scoreFmt(v){return v?String(Math.round(v*100)/100):'-';}
+  const data=visChaps.map(function(ch){
+    const chE=entries.filter(function(e){return e.chapter===ch.name;});
+    const director=chapterDirectorName(ch);
+    if(!chE.length)return{name:ch.name,director:director,weeks:0,netAdd:0,avgTLR:0,totRefs:0,totTYFCB:0,totVis:0,convRate:0};
+    const netAdd=chE.reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0);
+    const tlrE=chE.filter(function(e){return +e.tlr>0;});
+    const avgTLR=tlrE.length?Math.round((tlrE.reduce(function(s,e){return s+(+e.tlr||0);},0)/tlrE.length)*100)/100:0;
+    const totRefs=chE.reduce(function(s,e){return s+(+e.references||0);},0);
+    const totTYFCB=chE.reduce(function(s,e){return s+(+e.tyfcb||0);},0);
+    const totVis=chE.reduce(function(s,e){return s+(+e.visitors||0);},0);
+    const convE=chE.filter(function(e){return e.conversionPct!==undefined&&e.conversionPct!==null;});
+    const convRate=convE.length?Math.round(convE.reduce(function(s,e){return s+(+e.conversionPct||0);},0)/convE.length):0;
+    return{name:ch.name,director:director,weeks:chE.length,netAdd:netAdd,avgTLR:avgTLR,totRefs:totRefs,totTYFCB:totTYFCB,totVis:totVis,convRate:convRate};
+  }).sort(function(a,b){return(b.avgTLR-a.avgTLR)||(b.netAdd-a.netAdd)||a.name.localeCompare(b.name);});
+  const totals=data.reduce(function(a,r){
+    a.weeks+=r.weeks;a.netAdd+=r.netAdd;a.refs+=r.totRefs;a.tyfcb+=r.totTYFCB;a.vis+=r.totVis;
+    if(r.avgTLR>0){a.tlrSum+=r.avgTLR;a.tlrCount++;}
+    return a;
+  },{weeks:0,netAdd:0,refs:0,tyfcb:0,vis:0,tlrSum:0,tlrCount:0});
+  const regionTlr=totals.tlrCount?Math.round((totals.tlrSum/totals.tlrCount)*100)/100:0;
+  showExportBtn();
+  document.getElementById('reportContent').innerHTML=`<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Director</th><th>Weeks</th><th>Net Add</th><th>Avg TLR</th><th>References</th><th>TYFCB</th><th>Visitors</th><th>Conv%</th></tr></thead><tbody>${data.map((r,i)=>`<tr><td style="font-weight:700">${i===0?'Top 1 ':i===1?'Top 2 ':i===2?'Top 3 ':''}${r.name}</td><td>${r.director}</td><td>${r.weeks}</td><td style="color:${r.netAdd>=0?'var(--green)':'var(--red)'}"><strong>${r.netAdd>0?'+':''}${r.netAdd}</strong></td><td><span class="pill ${tlrPillCls(r.avgTLR)}">${scoreFmt(r.avgTLR)}</span></td><td>${r.totRefs}</td><td>Rs.${fmtL(r.totTYFCB)}</td><td>${r.totVis}</td><td style="color:${r.convRate>=30?'var(--green)':r.convRate>=15?'var(--amber)':'var(--red)'}">${r.convRate}%</td></tr>`).join('')}<tr style="font-weight:800;background:var(--surface);"><td>TOTAL / AVG</td><td>-</td><td>${totals.weeks}</td><td style="color:${totals.netAdd>=0?'var(--green)':'var(--red)'}">${totals.netAdd>0?'+':''}${totals.netAdd}</td><td><span class="pill ${tlrPillCls(regionTlr)}">${scoreFmt(regionTlr)}</span></td><td>${totals.refs}</td><td>Rs.${fmtL(totals.tyfcb)}</td><td>${totals.vis}</td><td>-</td></tr></tbody></table></div>`;
+}
 
 function runFunnel(){const{from,to}=gF();const entries=fEntries(from,to,'');const visChaps=visibleChapters();const data=visChaps.map(ch=>{const chE=entries.filter(e=>e.chapter===ch.name);if(!chE.length)return null;const tV=chE.reduce((s,e)=>s+(+e.visitors||0),0),tEY=chE.reduce((s,e)=>s+(+e.eoiYes||0),0),tEM=chE.reduce((s,e)=>s+(+e.eoiMaybe||0),0),tEN=chE.reduce((s,e)=>s+(+e.eoiNo||0),0),tI=chE.reduce((s,e)=>s+(+e.inductions||0),0);const pipelineContacts=S.visitorPipeline.filter(function(p){return p.chapter===ch.name;});const tP=pipelineContacts.filter(function(p){return(p.stage||'pipeline')==='pipeline';}).length;const tDropped=pipelineContacts.filter(function(p){return p.stage==='dropped';}).length;const overall=tV>0?Math.round(tI/tV*100):0;return{name:ch.name,tV,tEY,tEM,tEN,tP,tDropped,tI,r1:tV>0?Math.round(tEY/tV*100):0,overall};}).filter(Boolean);showExportBtn();document.getElementById('reportContent').innerHTML=`<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Visitors</th><th>EOI Yes</th><th>EOI Maybe</th><th>EOI No</th><th>In Pipeline</th><th>Dropped</th><th>Inducted</th><th>Overall%</th></tr></thead><tbody>${data.map(r=>`<tr><td style="font-weight:700">${r.name}</td><td>${r.tV}</td><td>${r.tEY} <span class="tm">(${r.r1}%)</span></td><td>${r.tEM}</td><td>${r.tEN}</td><td style="color:var(--blue);">${r.tP}</td><td style="color:var(--red);">${r.tDropped}</td><td><strong>${r.tI}</strong></td><td style="color:${r.overall>=10?'var(--green)':r.overall>=5?'var(--amber)':'var(--red)'}"><strong>${r.overall}%</strong></td></tr>`).join('')}</tbody></table></div>`;}
 
@@ -3329,6 +3852,15 @@ function dueMemberKey(m){
   return[(m.chapter||'').toLowerCase(),(m.name||'').toLowerCase().replace(/\s+/g,' ').trim(),m.dueDate||''].join('|');
 }
 
+function renewalDoneKey(chapter,name,dueDate){
+  return((chapter||'')+'_'+(name||'')+'_'+(dueDate||'')).replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_-]/g,'_');
+}
+
+function isRenewalDone(m){
+  if(!m)return false;
+  return !!S.renewalsDone[renewalDoneKey(m.chapter,m.name,m.dueDate)]||!!S.renewalsDone[m.chapter+'_'+m.name+'_'+m.dueDate];
+}
+
 function uniqueDuesMembers(rows){
   var seen={};
   return(rows||[]).filter(function(m){
@@ -3337,6 +3869,19 @@ function uniqueDuesMembers(rows){
     seen[key]=true;
     return true;
   });
+}
+
+function fScorecardEntries(from,to){
+  var byWeek={};
+  visibleChapterNames().forEach(function(ch){
+    getCascadedEntries(ch).forEach(function(e){
+      if(from&&e.date<from)return;
+      if(to&&e.date>to)return;
+      var key=e.chapter+'_'+getWeekKey(e.date);
+      if(!byWeek[key]||e.date>byWeek[key].date)byWeek[key]=e;
+    });
+  });
+  return Object.values(byWeek);
 }
 
 function mergeDuesUpload(existing,incoming){
@@ -3359,6 +3904,14 @@ async function handleDuesUpload(input){
     const chapterCount=[...new Set(filtered.map(function(m){return m.chapter;}))].length;
     if(!filtered.length)throw new Error('No matching chapter rows found for your upload scope');
     const merged=mergeDuesUpload(S.duesData,filtered);
+    if(isLocalPreviewMode()){
+      S.duesData=merged;
+      saveLocalPreviewState();
+      if(S.tab==='renewals')renderRenewals();
+      st.textContent=`Uploaded ${filtered.length} members across ${chapterCount} chapter${chapterCount>1?'s':''} locally. Other chapter dues preserved.`;
+      toast('Dues saved locally');
+      return;
+    }
     try{await db.collection('meta').doc('dues').set({members:merged,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name,lastUploadChapters:[...new Set(filtered.map(function(m){return m.chapter;}))]});
       S.duesData=merged;
       logActivity('dues_report_uploaded',{memberCount:filtered.length,chapterCount:chapterCount,totalMembers:merged.length});
@@ -3376,7 +3929,7 @@ function parseDuesRows(rows){
     var iFirst=colIndex(h,['First Name','First']);
     var iLast=colIndex(h,['Last Name','Last']);
     var iName=colIndex(h,['Full Name','Member Name','Member','Name']);
-    var iIndustry=colIndex(h,['Industry','Classification','Category','Profession']);
+    var iIndustry=colIndex(h,['Industry','Classification','Category','Profession','Company','Business']);
     var iType=colIndex(h,['Membership Type','Member Type','Type']);
     var iStatus=colIndex(h,['Status']);
     var iDue=colIndex(h,['Renewal Due','Due Date','Renewal Date','Expiry Date','Paid Through','Membership Due']);
@@ -3399,7 +3952,33 @@ function parseDuesRows(rows){
   return members;
 }
 
+function readXmlSpreadsheetRows(text){
+  try{
+    var doc=new DOMParser().parseFromString(text,'text/xml');
+    var rows=[].slice.call(doc.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet','Row'));
+    if(!rows.length)rows=[].slice.call(doc.getElementsByTagName('Row'));
+    return rows.map(function(row){
+      var out=[];var col=1;
+      var cells=[].slice.call(row.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet','Cell'));
+      if(!cells.length)cells=[].slice.call(row.getElementsByTagName('Cell'));
+      cells.forEach(function(cell){
+        var idx=+(cell.getAttribute('ss:Index')||cell.getAttributeNS('urn:schemas-microsoft-com:office:spreadsheet','Index')||0);
+        if(idx){while(col<idx){out.push('');col++;}}
+        var data=cell.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet','Data')[0]||cell.getElementsByTagName('Data')[0];
+        out.push(cleanCellValue(data?data.textContent:''));
+        col++;
+      });
+      return out;
+    }).filter(function(r){return r.some(Boolean);});
+  }catch(e){return[];}
+}
+
 function parseDuesLegacy(text){
+  var xmlRows=readXmlSpreadsheetRows(text);
+  if(xmlRows.length){
+    var parsed=parseDuesRows(xmlRows);
+    if(parsed.length)return parsed;
+  }
   const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];const members=[];
   rows.forEach(row=>{
     const cells=[...row.matchAll(/<(?:ss:)?Data[^>]*>([^<]*)<\/(?:ss:)?Data>/g)].map(m=>decodeXmlText(m[1]));
@@ -3424,6 +4003,16 @@ async function handleTLRUpload(input){
     if(!newRows.length)throw new Error('No chapter rows found in PDF');
     const merged=[...S.tlrData];
     newRows.forEach(nr=>{const idx=merged.findIndex(er=>er.name.toLowerCase()===nr.name.toLowerCase()||nr.name.toLowerCase().includes(er.name.toLowerCase().replace('bni ',''))||er.name.toLowerCase().includes(nr.name.toLowerCase().replace('bni ','')));if(idx>=0)merged[idx]=nr;else merged.push(nr);});
+    if(isLocalPreviewMode()){
+      S.tlrData=merged;
+      applyLocalTlrRowsToWeekly(merged);
+      saveLocalPreviewState();
+      refresh();
+      if(S.tab==='tlr')renderTLR();
+      st.textContent=`Uploaded ${newRows.length} chapters locally, ${merged.length} total`;
+      toast('TLR saved locally');
+      return;
+    }
     try{await db.collection('meta').doc('tlr').set({rows:merged,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
       logActivity('tlr_report_uploaded',{chaptersUpdated:newRows.length});
       st.textContent=`Uploaded ${newRows.length} chapters, ${merged.length} total`;toast('TLR merged & synced');}
@@ -3450,6 +4039,41 @@ function firstMatch(lines,re,group){
   return'';
 }
 
+function firstTwoNumberRow(lines,re){
+  var l=lines.find(function(x){return re.test(x);})||'';
+  var m=l.match(re);
+  return m?[m[1].replace(/,/g,''),m[2].replace(/,/g,'')]:['',''];
+}
+
+function metricAfterDash(lines,re){
+  var l=lines.find(function(x){return re.test(x);})||'';
+  var m=l.match(re);
+  return m?m[1].replace(/,/g,''):'';
+}
+
+function parseMoney(v){
+  var cleaned=String(v||'').replace(/[^\d.]/g,'');
+  if(!cleaned)return'';
+  return String(Math.round(parseFloat(cleaned)||0));
+}
+
+function moneyTokens(line){
+  var rupees=[...String(line||'').matchAll(/₹\s*([\d,]+(?:\.\d+)?)/g)].map(function(m){return parseMoney(m[1]);});
+  if(rupees.length)return rupees;
+  return(String(line||'').match(/[\d,]+(?:\.\d+)?/g)||[]).map(function(v){return parseMoney(v);});
+}
+
+function chapterBusinessPassed(lines){
+  var l=lines.find(function(x){return /^Business Passed\b/i.test(x)&&/Avg Referral Value/i.test(x);})||'';
+  var vals=moneyTokens(l);
+  return{lastMonthBusinessPassed:vals[0]||'',sixMonthBusinessPassed:vals[1]||''};
+}
+
+function averageBusinessPassed(lines){
+  var l=lines.find(function(x){return /^Avg Business Passed\b/i.test(x);})||'';
+  return moneyTokens(l)[0]||'';
+}
+
 function countMemberTrafficPages(lines,chapter,region){
   var seen={};
   for(var i=1;i<lines.length;i++){
@@ -3465,6 +4089,26 @@ function countMemberTrafficPages(lines,chapter,region){
   return Object.keys(seen).length;
 }
 
+function countCurrentMonthScoredMembers(lines,reportMonth){
+  if(!reportMonth)return 0;
+  var escaped=reportMonth.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  var re=new RegExp('^'+escaped+'\\s+(?:[-+]?\\d+(?:\\.\\d+)?\\s+){7}[-+]?\\d+(?:\\.\\d+)?$','i');
+  return lines.filter(function(l){return re.test(l);}).length;
+}
+
+function inferStatusTotal(vals){
+  var nums=vals.map(function(v){return parseFloat(v);}).filter(function(v){return!isNaN(v);});
+  if(nums.length!==4)return 0;
+  var best={total:0,error:Infinity};
+  for(var total=1;total<=300;total++){
+    var counts=nums.map(function(pct){return Math.round((pct/100)*total);});
+    if(counts.reduce(function(s,c){return s+c;},0)!==total)continue;
+    var err=nums.reduce(function(s,pct,i){return s+Math.abs(pct-(counts[i]/total)*100);},0);
+    if(err<best.error)best={total:total,error:err};
+  }
+  return best.error<=0.08?best.total:0;
+}
+
 function parseChapterTrafficLightPdf(lines,sourceFile){
   var reportMonth=firstMatch(lines,/Report Issue Date\s+([A-Za-z]{3}-\d{4})/i,1)||firstMatch(lines,/Period\s+([A-Za-z]{3}-\d{4})/i,1);
   var region=firstMatch(lines,/^Region\s+(.+)$/i,1);
@@ -3476,20 +4120,24 @@ function parseChapterTrafficLightPdf(lines,sourceFile){
   var score=scoreNums.length?scoreNums[scoreNums.length-1]:'';
   if(!score)return null;
 
-  var refsLine=lines.find(function(l){return /Total Referrals\s+\d/i.test(l)&&numericTokens(l).length>=2;})||'';
-  var refsNums=numericTokens(refsLine);
-  var lastMonthReferrals=refsNums.length>=2?refsNums[0]:(refsNums[0]||'');
-  var sixMonthReferrals=refsNums.length>=2?refsNums[1]:'';
-  var avgRefs=firstMatch(lines,/Avg No of Referrals\s+([\d,]+)/i,1);
-  var lastMonthVisitors=firstMatch(lines,/No\. of Visitors\s+([\d,]+)/i,1);
-  var visitorMatches=[];
-  lines.forEach(function(l){
-    var re=/No\. of Visitors\s+([\d,]+)/ig,m;
-    while((m=re.exec(l)))visitorMatches.push(m[1].replace(/,/g,''));
-  });
-  var sixMonthVisitors=visitorMatches.length>1?visitorMatches[1]:'';
-  var avgVisitors=firstMatch(lines,/Avg No\. of Visitors\s+([\d,]+)/i,1);
-  var chapterSize=countMemberTrafficPages(lines,chapter,region);
+  var refNums=firstTwoNumberRow(lines,/^Total Referrals\s+([\d,]+)\s+([\d,]+)\b/i);
+  var lastMonthReferrals=refNums[0];
+  var sixMonthReferrals=refNums[1];
+  var avgRefs=metricAfterDash(lines,/^Avg No\.?\s*of Referrals\s+-?\s*([\d,]+)/i);
+  var visitorNums=firstTwoNumberRow(lines,/^No\.?\s*of Visitors\s+([\d,]+)\s+([\d,]+)\b/i);
+  var lastMonthVisitors=visitorNums[0];
+  var sixMonthVisitors=visitorNums[1];
+  var avgVisitors=metricAfterDash(lines,/^Avg No\.?\s*of Visitors\s+-?\s*([\d,]+)/i);
+  var businessPassed=chapterBusinessPassed(lines);
+  var avgBusinessPassed=averageBusinessPassed(lines);
+  var greenPct=percentForRow(lines,'GREEN');
+  var amberPct=percentForRow(lines,'AMBER');
+  var redPct=percentForRow(lines,'RED');
+  var greyPct=percentForRow(lines,'GREY');
+  var scoredMembers=countCurrentMonthScoredMembers(lines,reportMonth);
+  var statusTotal=inferStatusTotal([greenPct,amberPct,redPct,greyPct]);
+  var memberDetailPages=countMemberTrafficPages(lines,chapter,region);
+  var chapterSize=scoredMembers||statusTotal||memberDetailPages;
 
   return{
     name:chapter,
@@ -3508,13 +4156,19 @@ function parseChapterTrafficLightPdf(lines,sourceFile){
     lastMonthReferrals:lastMonthReferrals,
     sixMonthReferrals:sixMonthReferrals,
     avgReferrals:avgRefs,
+    tyfcb:businessPassed.lastMonthBusinessPassed,
+    lastMonthBusinessPassed:businessPassed.lastMonthBusinessPassed,
+    sixMonthBusinessPassed:businessPassed.sixMonthBusinessPassed,
+    avgBusinessPassed:avgBusinessPassed,
     lastMonthVisitors:lastMonthVisitors,
     sixMonthVisitors:sixMonthVisitors,
     avgVisitors:avgVisitors,
-    greenPct:percentForRow(lines,'GREEN'),
-    amberPct:percentForRow(lines,'AMBER'),
-    redPct:percentForRow(lines,'RED'),
-    greyPct:percentForRow(lines,'GREY')
+    greenPct:greenPct,
+    amberPct:amberPct,
+    redPct:redPct,
+    greyPct:greyPct,
+    scoredMembers:scoredMembers,
+    memberDetailPages:memberDetailPages
   };
 }
 
@@ -3614,7 +4268,7 @@ function renderSettings(){
   h+='<div class="tm" style="margin-bottom:12px;">Paste any direct image URL. Updates everywhere instantly.</div>';
   h+='<div class="fg"><label>BNI Ahmedabad Logo URL</label><input type="url" id="bniLogoUrl" placeholder="https://..." value="'+(BRANDING.bniLogo||'')+'"></div>';
   h+='<div class="fg"><label>Sicilian Ventures Logo URL</label><input type="url" id="svLogoUrl" placeholder="https://..." value="'+(BRANDING.svLogo||'')+'"></div>';
-  h+='<div class="fg"><label>The Argonauts Logo URL</label><input type="url" id="argLogoUrl" placeholder="https://..." value="'+(BRANDING.argLogo||'')+'"></div>';
+  h+='<div class="fg"><label>BNI Chapter Pulse Logo URL</label><input type="url" id="argLogoUrl" placeholder="https://..." value="'+(BRANDING.argLogo||'')+'"></div>';
   h+='<div class="btn-row"><button class="btn btn-navy" onclick="saveBranding()">Save Logos</button></div></div>';
   el.innerHTML=h;
   popSelects();
@@ -3651,7 +4305,15 @@ async function saveMember(){
   if(role==='viewer'||role==='ad'){chapters=[];chapter='';}
   else if(role==='dc'||role==='srdc'){const sel=document.getElementById('mChapters');chapters=sel?Array.from(sel.selectedOptions).map(o=>o.value):[];chapter=chapters[0]||'';}
   else{chapter=document.getElementById('mChapter')?.value||'';chapters=[chapter];}
-  const data={name,role,chapter,chapters,reportsTo};if(pin)data.pin=pin;
+  const existing=id?S.members.find(function(x){return x.id===id;}):null;
+  const chapterReportsTo={};
+  chapters.forEach(function(chName){
+    const chObj=S.chapters.find(function(c){return c.name===chName;});
+    if(chObj&&chObj.seniorDirector)chapterReportsTo[chName]=chObj.seniorDirector;
+  });
+  const reportTargets=[...new Set(Object.values(chapterReportsTo).filter(Boolean))];
+  const finalReportsTo=reportsTo||reportTargets.join('; ');
+  const data={name,role,chapter,chapters,reportsTo:finalReportsTo};if(Object.keys(chapterReportsTo).length)data.chapterReportsTo=chapterReportsTo;else if(existing&&existing.chapterReportsTo)data.chapterReportsTo=existing.chapterReportsTo;if(pin)data.pin=pin;
   await db.collection('members').doc(id||('m'+Date.now())).set(data,{merge:!!id});
   logActivity('member_saved',{memberName:name,role:role,chapter:chapter});
   hide('memberFormCard');toast('Saved');
@@ -3801,6 +4463,7 @@ try{
 
 function loadBranding(){
   applyBranding(); // paint from cache immediately, before the network round-trip resolves
+  if(isOfflinePreviewParam()||typeof db==='undefined'||!db.collection)return;
   db.collection('meta').doc('branding').onSnapshot(function(doc){
     if(doc.exists){
       BRANDING=Object.assign({},BRANDING,doc.data());
@@ -3866,7 +4529,7 @@ function calcHealthScore(chapterName){
   var tlrScore=tlr>=50?20:0;
 
   // Conversion - 20 pts, TLR-sourced conversion rate (tiered)
-  var entries=S.weeklyData.filter(function(e){return e.chapter===chapterName;}).sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,4);
+  var entries=getCascadedEntries(chapterName).reverse().slice(0,4);
   var convRates=entries.map(function(e){return getEntryConv(e);});
   var avgConv=convRates.length?convRates.reduce(function(a,b){return a+b;},0)/convRates.length:0;
   var hasVisitorsNoConv=entries.some(function(e){return(+e.visitors||0)>0;})&&avgConv<15;
@@ -3888,7 +4551,7 @@ function calcHealthScore(chapterName){
 function getActionItems(chapterName){
   var items=[];
   var weeks=getWeeks(); var recent4=weeks.slice(0,4);
-  var entries=S.weeklyData.filter(function(e){return e.chapter===chapterName;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  var entries=getCascadedEntries(chapterName).reverse();
   var curr=entries[0];
   var missed=recent4.filter(function(wk){var r=getWeekTueFri(wk);return !S.weeklyData.some(function(e){return e.chapter===chapterName&&e.date>=r.tue&&e.date<=r.fri;});}).length;
   if(missed>=2)items.push({type:'warning',msg:'Missed '+missed+' of last 4 weekly submissions'});
@@ -3933,8 +4596,9 @@ function renderWeeklyPreview(){
     var meetDt=new Date(tueDt); meetDt.setDate(tueDt.getDate()+(dayIdx-2+7)%7);
     if(dayIdx<2)meetDt.setDate(meetDt.getDate()+7);
     var hasData=S.weeklyData.some(function(e){return e.chapter===ch.name&&e.date>=tue&&e.date<=fri;});
-    var isPast=meetDt<today;
-    return Object.assign({},ch,{meetDt:meetDt,hasData:hasData,isPast:isPast});
+    var meetEnd=new Date(meetDt);meetEnd.setHours(23,59,59,999);
+    var isPast=meetEnd<today;
+    return Object.assign({},ch,{meetDt:meetDt,meetEnd:meetEnd,hasData:hasData,isPast:isPast});
   }).filter(function(c){return c.meetDt>=new Date(tue+'T00:00:00')&&c.meetDt<=new Date(fri+'T23:59:59');});
   var notSubmitted=meetingThisWeek.filter(function(c){return c.isPast&&!c.hasData;});
   var weekEnd=new Date(fri+'T23:59:59');
@@ -3952,7 +4616,10 @@ function renderWeeklyPreview(){
     if(!dayChs.length)return;
     h+='<div style="background:var(--surface);border-radius:8px;padding:10px;">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">'+dayName.toUpperCase()+'</div>';
-    dayChs.forEach(function(c){h+='<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;"><span style="font-weight:600">'+c.name+'</span><span>'+(c.hasData?'Yes':'⏳')+'</span></div>';});
+    dayChs.forEach(function(c){
+      var status=c.hasData?'<span title="Submitted" style="color:var(--green);font-weight:900;">&#10003;</span>':(c.isPast?'<span title="Meeting day passed" style="color:var(--green);font-weight:900;">&#10003;</span>':'<span title="Meeting day pending">&#8987;</span>');
+      h+='<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;"><span style="font-weight:600">'+c.name+'</span><span>'+status+'</span></div>';
+    });
     h+='</div>';
   });
   h+='</div>';
@@ -3971,7 +4638,7 @@ function renderPlanningTab(){
   var weeksLeft=Math.max(0,Math.ceil((tenureEnd-today)/(7*24*60*60*1000)));
   var monthsLeft=Math.max(0,Math.ceil((tenureEnd-today)/(30*24*60*60*1000)));
   var chapterData=visChapters.map(function(ch){
-    var latest=S.weeklyData.filter(function(e){return e.chapter===ch.name;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0];
+    var latest=getLatestCascaded(ch.name);
     var current=latest?+latest.membersClose||0:0;
     var target=ch.target||0; var gap=target-current;
     var weeklyTarget=weeksLeft>0?Math.ceil(gap/weeksLeft):gap;
@@ -3980,8 +4647,10 @@ function renderPlanningTab(){
     var currMonth=today.toISOString().substring(0,7);
     var prevMonth=new Date(today); prevMonth.setMonth(prevMonth.getMonth()-1);
     var prevMonthStr=prevMonth.toISOString().substring(0,7);
-    var currMNet=S.weeklyData.filter(function(e){return e.chapter===ch.name&&e.date.startsWith(currMonth);}).reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0);
-    var prevMNet=S.weeklyData.filter(function(e){return e.chapter===ch.name&&e.date.startsWith(prevMonthStr);}).reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0);
+    var currMEntries=getCascadedEntries(ch.name).filter(function(e){return e.date.startsWith(currMonth);});
+    var prevMEntries=getCascadedEntries(ch.name).filter(function(e){return e.date.startsWith(prevMonthStr);});
+    var currMNet=currMEntries.length?((+currMEntries[currMEntries.length-1].membersClose||0)-(+currMEntries[0].membersStart||0)):0;
+    var prevMNet=prevMEntries.length?((+prevMEntries[prevMEntries.length-1].membersClose||0)-(+prevMEntries[0].membersStart||0)):0;
     var pipeline=latest?+latest.pipeline||0:0;
     var nms=new Date(today); nms.setMonth(nms.getMonth()+1); nms.setDate(1); nms.setHours(0,0,0,0);
     var nme=new Date(nms); nme.setMonth(nme.getMonth()+1); nme.setDate(0); nme.setHours(23,59,59,999);
@@ -3989,7 +4658,7 @@ function renderPlanningTab(){
     var health=calcHealthScore(ch.name);
     var currMonth2=today.toISOString().substring(0,7);
     var moTarget=getMonthlyTarget(ch.name,currMonth2);
-    var moEntries=S.weeklyData.filter(function(e){return e.chapter===ch.name&&e.date.startsWith(currMonth2);}).sort(function(a,b){return a.date.localeCompare(b.date);});
+    var moEntries=getCascadedEntries(ch.name).filter(function(e){return e.date.startsWith(currMonth2);});
     var moNet=moEntries.length?((+moEntries[moEntries.length-1].membersClose||0)-(+moEntries[0].membersStart||0)):0;
     // moGap = members still needed to reach monthly target (vs current member count)
     var moGap=moTarget>0?moTarget-current:0;
@@ -4056,7 +4725,7 @@ function renderPlanningTab(){
 function renderRiskRadar(){
   var el=document.getElementById('tab-radar'); if(!el)return;
   var chapterData=visibleChapters().map(function(ch){
-    var entries=S.weeklyData.filter(function(e){return e.chapter===ch.name;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+    var entries=getCascadedEntries(ch.name).reverse();
     var recent4=entries.slice(0,4);
     var avgNet=recent4.length?recent4.reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0)/recent4.length:0;
     var tlrRow=S.tlrData.find(function(r){return r.name.toLowerCase().includes(ch.name.toLowerCase())||ch.name.toLowerCase().includes(r.name.toLowerCase().replace('bni ',''));});
@@ -4111,17 +4780,119 @@ function setPipelineFilter(field,value){
   renderPipelineVelocity();
 }
 
+function pipelineCountedIds(entry){
+  if(!entry)return[];
+  if(Array.isArray(entry.pipelineInductedIds))return entry.pipelineInductedIds.slice();
+  if(entry.pipelineInductedIds&&typeof entry.pipelineInductedIds==='object')return Object.keys(entry.pipelineInductedIds).filter(function(k){return entry.pipelineInductedIds[k];});
+  return[];
+}
+
+function latestCloseBefore(chapter,date){
+  var prior=getCascadedEntries(chapter).filter(function(e){return e.date<date;});
+  return prior.length?(+prior[prior.length-1].membersClose||0):0;
+}
+
+async function adjustWeeklyPipelineInduction(contact,date,delta){
+  if(!contact||!contact.id||!contact.chapter||!date||!delta)return;
+  var wk=getWeekKey(date);
+  var range=getWeekTueFri(wk);
+  var existing=S.weeklyData.filter(function(e){return e.chapter===contact.chapter&&e.date>=range.tue&&e.date<=range.fri;}).sort(function(a,b){return b.date.localeCompare(a.date);})[0];
+  if(!existing&&delta<0)return;
+  var entry=existing||{
+    chapter:contact.chapter,
+    date:date,
+    filledBy:S.user.name,
+    filledByRole:S.user.role,
+    visitors_list:[],
+    membersStart:latestCloseBefore(contact.chapter,date),
+    inductions:0,
+    drops:0,
+    membersClose:0,
+    membersConnect:0,
+    visitors:0,
+    posVisitors:0,
+    concall:'No',
+    tlr:getTLRFromReport(contact.chapter),
+    conversionPct:getTLRConversion(contact.chapter),
+    onetwentyone:0,
+    references:0,
+    tyfcb:0,
+    eoiYes:0,
+    eoiMaybe:0,
+    eoiNo:0,
+    eoiPending:0,
+    eoi:0,
+    pipeline:0,
+    renewals:0,
+    training:0,
+    successStory:'',
+    savedAt:new Date().toISOString()
+  };
+  var ids=pipelineCountedIds(entry);
+  var already=ids.includes(contact.id);
+  if(delta>0&&already)return;
+  if(delta<0&&!already)return;
+  if(delta>0)ids.push(contact.id);
+  else ids=ids.filter(function(id){return id!==contact.id;});
+  entry.pipelineInductedIds=ids;
+  entry.inductions=Math.max(0,(+entry.inductions||0)+delta);
+  entry.membersClose=calcActiveMembers(+entry.membersStart||0,+entry.inductions||0,+entry.drops||0);
+  entry.updatedAt=new Date().toISOString();
+  entry.updatedBy=S.user.name;
+  var idx=S.weeklyData.findIndex(function(e){return e.chapter===entry.chapter&&e.date===entry.date;});
+  if(idx>=0)S.weeklyData[idx]=Object.assign({},S.weeklyData[idx],entry);
+  else S.weeklyData.unshift(entry);
+  if(!isLocalPreviewMode()){
+    await db.collection('weeklyData').doc(entry.chapter+'_'+entry.date).set(entry,{merge:true});
+  }
+}
+
+async function syncPipelineStageToScorecard(contact,oldStage,newStage,oldStageDate,newStageDate){
+  oldStage=oldStage||'pipeline';
+  newStage=newStage||'pipeline';
+  if(oldStage===newStage)return;
+  if(oldStage==='inducted')await adjustWeeklyPipelineInduction(contact,oldStageDate||newStageDate,-1);
+  if(newStage==='inducted')await adjustWeeklyPipelineInduction(contact,newStageDate,1);
+}
+
 async function markContactStage(pid,stage){
+  var today=new Date().toISOString().split('T')[0];
+  var updates={stage:stage,stageChangedDate:today,stageChangedBy:S.user.name};
   try{
-    await db.collection('visitorPipeline').doc(pid).set({stage:stage,stageChangedDate:new Date().toISOString().split('T')[0],stageChangedBy:S.user.name},{merge:true});
+    var localContact=S.visitorPipeline.find(function(p){return p.id===pid;});
+    var oldStage=localContact?(localContact.stage||'pipeline'):'pipeline';
+    var oldStageDate=localContact?(localContact.stageChangedDate||today):today;
+    if(localContact)Object.assign(localContact,updates);
+    if(S.pipelineFilterStage&&S.pipelineFilterStage!==stage)S.pipelineFilterStage=stage;
+    if(isLocalPreviewMode()){
+      await syncPipelineStageToScorecard(localContact,oldStage,stage,oldStageDate,today);
+      saveLocalPreviewState();
+      renderPipelineVelocity();
+      refresh();
+      toast(stage==='inducted'?'Inducted and moved to Inducted list':'Pipeline status updated locally');
+      return;
+    }
+    await db.collection('visitorPipeline').doc(pid).set(updates,{merge:true});
+    await syncPipelineStageToScorecard(localContact,oldStage,stage,oldStageDate,today);
     logActivity('pipeline_stage_changed',{contactId:pid,stage:stage});
+    renderPipelineVelocity();
+    refresh();
     toast('Yes Updated');
   }catch(e){toast('No '+e.message);}
 }
 
 async function deleteContact(pid){
   if(!confirm('Remove this contact from the pipeline tracker?'))return;
-  try{await db.collection('visitorPipeline').doc(pid).delete();logActivity('pipeline_contact_deleted',{contactId:pid});toast('Yes Removed');}
+  try{
+    S.visitorPipeline=(S.visitorPipeline||[]).filter(function(p){return p.id!==pid;});
+    if(isLocalPreviewMode()){
+      saveLocalPreviewState();
+      renderPipelineVelocity();
+      toast('Removed locally');
+      return;
+    }
+    await db.collection('visitorPipeline').doc(pid).delete();logActivity('pipeline_contact_deleted',{contactId:pid});renderPipelineVelocity();toast('Yes Removed');
+  }
   catch(e){toast('No '+e.message);}
 }
 
@@ -4177,7 +4948,7 @@ function renderPipelineVelocity(){
   filtered.forEach(function(p){
     var stage=p.stage||'pipeline';
     var stageColor=stage==='inducted'?'var(--green)':stage==='dropped'?'var(--red)':'var(--blue)';
-    var stageLabel=stage==='inducted'?'Yes Inducted':stage==='dropped'?'No Dropped Off':'🔵 In Pipeline';
+    var stageLabel=stage==='inducted'?'Inducted':stage==='dropped'?'Dropped Off':'In Pipeline';
     var days=daysSince(p.addedDate);
     h+='<tr>';
     h+='<td style="font-weight:700">'+p.name+'</td>';
@@ -4214,11 +4985,17 @@ function generateWhatsAppReport(){
   curr=curr.filter(function(e){return visNames.includes(e.chapter);});
   var month=tue.substring(0,7);
 
-  var totM=curr.reduce(function(s,e){return s+(+e.membersClose||0);},0);
+  var totM=visChapters.reduce(function(s,ch){
+    var e=getCascadedForWeek(ch.name,tue,fri);
+    return s+(e?(+e.membersClose||0):0);
+  },0);
   var totI=curr.reduce(function(s,e){return s+(+e.inductions||0);},0);
   var totD=curr.reduce(function(s,e){return s+(+e.drops||0);},0);
   var totWN=totI-totD;
-  var totMN=S.weeklyData.filter(function(e){return visNames.includes(e.chapter)&&e.date.startsWith(month);}).reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0);
+  var totMN=visChapters.reduce(function(s,ch){
+    var chMonthEntries=getCascadedEntries(ch.name).filter(function(e){return e.date.startsWith(month);});
+    return s+(chMonthEntries.length?((+chMonthEntries[chMonthEntries.length-1].membersClose||0)-(+chMonthEntries[0].membersStart||0)):0);
+  },0);
   var totV=curr.reduce(function(s,e){return s+(+e.visitors||0);},0);
   var totEOIYes=curr.reduce(function(s,e){return s+(+e.eoiYes||0);},0);
   var totEOIMaybe=curr.reduce(function(s,e){return s+(+e.eoiMaybe||0);},0);
@@ -4230,7 +5007,7 @@ function generateWhatsAppReport(){
   var submitted=submittedChs.length;
 
   var lines=[];
-  lines.push('BNI Argonauts - Week of '+fmtWeekChip(weekKey));
+  lines.push('BNI CHAPTER PULSE - Week of '+fmtWeekChip(weekKey));
   lines.push('--------------------');
   lines.push('Members: '+totM+' | '+submitted+'/'+visChapters.length+' submitted');
   if(notSubmittedChs.length){
@@ -4332,7 +5109,7 @@ function generateWhatsAppReport(){
     lines.push('--------------------');
   }
 
-  lines.push('BNI Ahmedabad - The Argonauts');
+  lines.push('BNI CHAPTER PULSE');
   var report=lines.join('\n');
   var modal=document.createElement('div');
   modal.id='waModal';
@@ -4367,6 +5144,41 @@ function copyWA(){
 }
 
 // MONTHLY RETROSPECTIVE ─────────────────────────────────
+function getChapterMonthRetro(ch,month){
+  var chEntries=getCascadedEntries(ch.name).filter(function(e){return e.date.startsWith(month);}).sort(function(a,b){return a.date.localeCompare(b.date);});
+  if(!chEntries.length)return{name:ch.name,director:chapterDirectorName(ch),hasData:false};
+  var first=chEntries[0],last=chEntries[chEntries.length-1];
+  var startMembers=+first.membersStart||0;
+  var closeMembers=+last.membersClose||0;
+  var inductions=chEntries.reduce(function(s,e){return s+(+e.inductions||0);},0);
+  var drops=chEntries.reduce(function(s,e){return s+(+e.drops||0);},0);
+  var netAdd=closeMembers-startMembers;
+  var totRefs=chEntries.reduce(function(s,e){return s+(+e.references||0);},0);
+  var totVis=chEntries.reduce(function(s,e){return s+(+e.visitors||0);},0);
+  var totPos=chEntries.reduce(function(s,e){return s+(+e.posVisitors||+e.eoiYes||0);},0);
+  var totTYFCB=chEntries.reduce(function(s,e){return s+(+e.tyfcb||0);},0);
+  var totEOIYes=chEntries.reduce(function(s,e){return s+(+e.eoiYes||0);},0);
+  var totEOIMaybe=chEntries.reduce(function(s,e){return s+(+e.eoiMaybe||0);},0);
+  var totEOINo=chEntries.reduce(function(s,e){return s+(+e.eoiNo||0);},0);
+  var convEntries=chEntries.filter(function(e){return e.conversionPct!==undefined&&e.conversionPct!==null;});
+  var conv=totVis>0?Math.round((totPos/totVis)*100):(convEntries.length?Math.round(convEntries.reduce(function(s,e){return s+(+e.conversionPct||0);},0)/convEntries.length):0);
+  var tlrEntries=chEntries.filter(function(e){return +e.tlr>0;});
+  var tlr=tlrEntries.length?Math.round((tlrEntries.reduce(function(s,e){return s+(+e.tlr||0);},0)/tlrEntries.length)*100)/100:null;
+  if(tlr===null){
+    var tlrRow=S.tlrData.find(function(r){return r.name.toLowerCase().includes(ch.name.toLowerCase())||ch.name.toLowerCase().includes(r.name.toLowerCase().replace('bni ',''));});
+    tlr=tlrRow?+tlrRow.score:null;
+  }
+  var rMoTgt=getMonthlyTarget(ch.name,month);
+  var rMoGap=rMoTgt>0?rMoTgt-closeMembers:0;
+  var rDue=(S.duesData||[]).filter(function(m){return m.chapter===ch.name&&m.dueDate&&m.dueDate.startsWith(month);}).length;
+  var rDone=(S.duesData||[]).filter(function(m){
+    if(m.chapter!==ch.name||!m.dueDate||!m.dueDate.startsWith(month))return false;
+    return isRenewalDone(m);
+  }).length;
+  var weekCount=Object.keys(chEntries.reduce(function(a,e){a[getWeekKey(e.date)]=1;return a;},{})).length;
+  return{name:ch.name,director:chapterDirectorName(ch),hasData:true,startMembers:startMembers,closeMembers:closeMembers,inductions:inductions,drops:drops,netAdd:netAdd,totRefs:totRefs,totVis:totVis,totPos:totPos,conv:conv,totTYFCB:totTYFCB,totEOI:totEOIYes+totEOIMaybe+totEOINo,totEOIYes:totEOIYes,totEOIMaybe:totEOIMaybe,totEOINo:totEOINo,tlr:tlr,weeks:weekCount,moTarget:rMoTgt,moGap:rMoGap,renewalsDue:rDue,renewalsDone:rDone};
+}
+
 function renderRetroTab(){
   var el=document.getElementById('tab-retro'); if(!el)return;
   var visChapters=visibleChapters();
@@ -4378,20 +5190,8 @@ function renderRetroTab(){
   var selMonth=selMonthEl?selMonthEl.value:'';
   if(!selMonth&&allMonths.length)selMonth=allMonths[0];
   if(!selMonth){el.innerHTML='<div class="card"><div class="empty">No data available yet</div></div>';return;}
-  var entries=S.weeklyData.filter(function(e){return e.date.startsWith(selMonth)&&visNames.includes(e.chapter);});
   var chapterData=visChapters.map(function(ch){
-    var chE=entries.filter(function(e){return e.chapter===ch.name;});
-    if(!chE.length)return{name:ch.name,hasData:false};
-    var netAdd=chE.reduce(function(s,e){return s+(+e.inductions||0)-(+e.drops||0);},0);
-    var totRefs=chE.reduce(function(s,e){return s+(+e.references||0);},0);
-    var totVis=chE.reduce(function(s,e){return s+(+e.visitors||0);},0);
-    var totTYFCB=chE.reduce(function(s,e){return s+(+e.tyfcb||0);},0);
-    var totEOI=chE.reduce(function(s,e){return s+((+e.eoiYes||0)+(+e.eoiMaybe||0)+(+e.eoiNo||0));},0);
-    var convEntries=chE.filter(function(e){return e.conversionPct!==undefined&&e.conversionPct!==null;});
-    var conv=convEntries.length?Math.round(convEntries.reduce(function(s,e){return s+(+e.conversionPct||0);},0)/convEntries.length):0;
-    var tlrRow=S.tlrData.find(function(r){return r.name.toLowerCase().includes(ch.name.toLowerCase())||ch.name.toLowerCase().includes(r.name.toLowerCase().replace('bni ',''));});
-    var tlr=tlrRow?+tlrRow.score:null;
-    return{name:ch.name,hasData:true,netAdd:netAdd,totRefs:totRefs,totVis:totVis,conv:conv,totTYFCB:totTYFCB,totEOI:totEOI,tlr:tlr,weeks:chE.length};
+    return getChapterMonthRetro(ch,selMonth);
   });
   var withData=chapterData.filter(function(c){return c.hasData;});
   var sorted=withData.slice().sort(function(a,b){return b.netAdd-a.netAdd;});
@@ -4401,6 +5201,8 @@ function renderRetroTab(){
   var totNet=withData.reduce(function(s,c){return s+c.netAdd;},0);
   var totRefs=withData.reduce(function(s,c){return s+c.totRefs;},0);
   var totTYFCB=withData.reduce(function(s,c){return s+c.totTYFCB;},0);
+  var totRenewDue=withData.reduce(function(s,c){return s+c.renewalsDue;},0);
+  var totRenewDone=withData.reduce(function(s,c){return s+c.renewalsDone;},0);
   var monthOpts=allMonths.map(function(m){return '<option value="'+m+'"'+(m===selMonth?' selected':'')+'>'+fmtM(m)+'</option>';}).join('');
   var h='<div class="card">';
   h+='<div class="sec-hdr"><div class="sec-title">Monthly Retrospective</div><select id="retroMonth" onchange="renderRetroTab()" style="width:auto;padding:7px 12px;font-size:13px;">'+monthOpts+'</select></div>';
@@ -4408,24 +5210,25 @@ function renderRetroTab(){
   h+='<div class="month-card"><div class="month-lbl">Region Net Add</div><div class="month-val" style="color:'+(totNet>=0?'var(--green)':'var(--red)')+'">'+(totNet>0?'+':'')+totNet+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Total References</div><div class="month-val">'+totRefs+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Total TYFCB</div><div class="month-val">Rs.'+fmtL(totTYFCB)+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Renewals</div><div class="month-val" style="font-size:18px;">'+totRenewDone+'/'+totRenewDue+'</div><div class="month-sub">done / due</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Best Net Add</div><div class="month-val" style="font-size:14px;">'+(bestNet?bestNet.name:'-')+'</div><div class="month-sub">'+(bestNet?'+'+bestNet.netAdd:'')+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Best Conversion</div><div class="month-val" style="font-size:14px;">'+(bestConv?bestConv.name:'-')+'</div><div class="month-sub">'+(bestConv?bestConv.conv+'%':'')+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Most References</div><div class="month-val" style="font-size:14px;">'+(bestRef?bestRef.name:'-')+'</div><div class="month-sub">'+(bestRef?bestRef.totRefs+' refs':'')+'</div></div>';
   h+='</div>';
-  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Net Add</th><th>Mo Target</th><th>vs Target</th><th>References</th><th>TYFCB</th><th>Visitors</th><th>Conv%</th><th>EOI</th><th>TLR</th><th>Weeks</th></tr></thead><tbody>';
+  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Start</th><th>Close</th><th>Ind</th><th>Drop</th><th>Net Add</th><th>Mo Target</th><th>vs Target</th><th>Renewals</th><th>References</th><th>TYFCB</th><th>Visitors</th><th>Conv%</th><th>EOI</th><th>TLR</th><th>Weeks</th></tr></thead><tbody>';
   chapterData.forEach(function(c){
-    if(!c.hasData){h+='<tr><td style="font-weight:600;color:var(--muted);">'+c.name+'</td><td colspan="10" style="color:var(--muted);font-size:12px;">No data</td></tr>';return;}
+    if(!c.hasData){h+='<tr><td style="font-weight:600;color:var(--muted);">'+c.name+'</td><td colspan="15" style="color:var(--muted);font-size:12px;">No data</td></tr>';return;}
     h+='<tr>';
     h+='<td style="font-weight:700">'+c.name+'</td>';
-    var rMoTgt=getMonthlyTarget(c.name,selMonth);
-    // vs Target = Mo Target (member count) vs last entry's membersClose for that month
-    var rMonthEntries=getCascadedEntries(c.name).filter(function(e){return e.date.startsWith(selMonth);});
-    var rLastClose=rMonthEntries.length?+rMonthEntries[rMonthEntries.length-1].membersClose||0:0;
-    var rMoGap=rMoTgt>0?rMoTgt-rLastClose:0;
-    var rVsCol=rMoTgt>0?(rLastClose>=rMoTgt?'var(--green)':rMoGap<=3?'var(--amber)':'var(--red)'):'var(--muted)';
+    var rVsCol=c.moTarget>0?(c.closeMembers>=c.moTarget?'var(--green)':c.moGap<=3?'var(--amber)':'var(--red)'):'var(--muted)';
+    h+='<td>'+c.startMembers+'</td>';
+    h+='<td>'+c.closeMembers+'</td>';
+    h+='<td style="color:var(--green);">+'+c.inductions+'</td>';
+    h+='<td style="color:var(--red);">-'+c.drops+'</td>';
     h+='<td style="color:'+(c.netAdd>0?'var(--green)':c.netAdd<0?'var(--red)':'var(--muted)')+'">'+(c.netAdd>0?'+':'')+c.netAdd+'</td>';
-    h+='<td style="color:var(--muted);">'+(rMoTgt||'-')+'</td>';
-    h+='<td style="color:'+rVsCol+';font-weight:700;">'+(rMoTgt>0?(rLastClose>=rMoTgt?'Yes Hit':rMoGap+' needed'):'-')+'</td>';
+    h+='<td style="color:var(--muted);">'+(c.moTarget||'-')+'</td>';
+    h+='<td style="color:'+rVsCol+';font-weight:700;">'+(c.moTarget>0?(c.closeMembers>=c.moTarget?'Yes Hit':c.moGap+' needed'):'-')+'</td>';
+    h+='<td>'+c.renewalsDone+'/'+c.renewalsDue+'</td>';
     h+='<td>'+c.totRefs+'</td>';
     h+='<td>Rs.'+fmtL(c.totTYFCB)+'</td>';
     h+='<td>'+c.totVis+'</td>';
@@ -4444,12 +5247,16 @@ function renderRetroTab(){
 function doExportRetro(){exportRetroCSV(document.getElementById('retroMonth').value);}
 function doExportSD(){exportSDReport(document.getElementById('sdReportMonth').value);}
 function exportRetroCSV(month){
-  var visNames=visibleChapterNames();
-  var entries=S.weeklyData.filter(function(e){return e.date.startsWith(month)&&visNames.includes(e.chapter);});
-  if(!entries.length){toast('No data');return;}
-  var hdr='Chapter,Date,Inductions,Drops,Net,Members,Visitors,Pos Visitors,Conv%,References,TYFCB,EOI,Pipeline,TLR';
-  var rows=entries.map(function(e){var conv=getEntryConv(e);var net=(+e.inductions||0)-(+e.drops||0);return[e.chapter,e.date,e.inductions||0,e.drops||0,net,e.membersClose||0,e.visitors||0,e.eoiYes||0,conv+'%',e.references||0,e.tyfcb||0,e.eoiYes||0,e.eoiMaybe||0,e.eoiNo||0,e.tlr||0].join(',');});
-  dl([hdr].concat(rows).join('\n'),'BNI_'+month+'_Retro.csv','text/csv');
+  var rows=visibleChapters().map(function(ch){return getChapterMonthRetro(ch,month);}).filter(function(r){return r.hasData;});
+  if(!rows.length){toast('No data');return;}
+  var hdr='Chapter,Director,Start Members,Close Members,Inductions,Drops,Net Add,Monthly Target,Target Gap,Renewals Due,Renewals Done,References,TYFCB,Visitors,Positive Visitors,Conversion %,EOI Yes,EOI Maybe,EOI No,TLR,Weeks';
+  var csvRows=rows.map(function(r){
+    return[
+      r.name,r.director,r.startMembers,r.closeMembers,r.inductions,r.drops,r.netAdd,r.moTarget||'',r.moTarget?r.moGap:'',
+      r.renewalsDue,r.renewalsDone,r.totRefs,r.totTYFCB,r.totVis,r.totPos,r.conv+'%',r.totEOIYes,r.totEOIMaybe,r.totEOINo,r.tlr!==null?r.tlr:'',r.weeks
+    ].map(function(v){return'"'+String(v).replace(/"/g,"''")+'"';}).join(',');
+  });
+  dl([hdr].concat(csvRows).join('\n'),'BNI_'+month+'_Retro.csv','text/csv');
   toast('Exported');
 }
 
@@ -4912,7 +5719,7 @@ function exportGoalsExcel(){
   });
   // Build CSV (Excel-compatible)
   var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
-  dl('\uFEFF'+csv,'BNI_Argonauts_Chapter_Goals_Jul26_Jun27.csv','text/csv;charset=utf-8');
+  dl('\uFEFF'+csv,'BNI_Chapter_Pulse_Chapter_Goals_Jul26_Jun27.csv','text/csv;charset=utf-8');
   toast('Yes Goals exported');
 }
 
@@ -5039,7 +5846,7 @@ function exportMonthlyGoalsExcel(){
   var csv=rows.map(function(r){
     return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');
   }).join('\n');
-  dl('\uFEFF'+csv,'BNI_Argonauts_12Month_Goals.csv','text/csv;charset=utf-8');
+  dl('\uFEFF'+csv,'BNI_Chapter_Pulse_12Month_Goals.csv','text/csv;charset=utf-8');
   toast('Yes 12-Month Goals exported');
 }
 
@@ -5123,6 +5930,14 @@ async function handleLOMUpload(input){
     try{rows=parseLOMRows(await readExcelRows(file));}
     catch(xlsxErr){rows=parseLOMLegacy(await readTextFile(file));}
     rows=filterRowsToScope(rows).filter(function(r){return r.chapter&&r.name;});
+    if(isLocalPreviewMode()){
+      S.lomData=rows;
+      saveLocalPreviewState();
+      if(S.tab==='miyagi')renderMiyagiTab();
+      if(st)st.textContent='Uploaded '+rows.length+' members locally';
+      toast('Length of Membership saved locally');
+      return;
+    }
     try{
       await db.collection('meta').doc('lengthOfMembership').set({rows:rows,uploadedAt:new Date().toISOString().split('T')[0],uploadedBy:S.user.name});
       S.lomData=rows;
@@ -5710,23 +6525,23 @@ function renderMiyagiTab(){
 }
 
 function startSrdcPreview(){
-  S.user={id:'preview-srdc',name:'Dinesh Sitlani',role:'srdc',chapter:null,chapters:[]};
+  S.user={id:'preview-srdc',name:'Senior Director Preview',role:'srdc',chapter:null,chapters:[]};
   S.chapters=MY_CHAPTERS.map(function(name,i){
     var days=['Tuesday','Tuesday','Tuesday','Tuesday','Tuesday','Wednesday','Wednesday','Wednesday','Friday'];
     var targets=[38,22,110,20,46,36,34,104,54];
     return{id:name,name:name,day:days[i]||'Tuesday',tenure:'apr',target:targets[i]||0,order:i+1};
   });
   S.members=[
-    {id:'preview-srdc',name:'Dinesh Sitlani',role:'srdc',chapters:MY_CHAPTERS},
-    {id:'dc-faustus',name:'Abhishek Sheth',role:'dc',chapter:'Faustus',chapters:['Faustus'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-crios',name:'Mitesh Patel',role:'dc',chapter:'Crios',chapters:['Crios'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-makarios',name:'Shreyas Kothari',role:'dc',chapter:'Makarios',chapters:['Makarios'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-atilius',name:'Harsh Vachhani',role:'dc',chapter:'Atilius',chapters:['Atilius'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-tyche',name:'Karishma Shah',role:'dc',chapter:'Tyche',chapters:['Tyche'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-obsidian',name:'Rohit Nair',role:'dc',chapter:'Obsidian',chapters:['Obsidian'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-ares',name:'Alpesh Shah',role:'dc',chapter:'Ares',chapters:['Ares'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-prometheus',name:'Dr Rashmin Sadrani',role:'dc',chapter:'Prometheus',chapters:['Prometheus'],reportsTo:'Dinesh Sitlani'},
-    {id:'dc-lincoln',name:'Hardik Khamar',role:'dc',chapter:'Lincoln',chapters:['Lincoln'],reportsTo:'Dinesh Sitlani'}
+    {id:'preview-srdc',name:'Senior Director Preview',role:'srdc',chapters:MY_CHAPTERS},
+    {id:'dc-faustus',name:'Abhishek Sheth',role:'dc',chapter:'Faustus',chapters:['Faustus'],reportsTo:'Senior Director Preview'},
+    {id:'dc-crios',name:'Mitesh Patel',role:'dc',chapter:'Crios',chapters:['Crios'],reportsTo:'Senior Director Preview'},
+    {id:'dc-makarios',name:'Shreyas Kothari',role:'dc',chapter:'Makarios',chapters:['Makarios'],reportsTo:'Senior Director Preview'},
+    {id:'dc-atilius',name:'Harsh Vachhani',role:'dc',chapter:'Atilius',chapters:['Atilius'],reportsTo:'Senior Director Preview'},
+    {id:'dc-tyche',name:'Karishma Shah',role:'dc',chapter:'Tyche',chapters:['Tyche'],reportsTo:'Senior Director Preview'},
+    {id:'dc-obsidian',name:'Rohit Nair',role:'dc',chapter:'Obsidian',chapters:['Obsidian'],reportsTo:'Senior Director Preview'},
+    {id:'dc-ares',name:'Alpesh Shah',role:'dc',chapter:'Ares',chapters:['Ares'],reportsTo:'Senior Director Preview'},
+    {id:'dc-prometheus',name:'Dr Rashmin Sadrani',role:'dc',chapter:'Prometheus',chapters:['Prometheus'],reportsTo:'Senior Director Preview'},
+    {id:'dc-lincoln',name:'Hardik Khamar',role:'dc',chapter:'Lincoln',chapters:['Lincoln'],reportsTo:'Senior Director Preview'}
   ];
   S.weeklyData=HIST.slice();
   S.tlrData=[
@@ -5762,7 +6577,7 @@ function startSrdcPreview(){
   var dot=document.getElementById('syncDot'),txt=document.getElementById('syncTxt');
   if(dot)dot.classList.add('off');
   if(txt)txt.textContent='Preview';
-  document.getElementById('userChip').textContent='* Dinesh Sitlani - Preview';
+  document.getElementById('userChip').textContent='* Senior Director Preview';
   buildNav();
   popSelects();
   applyBranding();
