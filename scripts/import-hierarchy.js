@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import ExcelJS from "exceljs";
 import { getDb } from "../src/firebaseAdmin.js";
+import { REMOVED_SENIOR_DIRECTORS } from "./region-removals.js";
 
 const args = new Map();
 for (const arg of process.argv.slice(2)) {
@@ -16,6 +17,10 @@ const workbookPath = args.get("file") || defaultWorkbook;
 const dryRun = args.get("dry-run") !== "false" && args.get("write") !== "true";
 const defaultPin = args.get("default-pin") || process.env.DEFAULT_MEMBER_PIN || "";
 const areaDirectors = (args.get("area-directors") || "Yash Vasant,Snehal Patel")
+  .split(",")
+  .map(value => value.trim())
+  .filter(Boolean);
+const excludedSeniorDirectors = (args.get("exclude-senior-directors") || REMOVED_SENIOR_DIRECTORS.join(","))
   .split(",")
   .map(value => value.trim())
   .filter(Boolean);
@@ -106,7 +111,13 @@ async function buildImportData(chapters) {
   for (const name of dcNames) {
     const ownedRows = chapters.filter(row => row.chapterDirector === name);
     const ownedChapters = ownedRows.map(row => row.chapter);
-    const seniorDirector = ownedRows[0]?.seniorDirector || "";
+    const seniorDirectors = unique(ownedRows.map(row => row.seniorDirector));
+    const seniorDirector = seniorDirectors[0] || "";
+    const chapterReportsTo = Object.fromEntries(
+      ownedRows
+        .filter(row => row.chapter && row.seniorDirector)
+        .map(row => [row.chapter, row.seniorDirector])
+    );
     members.push({
       id: `dc-${slug(name)}`,
       data: {
@@ -114,8 +125,9 @@ async function buildImportData(chapters) {
         role: "dc",
         chapter: ownedChapters[0] || "",
         chapters: ownedChapters,
-        reportsTo: seniorDirector,
-        seniorDirectorId: seniorDirector ? `srdc-${slug(seniorDirector)}` : "",
+        reportsTo: seniorDirectors.join("; "),
+        seniorDirectorId: seniorDirectors.length === 1 && seniorDirector ? `srdc-${slug(seniorDirector)}` : "",
+        chapterReportsTo,
         ...(pinHash ? { pinHash } : {})
       }
     });
@@ -161,13 +173,15 @@ async function writeImport(data) {
   });
 }
 
-const chapters = await readWorkbook(workbookPath);
+const workbookChapters = await readWorkbook(workbookPath);
+const chapters = workbookChapters.filter(row => !excludedSeniorDirectors.includes(row.seniorDirector));
 const data = await buildImportData(chapters);
 const srdcCount = data.members.filter(member => member.data.role === "srdc").length;
 const dcCount = data.members.filter(member => member.data.role === "dc").length;
 
 console.log(`Workbook: ${workbookPath}`);
 console.log(`Chapters: ${data.chapters.length}`);
+console.log(`Excluded Senior Directors: ${excludedSeniorDirectors.length ? excludedSeniorDirectors.join(", ") : "none"}`);
 console.log(`Area Directors: ${areaDirectors.length}`);
 console.log(`Senior Directors: ${srdcCount}`);
 console.log(`Chapter Directors/DCs: ${dcCount}`);

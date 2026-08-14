@@ -1,6 +1,6 @@
-# BNI PULSE
+# BNI CHAPTER PULSE
 
-BNI Pulse is a single-service deployment for the BNI Argonauts dashboard. It serves the existing frontend and adds a Node/Express backend for authentication, Firestore access, runtime Firebase config, and deployment health checks.
+BNI CHAPTER PULSE is a single-service deployment for the chapter leadership dashboard. It serves the existing frontend and adds a Node/Express backend for authentication, Firestore access, runtime Firebase config, and deployment health checks.
 
 ## Role hierarchy
 
@@ -50,6 +50,8 @@ npm run dev
 Open `http://localhost:3000`.
 
 For a beginner-friendly Firebase setup walkthrough, see [docs/FIREBASE_BEGINNER_SETUP.md](docs/FIREBASE_BEGINNER_SETUP.md).
+
+For the production launch checklist, see [docs/GO_LIVE_CHECKLIST.md](docs/GO_LIVE_CHECKLIST.md).
 
 ## Required deployment variables
 

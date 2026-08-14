@@ -7,6 +7,7 @@ const PUBLIC_MEMBER_FIELDS = [
   "chapter",
   "chapters",
   "reportsTo",
+  "chapterReportsTo",
   "seniorDirectorId",
   "areaDirectorId"
 ];
@@ -62,7 +63,7 @@ export async function setMetaDoc(docId, data, merge = true) {
 
 export async function writeActivity(user, action, details = {}) {
   await getDb().collection("activityLog").add({
-    team: "argonauts",
+    team: "bni_chapter_pulse",
     action,
     details,
     userName: user?.name || user?.sub || "system",

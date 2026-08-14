@@ -1,6 +1,5 @@
 import bcrypt from "bcryptjs";
 import express from "express";
-import { config } from "../config.js";
 import { getDb } from "../firebaseAdmin.js";
 import { requireAuth, signSession } from "../middleware/auth.js";
 
@@ -14,6 +13,7 @@ function publicUser(id, data) {
     chapter: data.chapter || null,
     chapters: data.chapters || [],
     reportsTo: data.reportsTo || "",
+    chapterReportsTo: data.chapterReportsTo || {},
     seniorDirectorId: data.seniorDirectorId || "",
     areaDirectorId: data.areaDirectorId || ""
   };
@@ -32,21 +32,6 @@ router.post("/login", async (req, res, next) => {
     }
 
     const db = getDb();
-
-    if (memberId === "__srdc__") {
-      const cfg = await db.collection("meta").doc("config").get();
-      const srPin = cfg.exists ? cfg.data().srPin : "";
-      const fallback = config.srAdminPin;
-      if (!srPin && !fallback) {
-        return res.status(503).json({ error: "Sr. DC login is not configured" });
-      }
-      if (pin !== srPin && pin !== fallback) {
-        return res.status(401).json({ error: "Incorrect PIN" });
-      }
-
-      const user = { id: "__srdc__", name: "Dinesh Sitlani", role: "srdc", chapter: null, chapters: [] };
-      return res.json({ token: signSession(user), user });
-    }
 
     const doc = await db.collection("members").doc(memberId).get();
     if (!doc.exists || !(await pinMatches(doc.data(), pin))) {

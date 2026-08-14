@@ -26,7 +26,7 @@ app.use(express.json({ limit: "2mb" }));
 app.use(morgan(config.env === "production" ? "combined" : "dev"));
 
 app.get("/healthz", (req, res) => {
-  res.json({ ok: true, service: "bni-pulse", environment: config.env });
+  res.json({ ok: true, service: "bni-chapter-pulse", environment: config.env });
 });
 
 app.get("/config.js", (req, res) => {
@@ -50,5 +50,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(config.port, () => {
-  console.log(`BNI Pulse listening on port ${config.port}`);
+  console.log(`BNI CHAPTER PULSE listening on port ${config.port}`);
 });
