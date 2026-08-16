@@ -181,7 +181,7 @@ textarea{resize:vertical;min-height:68px;}
 .dropz{border:2px dashed var(--border);border-radius:var(--r);padding:26px;text-align:center;cursor:pointer;transition:all .2s;}
 .dropz:hover{border-color:var(--navy);background:rgba(26,31,46,.03);}
 .dropz input{display:none;}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--navy);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--navy);color:#fff;padding:11px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:all .3s;pointer-events:none;white-space:pre-line;max-width:min(92vw,620px);text-align:left;line-height:1.35;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 .hidden{display:none!important;}.tm{color:var(--muted);font-size:12px;}
 .empty{text-align:center;padding:28px 16px;color:var(--muted);}
@@ -1969,7 +1969,7 @@ function buildNav(){
       {id:'retention',label:'Retention',hidden:role!=='ad'},
       {id:'tlr',label:'TLR Report'},
       {id:'reports',label:'Reports'},
-      {id:'planning',label:'Planning',hidden:role==='ad'},
+      {id:'planning',label:'Planning'},
       {id:'radar',label:'Risk Radar'},
       {id:'pipeline',label:'Pipeline'},
       {id:'miyagi',label:'Miyagi'},
@@ -4284,7 +4284,14 @@ function toggleChaptersField(){
   else if(!isViewer)document.getElementById('singleChapField')?.classList.remove('hidden');
 }
 
-function showMemberForm(){show('memberFormCard');document.getElementById('memberFormTitle').textContent='Add Member';document.getElementById('editMemberId').value='';['mName','mPin','mReportsTo'].forEach(id=>document.getElementById(id).value='');document.getElementById('mRole').value='dc';toggleChaptersField();}
+function clearMemberForm(){
+  ['editMemberId','mName','mPin','mReportsTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  var role=document.getElementById('mRole');if(role)role.value='dc';
+  var chapter=document.getElementById('mChapter');if(chapter)chapter.value='';
+  var chapters=document.getElementById('mChapters');if(chapters)Array.from(chapters.options).forEach(function(o){o.selected=false;});
+  toggleChaptersField();
+}
+function showMemberForm(){show('memberFormCard');document.getElementById('memberFormTitle').textContent='Add Member';clearMemberForm();}
 function editMember(id){
   const m=S.members.find(x=>x.id===id);if(!m)return;
   show('memberFormCard');document.getElementById('memberFormTitle').textContent='Edit Member';
@@ -4293,6 +4300,29 @@ function editMember(id){
   toggleChaptersField();
   if(m.role==='dc'||m.role==='srdc'){const sel=document.getElementById('mChapters');if(sel){Array.from(sel.options).forEach(o=>o.selected=(m.chapters||[m.chapter]).includes(o.value));}}
   else{const sel=document.getElementById('mChapter');if(sel)sel.value=m.chapter||'';}
+}
+function memberSeniorDirectorSummary(memberData){
+  var role=memberData.role;
+  var chapters=(memberData.chapters&&memberData.chapters.length)?memberData.chapters:(memberData.chapter?[memberData.chapter]:[]);
+  if(role==='ad')return'Whole region access';
+  if(role==='srdc')return memberData.name+' is the Senior DC for '+(chapters.length?chapters.join(', '):'assigned chapters');
+  var mapped=chapters.map(function(chName){
+    var mappedSenior=(memberData.chapterReportsTo&&memberData.chapterReportsTo[chName])||'';
+    var chapter=S.chapters.find(function(c){return c.name===chName;});
+    var senior=mappedSenior||(chapter&&chapter.seniorDirector)||memberData.reportsTo||'Not assigned';
+    return chName+' -> '+senior;
+  });
+  if(mapped.length)return mapped.join('; ');
+  return memberData.reportsTo||'Not assigned';
+}
+function showMemberPasswordConfirmation(memberData,pin,isNew){
+  var chapters=(memberData.chapters&&memberData.chapters.length)?memberData.chapters:(memberData.chapter?[memberData.chapter]:[]);
+  var msg=(isNew?'Account created':'Password changed')+' successfully\n'
+    +'Name: '+memberData.name+' ('+rl(memberData.role)+')\n'
+    +'Senior DC relation: '+memberSeniorDirectorSummary(memberData)+'\n'
+    +'Chapters: '+(chapters.length?chapters.join(', '):'Whole Region')+'\n'
+    +'New password/PIN: '+pin;
+  toast(msg,10000);
 }
 async function saveMember(){
   const id=document.getElementById('editMemberId').value;
@@ -4313,19 +4343,22 @@ async function saveMember(){
   });
   const reportTargets=[...new Set(Object.values(chapterReportsTo).filter(Boolean))];
   const finalReportsTo=reportsTo||reportTargets.join('; ');
-  const data={name,role,chapter,chapters,reportsTo:finalReportsTo};if(Object.keys(chapterReportsTo).length)data.chapterReportsTo=chapterReportsTo;else if(existing&&existing.chapterReportsTo)data.chapterReportsTo=existing.chapterReportsTo;if(pin)data.pin=pin;
+  const data={name,role,chapter,chapters,reportsTo:finalReportsTo};if(Object.keys(chapterReportsTo).length)data.chapterReportsTo=chapterReportsTo;else if(existing&&existing.chapterReportsTo)data.chapterReportsTo=existing.chapterReportsTo;if(pin){data.pin=pin;if(typeof firebase!=='undefined'&&firebase.firestore&&firebase.firestore.FieldValue)data.pinHash=firebase.firestore.FieldValue.delete();}
   await db.collection('members').doc(id||('m'+Date.now())).set(data,{merge:!!id});
-  logActivity('member_saved',{memberName:name,role:role,chapter:chapter});
-  hide('memberFormCard');toast('Saved');
+  logActivity('member_saved',{memberName:name,role:role,chapter:chapter,passwordChanged:!!pin});
+  clearMemberForm();
+  hide('memberFormCard');
+  if(pin)showMemberPasswordConfirmation(data,pin,!id);
+  else toast('Saved');
 }
-function cancelMemberForm(){hide('memberFormCard');}
+function cancelMemberForm(){clearMemberForm();hide('memberFormCard');}
 async function delMember(id){if(!confirm('Remove member?'))return;const m=S.members.find(x=>x.id===id);await db.collection('members').doc(id).delete();logActivity('member_deleted',{memberName:m?m.name:id});toast('Removed');}
 function showChapterForm(){show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Add Chapter';document.getElementById('editChapterId').value='';['fName','fTarget'].forEach(id=>document.getElementById(id).value='');}
 function editChapter(id){const c=S.chapters.find(x=>x.id===id);if(!c)return;show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Edit Chapter';document.getElementById('editChapterId').value=id;document.getElementById('fName').value=c.name;document.getElementById('fDay').value=c.day;document.getElementById('fTenure').value=c.tenure||'apr';document.getElementById('fTarget').value=c.target||'';}
 async function saveChapter(){const id=document.getElementById('editChapterId').value;const name=document.getElementById('fName').value.trim();if(!name){toast('Name required');return;}const data={name,day:document.getElementById('fDay').value,tenure:document.getElementById('fTenure').value,target:+document.getElementById('fTarget').value||0,order:id?(S.chapters.find(c=>c.id===id)?.order||99):S.chapters.length+1};await db.collection('chapters').doc(id||name).set(data,{merge:!!id});logActivity('chapter_saved',{chapterName:name});hide('chapterFormCard');toast('Saved');}
 function cancelChapterForm(){hide('chapterFormCard');}
 
-async function changeSrPin(){const pin=document.getElementById('newSrPin')?.value;if(!pin||pin.length<4){toast('Min 4 digits');return;}await db.collection('meta').doc('config').set({srPin:pin},{merge:true});logActivity('sr_pin_changed',{});document.getElementById('newSrPin').value='';toast('PIN updated');}
+async function changeSrPin(){const pin=document.getElementById('newSrPin')?.value;if(!pin||pin.length<4){toast('Min 4 digits');return;}await db.collection('meta').doc('config').set({srPin:pin},{merge:true});logActivity('sr_pin_changed',{});document.getElementById('newSrPin').value='';toast('Sr. DC master PIN changed successfully\nScope: Senior Director fallback login\nNew password/PIN: '+pin,10000);}
 async function saveSrCallDay(){const day=document.getElementById('srCallDaySelect')?.value;if(!day)return;await db.collection('meta').doc('config').set({srCallDay:day},{merge:true});logActivity('sr_call_day_changed',{day:day});toast('Call day updated');}
 
 // EXPORT ──
@@ -4417,7 +4450,15 @@ function fmtD(s){if(!s)return'-';return new Date(s+'T00:00:00').toLocaleDateStri
 function fmtM(s){if(!s)return'-';return new Date(s+'-01').toLocaleDateString('en-IN',{month:'short',year:'2-digit'});}
 function fmtL(n){n=+n||0;if(n>=10000000)return(n/10000000).toFixed(1)+'Cr';if(n>=100000)return(n/100000).toFixed(1)+'L';if(n>=1000)return Math.round(n/1000)+'K';return n+'';}
 function rl(r){return r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':r==='sa1'?'SA1':r==='sa2'?'SA2':r==='viewer'?'Viewer':r||'';}
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+var TOAST_TIMER=null;
+function toast(msg,duration){
+  const t=document.getElementById('toast');
+  if(!t)return;
+  if(TOAST_TIMER)clearTimeout(TOAST_TIMER);
+  t.textContent=msg;
+  t.classList.add('show');
+  TOAST_TIMER=setTimeout(()=>t.classList.remove('show'),duration||2800);
+}
 function show(id){document.getElementById(id)?.classList.remove('hidden');}
 function hide(id){document.getElementById(id)?.classList.add('hidden');}
 

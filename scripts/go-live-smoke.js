@@ -52,6 +52,11 @@ assert(/rangeBtn\(30\)[\s\S]*rangeBtn\(60\)[\s\S]*rangeBtn\(90\)/.test(html), "R
 assert(/Complete<\/span>/.test(html), "Renewals marked done renders Complete badge");
 assert(/AREA_DIRECTOR_SUPPORT_YEAR_TARGET=696/.test(html), "Support scorecard yearly target is 696");
 assert(/AREA_DIRECTOR_SUPPORT_QUARTER_TARGET=174/.test(html), "Support scorecard quarterly target is 174");
+assert(/\{id:'planning',label:'Planning'\}/.test(html), "AD dashboard includes Planning tab");
+assert(/data\.pinHash=firebase\.firestore\.FieldValue\.delete\(\)/.test(html), "Member password changes clear old hashed PINs");
+assert(/showMemberPasswordConfirmation\(data,pin,!id\)/.test(html), "Member password changes show detailed confirmation");
+assert(/New password\/PIN: '\+pin/.test(html), "Password confirmation includes the new password");
+assert(/toast\(msg,10000\)/.test(html), "Password confirmation stays visible for 10 seconds");
 
 assert(/from = "\/api\/\*"/.test(netlifyToml), "Netlify redirects /api/* to function");
 assert(/from = "\/config\.js"/.test(netlifyToml), "Netlify redirects /config.js to function");
