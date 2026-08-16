@@ -1744,18 +1744,27 @@ async function doLogin(){
   const pin=document.getElementById('loginPin').value;
   if(!nv||!pin){toast('Select name and enter PIN');return;}
   if(nv==='__srdc__'){showLoginErr();return;}
-  let m=null;
+  let m=null,userFromApi=null;
   if(S.localPreview){
     if(pin!==PREVIEW_MEMBER_PIN){showLoginErr();return;}
   }else{
     try{
-      const doc=await db.collection('members').doc(nv).get();
-      if(doc.exists)m=doc.data();
-    }catch(e){console.warn('Member lookup failed; using built-in login hierarchy:',e);}
+      const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({memberId:nv,pin:pin})});
+      if(!res.ok){showLoginErr();return;}
+      const payload=await res.json();
+      userFromApi=payload.user||null;
+      if(payload.token)try{localStorage.setItem('bniPulseToken',payload.token);}catch(e){}
+    }catch(e){
+      console.warn('API login failed:',e);
+      if(!['localhost','127.0.0.1'].includes(location.hostname)){showLoginErr();return;}
+      try{const doc=await db.collection('members').doc(nv).get();if(doc.exists)m=doc.data();}catch(err){console.warn('Local member lookup failed:',err);}
+    }
   }
+  if(userFromApi){m=userFromApi;}
   if(!m&&SEED_LOGIN_MEMBERS.length)m=SEED_LOGIN_MEMBERS.find(function(x){return x.id===nv;});
   if(!m){showLoginErr();return;}
   S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',chapterReportsTo:m.chapterReportsTo||{},seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
+  ensureUserChapterScope();
   document.getElementById('loginPin').value='';
   document.getElementById('loginErr').classList.add('hidden');
   startApp();
@@ -1780,6 +1789,7 @@ function startApp(){
   const isDC=['cd','dc','sa1','sa2'].includes(role);
   document.getElementById('userChip').textContent=(isSd?'* ':'')+S.user.name+' - Logout';
   loadBranding();
+  ensureUserChapterScope();
   // Set active chapter for DC
   if(isDC) S.dcActiveChapter=S.user.chapters?.[0]||S.user.chapter;
   // Build nav
@@ -1998,8 +2008,8 @@ function buildNav(){
 }
 
 function subAll(){
-  const u1=db.collection('chapters').orderBy('order').onSnapshot(s=>{S.chapters=s.docs.map(d=>({id:d.id,...d.data()}));popSelects();refresh();});
-  const u2=db.collection('members').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));popSelects();if(S.tab==='settings')renderSettings();});
+  const u1=db.collection('chapters').orderBy('order').onSnapshot(s=>{S.chapters=s.docs.map(d=>({id:d.id,...d.data()}));ensureUserChapterScope();popSelects();refresh();});
+  const u2=db.collection('members').onSnapshot(s=>{S.members=s.docs.map(d=>({id:d.id,...d.data()}));ensureUserChapterScope();popSelects();if(S.tab==='settings')renderSettings();});
   const u3=db.collection('weeklyData').orderBy('date','desc').onSnapshot(s=>{S.weeklyData=s.docs.map(d=>({id:d.id,...d.data()}));refresh();});
   const u4=db.collection('meta').doc('dues').onSnapshot(d=>{if(d.exists){S.duesData=d.data().members||[];if(S.tab==='renewals')renderRenewals();if(S.tab==='retention')renderAreaDirectorRetentionTab();}});
   const u5=db.collection('meta').doc('tlr').onSnapshot(async d=>{
@@ -2110,9 +2120,28 @@ function isViewer(){return S.user?.role==='viewer';}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
 function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
 function roleClass(role){return role==='ad'?'ad':role==='srdc'?'srdc':isChapterDirectorRole(role)?'dc':role==='viewer'?'viewer':'sa';}
+function normPersonName(value){return String(value||'').toLowerCase().replace(/\bpvt\b/g,'private').replace(/\bltd\b/g,'limited').replace(/[^a-z0-9]+/g,' ').trim();}
+function uniqueList(values){return[...new Set((values||[]).filter(Boolean))];}
+function seniorMappedChapters(name){
+  var key=normPersonName(name);
+  if(!key)return[];
+  return S.chapters.filter(function(ch){return normPersonName(ch.seniorDirector)===key;}).map(function(ch){return ch.name;});
+}
+function ensureUserChapterScope(){
+  if(!S.user)return;
+  if(isSeniorDirector()){
+    var assigned=uniqueList([...(S.user.chapters||[]),...seniorMappedChapters(S.user.name)]);
+    S.user.chapters=assigned;
+    S.user.chapter=assigned[0]||S.user.chapter||'';
+  }else if(isDC()){
+    S.user.chapters=uniqueList(S.user.chapters&&S.user.chapters.length?S.user.chapters:[S.user.chapter]);
+    S.user.chapter=S.user.chapter||S.user.chapters[0]||'';
+    S.dcActiveChapter=S.dcActiveChapter||S.user.chapter||S.user.chapters[0]||'';
+  }
+}
 function myChapters(){
   if(isAreaDirector()||isViewer())return S.chapters.map(c=>c.name);
-  if(isSeniorDirector())return S.user?.chapters?.length?S.user.chapters:[];
+  if(isSeniorDirector())return uniqueList([...(S.user?.chapters||[]),...seniorMappedChapters(S.user?.name)]);
   return(S.user?.chapters&&S.user.chapters.length)?S.user.chapters:(S.user?.chapter?[S.user.chapter]:[]);
 }
 function visibleChapterNames(){return myChapters().filter(Boolean);}

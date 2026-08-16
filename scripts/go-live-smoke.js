@@ -57,6 +57,12 @@ assert(/data\.pinHash=firebase\.firestore\.FieldValue\.delete\(\)/.test(html), "
 assert(/showMemberPasswordConfirmation\(data,pin,!id\)/.test(html), "Member password changes show detailed confirmation");
 assert(/New password\/PIN: '\+pin/.test(html), "Password confirmation includes the new password");
 assert(/toast\(msg,10000\)/.test(html), "Password confirmation stays visible for 10 seconds");
+assert(/fetch\('\/api\/auth\/login'/.test(html), "Login uses API PIN verification");
+assert(/function seniorMappedChapters/.test(html), "Senior DC chapters can be mapped from chapter ownership");
+assert(/function ensureUserChapterScope/.test(html), "User chapter scope is refreshed from hierarchy");
+assert(/chapters'\)\.orderBy\('order'\)\.onSnapshot[\s\S]*ensureUserChapterScope\(\)[\s\S]*popSelects\(\)/.test(html), "Chapter dropdowns refresh after hierarchy loads");
+assert(/db\.collection\('weeklyData'\)\.doc\(ch\+'\_'\+date\)\.set\(entry\)/.test(html), "DC data entry writes to shared weeklyData");
+assert(/S\.weeklyData=s\.docs\.map/.test(html), "Dashboards subscribe to shared weeklyData updates");
 
 assert(/from = "\/api\/\*"/.test(netlifyToml), "Netlify redirects /api/* to function");
 assert(/from = "\/config\.js"/.test(netlifyToml), "Netlify redirects /config.js to function");
