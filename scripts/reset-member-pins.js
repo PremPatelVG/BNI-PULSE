@@ -1,8 +1,12 @@
 // Assigns every member a fresh, unique, randomly generated PIN.
 //
-// Only the bcrypt hash is written to Firestore. Any legacy plaintext `pin` field is
-// removed in the same update, and records whose `pinHash` is not a real bcrypt hash
-// (e.g. a PIN written there literally) are repaired.
+// The bcrypt hash is written to the credential store (Netlify Blobs in production,
+// a local file in development) - not to Firestore. Member names/roles are read from
+// Firestore only to build the list.
+//
+// Locally this writes to the local file store. To bulk-reset production PINs, set
+// NETLIFY_SITE_ID and NETLIFY_BLOBS_TOKEN so the store resolves to production Blobs;
+// otherwise reset individual PINs through the app's Settings screen (no deploy needed).
 //
 // Dry run (default - writes nothing):
 //   node scripts/reset-member-pins.js
@@ -16,8 +20,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import bcrypt from "bcryptjs";
-import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../src/firebaseAdmin.js";
+import { credentialBackendKind, setMemberPinHash } from "../src/services/credentialStore.js";
 
 const args = new Map(
   process.argv.slice(2).map(arg => {
@@ -94,9 +98,7 @@ for (const member of members) {
   rows.push({ id: member.id, name: member.name, role: member.role, chapters: chapters.join("; "), pin });
 
   if (WRITE) {
-    const update = { pinHash: await bcrypt.hash(pin, BCRYPT_COST) };
-    if (member.pin !== undefined) update.pin = FieldValue.delete();
-    await db.collection("members").doc(member.id).update(update);
+    await setMemberPinHash(member.id, await bcrypt.hash(pin, BCRYPT_COST));
   }
 }
 
@@ -107,9 +109,9 @@ const csv = [header, ...rows.map(r => [r.id, r.name, r.role, r.chapters, r.pin])
 
 if (WRITE) {
   fs.writeFileSync(OUT, csv, "utf8");
-  console.log(`Updated ${rows.length} member(s).`);
+  console.log(`Updated ${rows.length} member(s) in the credential store (${credentialBackendKind()}).`);
   console.log(`Credential list written to ${OUT}`);
-  console.log("\nThis file is the only copy of these PINs - they are not recoverable from the database.");
+  console.log("\nThis file is the only copy of these PINs - they are not recoverable from the store.");
 } else {
   console.log(`Would update ${rows.length} member(s) and write ${OUT}.`);
   console.log("Sample of what would be generated (PINs shown are discarded on a dry run):\n");

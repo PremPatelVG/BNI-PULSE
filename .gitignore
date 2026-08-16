@@ -15,3 +15,6 @@ firebase-service-account-base64.txt
 
 # Generated credential lists - never commit these
 member-pins*.csv
+
+# Local credential store fallback (dev only; production uses Netlify Blobs)
+.credentials-store.json
