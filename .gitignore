@@ -12,3 +12,6 @@ coverage/
 dist/
 firebase-service-account-base64.txt
 .netlify/
+
+# Generated credential lists - never commit these
+member-pins*.csv
