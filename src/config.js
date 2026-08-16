@@ -29,11 +29,19 @@ export const config = {
   srAdminPin: env("SR_ADMIN_PIN")
 };
 
+// Values that must never sign production sessions: they are public, so a token
+// signed with any of them can be forged by anyone who has read the repo.
+const INSECURE_JWT_SECRETS = new Set([
+  "",
+  "dev-only-change-me",
+  "replace-with-a-long-random-secret"
+]);
+
 export function requireProductionSecrets() {
   if (config.env !== "production") return;
   const missing = [];
-  if (!env("APP_JWT_SECRET") || env("APP_JWT_SECRET") === "replace-with-a-long-random-secret") {
-    missing.push("APP_JWT_SECRET");
+  if (INSECURE_JWT_SECRETS.has(env("APP_JWT_SECRET"))) {
+    missing.push("APP_JWT_SECRET (missing or set to a known default)");
   }
   if (!config.firebase.serviceAccountBase64 && !config.firebase.serviceAccountPath) {
     missing.push("FIREBASE_SERVICE_ACCOUNT_BASE64 or FIREBASE_SERVICE_ACCOUNT_PATH");

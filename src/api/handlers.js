@@ -2,7 +2,7 @@
 // function are thin adapters over this module, so the two deployments cannot drift.
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { config } from "../config.js";
+import { config, requireProductionSecrets } from "../config.js";
 import { getDb } from "../firebaseAdmin.js";
 import { signSession } from "../middleware/auth.js";
 import {
@@ -44,6 +44,17 @@ export function ok(body, status = 200) {
 
 export function noContent() {
   return { status: 204, body: null };
+}
+
+// Only the Express entrypoint used to check this, so a Netlify deployment missing
+// APP_JWT_SECRET would silently fall back to the hard-coded development secret and
+// accept tokens anyone could forge. Checked here instead, so both deployments fail
+// loudly rather than running wide open.
+let secretsChecked = false;
+function assertRuntimeSecrets() {
+  if (secretsChecked) return;
+  requireProductionSecrets();
+  secretsChecked = true;
 }
 
 export function verifyToken(authorization) {
@@ -188,6 +199,7 @@ async function writeScopedMeta(user, docId, body) {
 
 // method: "GET" | "POST" | ... ; segments: path below /api, already decoded.
 export async function routeApi({ method, segments, body, authorization }) {
+  assertRuntimeSecrets();
   const [first, second, third] = segments;
 
   if (first === "auth" && second === "login" && method === "POST") return login(body);
