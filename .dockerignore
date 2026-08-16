@@ -1,0 +1,15 @@
+# Never bake credentials, logs or local state into an image. The container serves
+# index.html and vendor/ only; everything else here is either secret or noise.
+node_modules
+.git
+.env
+.env.*
+!.env.example
+firebase-service-account-base64.txt
+*.log
+*.err
+.netlify
+dist
+docs
+scripts
+local-*.json

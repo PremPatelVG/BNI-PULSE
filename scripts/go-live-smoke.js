@@ -53,11 +53,32 @@ assert(/Complete<\/span>/.test(html), "Renewals marked done renders Complete bad
 assert(/AREA_DIRECTOR_SUPPORT_YEAR_TARGET=696/.test(html), "Support scorecard yearly target is 696");
 assert(/AREA_DIRECTOR_SUPPORT_QUARTER_TARGET=174/.test(html), "Support scorecard quarterly target is 174");
 assert(/\{id:'planning',label:'Planning'\}/.test(html), "AD dashboard includes Planning tab");
-assert(/data\.pinHash=firebase\.firestore\.FieldValue\.delete\(\)/.test(html), "Member password changes clear old hashed PINs");
 assert(/showMemberPasswordConfirmation\(data,pin,!id\)/.test(html), "Member password changes show detailed confirmation");
 assert(/New password\/PIN: '\+pin/.test(html), "Password confirmation includes the new password");
 assert(/toast\(msg,10000\)/.test(html), "Password confirmation stays visible for 10 seconds");
-assert(/fetch\('\/api\/auth\/login'/.test(html), "Login uses API PIN verification");
+assert(/apiFetch\('\/auth\/login'/.test(html), "Login uses API PIN verification");
+
+// Security invariants. These previously regressed silently, so they are asserted.
+assert(!/data\.pin=pin;.*FieldValue\.delete/.test(html), "Frontend never writes a plaintext PIN to the database");
+assert(!/gstatic\.com\/firebasejs/.test(html), "Frontend ships no Firebase SDK and holds no database credentials");
+assert(!/firebase\.initializeApp/.test(html), "Frontend does not initialise a direct database connection");
+assert(/function esc\(v\)/.test(html) && /_ESC_MAP/.test(html), "HTML escaping helper is defined");
+assert(/function jsArg\(v\)/.test(html), "Inline-handler escaping helper is defined");
+assert(/apiFetch\('\/auth\/login-directory'\)/.test(html), "Login list comes from the credential-free directory endpoint");
+
+const serverJs = fs.readFileSync("src/server.js", "utf8");
+assert(!/express\.static\(rootDir/.test(serverJs), "Repository root is not served as static files");
+assert(/express\.static\(path\.join\(rootDir, "vendor"\)/.test(serverJs), "Only vendor assets are served statically");
+assert(fs.existsSync(".dockerignore"), ".dockerignore exists so credentials are not baked into images");
+const dockerIgnore = fs.existsSync(".dockerignore") ? fs.readFileSync(".dockerignore", "utf8") : "";
+assert(/firebase-service-account-base64\.txt/.test(dockerIgnore) && /^\.env$/m.test(dockerIgnore), "Docker images exclude service-account and .env files");
+
+const handlers = fs.readFileSync("src/api/handlers.js", "utf8");
+assert(/assertCanWriteChapter\(user, second\)/.test(handlers), "Weekly data writes are checked against the caller's chapters");
+assert(/if \(!member\?\.pinHash\) return false;/.test(handlers), "Login rejects legacy plaintext PINs");
+const netlifyFn = fs.readFileSync("netlify/functions/api.js", "utf8");
+assert(/routeApi/.test(netlifyFn) && /routeApi/.test(fs.readFileSync("src/routes/api.js", "utf8")),
+  "Express and Netlify share one route implementation");
 assert(/function seniorMappedChapters/.test(html), "Senior DC chapters can be mapped from chapter ownership");
 assert(/function ensureUserChapterScope/.test(html), "User chapter scope is refreshed from hierarchy");
 assert(/chapters'\)\.orderBy\('order'\)\.onSnapshot[\s\S]*ensureUserChapterScope\(\)[\s\S]*popSelects\(\)/.test(html), "Chapter dropdowns refresh after hierarchy loads");
@@ -72,6 +93,12 @@ assert(/publish = "dist"/.test(netlifyToml), "Netlify publish directory is dist"
 assert(/FIREBASE_PROJECT_ID=bnipulse/.test(envText), "Local Firebase project id is configured");
 assert(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) || /FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Local Firebase Admin credential is configured");
 warn(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) && !/FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Production Netlify must use FIREBASE_SERVICE_ACCOUNT_BASE64, not local FIREBASE_SERVICE_ACCOUNT_PATH");
+
+// NOTE: local-tlr-data.json and local-dues-data.json are import *sources*, read by
+// the browser on localhost only. In production the app reads meta/tlr and meta/dues
+// from Firestore. Passing these checks says the source files are well-formed; it
+// does NOT say the data has been imported. Run the importers before go-live.
+console.log("\nSource-file checks (these files are not read in production):");
 
 if (tlr) {
   const rows = tlr.rows || [];
@@ -89,6 +116,8 @@ if (dues) {
   assert(members.every((member) => member.chapter && member.name && member.dueDate), "Every dues member has chapter, name, and due date");
   assert(!members.some((member) => ["BNI Aegon", "BNI Antonius", "BNI Demetrius", "BNI Diomedes"].includes(member.chapter)), "Removed Nachiket team chapters are absent from dues data");
 }
+
+warnings.push("TLR and dues data must be present in Firestore (meta/tlr, meta/dues) - the local JSON files above are not served in production");
 
 if (warnings.length) {
   console.log("\nWarnings:");

@@ -5,8 +5,7 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import { config, requireProductionSecrets } from "./config.js";
-import authRoutes from "./routes/auth.js";
-import dataRoutes from "./routes/data.js";
+import apiRoutes from "./routes/api.js";
 
 requireProductionSecrets();
 
@@ -35,10 +34,18 @@ app.get("/config.js", (req, res) => {
   );
 });
 
-app.use("/api/auth", authRoutes);
-app.use("/api", dataRoutes);
-app.use(express.static(rootDir, { extensions: ["html"] }));
+app.use("/api", apiRoutes);
 
+// Serve only the files the browser actually needs. The repository root holds
+// service-account credentials, .env, server logs and application source, so it must
+// never be handed to express.static wholesale.
+const staticOptions = { dotfiles: "deny", index: false, redirect: false };
+app.get("/", (req, res) => res.sendFile(path.join(rootDir, "index.html")));
+app.get("/index.html", (req, res) => res.sendFile(path.join(rootDir, "index.html")));
+app.use("/vendor", express.static(path.join(rootDir, "vendor"), staticOptions));
+
+// Single-page app fallback. Anything that is not an API route or a known asset
+// renders the dashboard rather than exposing a file from disk.
 app.get("*", (req, res) => {
   res.sendFile(path.join(rootDir, "index.html"));
 });

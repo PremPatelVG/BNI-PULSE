@@ -72,20 +72,67 @@ Optional:
 - `CORS_ORIGIN`: comma-separated allowed origins. Leave blank while the backend and frontend are served by the same app.
 - `SR_ADMIN_PIN`: first-run fallback only if `meta/config.srPin` has not been created.
 
+## Architecture
+
+The browser never talks to Firestore directly and holds no database credentials. It
+calls this app's own API, which authenticates the caller, applies role and chapter
+scoping, and then reads or writes Firestore with the Admin SDK.
+
+```
+browser  ──►  /api/*  ──►  src/api/handlers.js  ──►  Firestore (Admin SDK)
+                             (auth + scoping)
+```
+
+`src/api/handlers.js` is the only implementation of the routes. Both deployments are
+thin adapters over it — `src/routes/api.js` for Express and `netlify/functions/api.js`
+for Netlify — so the two cannot drift apart.
+
+Live updates come from a single `GET /api/snapshot` poll. The frontend keeps a small
+Firestore-shaped facade (`db.collection(...)`) over that endpoint so existing call
+sites are unchanged.
+
+## Access control
+
+Enforced server-side in `src/services/scope.js`:
+
+- `ad` and `viewer` read the whole region; `viewer` cannot write anything.
+- `srdc`, `dc`, `sa1`, `sa2` read and write only their assigned chapters.
+- `ad` and `srdc` alone may create members and chapters or change branding and config.
+- Scoped meta documents (`dues`, `tlr`) merge server-side per chapter, so an upload
+  can only replace the uploader's own chapters and cannot clobber the rest.
+
 ## Backend endpoints
 
+Unauthenticated:
+
 - `GET /healthz`: deployment health check.
-- `GET /config.js`: browser Firebase config generated from environment variables.
 - `POST /api/auth/login`: login with `{ "memberId": "...", "pin": "..." }`.
+- `GET /api/auth/login-directory`: names and roles for the login dropdown. Never
+  returns PINs or hashes.
+- `GET /api/auth/branding`: logos for the login screen.
+
+Authenticated (bearer token):
+
 - `GET /api/auth/me`: validate a bearer token.
-- `GET /api/bootstrap`: load dashboard data.
-- `GET /api/hierarchy`: load Area Directors, Senior Directors, Chapter Directors, and chapter ownership.
+- `PUT /api/auth/sr-pin`: change the Sr. DC master PIN (`ad`/`srdc` only, bcrypt).
+- `GET /api/snapshot`: every collection and meta document the caller may see, scoped.
+- `GET /api/bootstrap`, `GET /api/hierarchy`
 - `GET /api/chapters`, `POST /api/chapters`
 - `GET /api/members`, `POST /api/members`, `DELETE /api/members/:id`
 - `GET /api/weekly-data`, `PUT /api/weekly-data/:chapter/:date`, `DELETE /api/weekly-data/:chapter/:date`
 - `GET /api/meta/:docId`, `PUT /api/meta/:docId`
+- `POST /api/activity`: append to the activity log (identity stamped server-side).
 
-The backend never returns member PINs. New member PINs sent through the API are stored as bcrypt hashes.
+Member PINs are only ever accepted by `POST /api/members`, hashed with bcrypt, and
+never returned. Logins reject records that only carry a legacy plaintext `pin`.
+
+## TLR and dues data
+
+`local-tlr-data.json` and `local-dues-data.json` are import *sources*. The browser
+reads them on `localhost` only; in production the app reads `meta/tlr` and `meta/dues`
+from Firestore. They are not copied into `dist`. Run `npm run import:local-tlr` and
+`npm run import:local-dues` before go-live — `npm run check` validates the files but
+cannot tell you whether they have been imported.
 
 ## Deployment
 

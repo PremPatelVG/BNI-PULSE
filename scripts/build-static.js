@@ -11,10 +11,10 @@ fs.mkdirSync(distDir, { recursive: true });
 
 fs.copyFileSync(path.join(rootDir, "index.html"), path.join(distDir, "index.html"));
 
-const localTlrPath = path.join(rootDir, "local-tlr-data.json");
-if (fs.existsSync(localTlrPath)) {
-  fs.copyFileSync(localTlrPath, path.join(distDir, "local-tlr-data.json"));
-}
+// local-tlr-data.json / local-dues-data.json are deliberately NOT copied. The
+// browser only fetches them on localhost (see isLocalTlrMode); in production the
+// app reads meta/tlr and meta/dues through the API, so shipping them would publish
+// membership data to a public URL for no benefit.
 
 const vendorDir = path.join(rootDir, "vendor");
 if (fs.existsSync(vendorDir)) {
