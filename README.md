@@ -124,32 +124,7 @@ Authenticated (bearer token):
 - `POST /api/activity`: append to the activity log (identity stamped server-side).
 
 Member PINs are only ever accepted by `POST /api/members`, hashed with bcrypt, and
-never returned.
-
-## Credentials (Netlify Blobs, not Firestore)
-
-PIN hashes do **not** live in Firestore. They are held in a separate credential store
-the backend owns, so they can be changed through the app with no deploy and never sit
-next to the business data.
-
-- **Production:** [Netlify Blobs](https://docs.netlify.com/blobs/overview/), store
-  `member-credentials`. Auto-configured inside Netlify Functions.
-- **Local dev / CI:** a gitignored `.credentials-store.json` file, so `npm start` and
-  the tests work without any Netlify credentials.
-
-One bcrypt hash per member keyed by member id; the Sr. DC master hash lives under the
-reserved key `__srdc__`. Firestore member documents hold only the profile (name, role,
-chapters) — no `pinHash`. See [src/services/credentialStore.js](src/services/credentialStore.js).
-
-Login verifies the PIN against the store. Changing a member's PIN through the Settings
-screen (`POST /api/members` with a `pin`) writes the new hash to the store at runtime —
-no redeploy. To bulk-reset, either run `node scripts/reset-member-pins.js --write` with
-`NETLIFY_SITE_ID` + `NETLIFY_BLOBS_TOKEN` set (so the script targets production Blobs),
-or reset individuals through the app.
-
-The one-time `POST /api/auth/migrate-credentials` (admin only, idempotent) copies any
-existing Firestore hashes into the store; it was used during the cutover and is safe to
-leave in place.
+never returned. Logins reject records that only carry a legacy plaintext `pin`.
 
 ## TLR and dues data
 

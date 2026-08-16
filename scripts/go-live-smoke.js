@@ -75,13 +75,7 @@ assert(/firebase-service-account-base64\.txt/.test(dockerIgnore) && /^\.env$/m.t
 
 const handlers = fs.readFileSync("src/api/handlers.js", "utf8");
 assert(/assertCanWriteChapter\(user, second\)/.test(handlers), "Weekly data writes are checked against the caller's chapters");
-// Credentials live in the credential store (Netlify Blobs), not Firestore.
-assert(/getMemberPinHash\(memberId\)/.test(handlers), "Login verifies PINs against the credential store");
-assert(/await setMemberPinHash\(docId, await bcrypt\.hash/.test(handlers), "New member PINs are written to the credential store, not Firestore");
-assert(!/member\.pinHash = await bcrypt\.hash/.test(handlers), "Member records no longer carry a pinHash into Firestore");
-const credStore = fs.readFileSync("src/services/credentialStore.js", "utf8");
-assert(/@netlify\/blobs/.test(credStore), "Credential store is backed by Netlify Blobs");
-assert(/fileBackend/.test(credStore), "Credential store has a local fallback for development");
+assert(/if \(!member\?\.pinHash\) return false;/.test(handlers), "Login rejects legacy plaintext PINs");
 const netlifyFn = fs.readFileSync("netlify/functions/api.js", "utf8");
 assert(/routeApi/.test(netlifyFn) && /routeApi/.test(fs.readFileSync("src/routes/api.js", "utf8")),
   "Express and Netlify share one route implementation");

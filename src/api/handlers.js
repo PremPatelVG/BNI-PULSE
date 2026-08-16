@@ -25,14 +25,6 @@ import {
   isViewer,
   notFound
 } from "../services/scope.js";
-import {
-  deleteMemberPinHash,
-  getMemberPinHash,
-  getSrPinHash,
-  migrateFromFirestore,
-  setMemberPinHash,
-  setSrPinHash
-} from "../services/credentialStore.js";
 
 const COLLECTION_READ_ALLOWLIST = new Set(["attendance", "renewalsDone", "visitorPipeline", "miyagiMembers", "activityLog"]);
 const COLLECTION_WRITE_ALLOWLIST = new Set(["attendance", "renewalsDone", "visitorPipeline", "miyagiMembers"]);
@@ -96,23 +88,17 @@ function publicUser(id, data) {
   };
 }
 
-// PIN verification. The credential store (Netlify Blobs) is the source of truth.
-// The Firestore `pinHash` is only consulted as a fallback for the brief window
-// between deploying this code and running the one-time migration, and for accounts
-// not yet migrated. Once Firestore is cleaned up the fallback simply never matches.
-async function verifyMemberPin(memberId, memberData, pin) {
-  const storeHash = await getMemberPinHash(memberId);
-  if (storeHash) return bcrypt.compare(pin, storeHash);
-  if (memberData?.pinHash) return bcrypt.compare(pin, memberData.pinHash);
-  return false;
+// Only bcrypt hashes are accepted. Plaintext `pin` fields left over from older
+// records are rejected so a legacy document cannot weaken the check.
+async function pinMatches(member, pin) {
+  if (!member?.pinHash) return false;
+  return bcrypt.compare(pin, member.pinHash);
 }
 
 async function srPinMatches(pin) {
-  const storeHash = await getSrPinHash();
-  if (storeHash) return bcrypt.compare(pin, storeHash);
-  // Migration fallback, then the documented first-run environment fallback.
   const cfg = await getRawMetaDoc("config");
   if (cfg.srPinHash) return bcrypt.compare(pin, cfg.srPinHash);
+  // First-run fallback only, per the deployment docs.
   if (config.srAdminPin) return pin === config.srAdminPin;
   return null;
 }
@@ -138,7 +124,7 @@ async function login(body) {
   }
 
   const doc = await getDb().collection("members").doc(memberId).get();
-  if (!doc.exists || !(await verifyMemberPin(memberId, doc.data(), pin))) {
+  if (!doc.exists || !(await pinMatches(doc.data(), pin))) {
     const err = new Error("Incorrect PIN");
     err.status = 401;
     throw err;
@@ -228,20 +214,9 @@ export async function routeApi({ method, segments, body, authorization }) {
     assertAdmin(user);
     const pin = String(body?.pin || "");
     if (pin.length < 4) throw badRequest("PIN must be at least 4 digits");
-    // Credential goes to the store, never to Firestore.
-    await setSrPinHash(await bcrypt.hash(pin, 12));
+    await setMetaDoc("config", { srPinHash: await bcrypt.hash(pin, 12), srPin: null }, true);
     await writeActivity(user, "sr_pin_changed", {});
     return ok({ ok: true });
-  }
-
-  // One-time copy of existing PIN hashes from Firestore into the credential store.
-  // Idempotent and admin-only; returns a round-trip verification so we can confirm
-  // the store works before removing the hashes from Firestore.
-  if (first === "auth" && second === "migrate-credentials" && method === "POST") {
-    assertAdmin(user);
-    const result = await migrateFromFirestore();
-    await writeActivity(user, "credentials_migrated", { migrated: result.migrated, verified: result.verified });
-    return ok(result);
   }
 
   if (first === "snapshot" && method === "GET") return ok(await buildSnapshot(user));
@@ -273,18 +248,16 @@ export async function routeApi({ method, segments, body, authorization }) {
 
   if (first === "members" && method === "POST") {
     assertAdmin(user);
-    // pinHash is stripped from the body: credentials never travel through the member
-    // record and are never written to Firestore.
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};
     if (!member.name) throw badRequest("Member name is required");
     if (member.role === "cd") member.role = "dc";
-    const docId = id || `m${Date.now()}`;
-    await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
-    // The PIN is hashed here and only here, and stored in the credential store.
+    // Credentials are hashed here and only here; a plaintext `pin` never reaches Firestore.
     if (pin) {
       if (String(pin).length < 4) throw badRequest("PIN must be at least 4 digits");
-      await setMemberPinHash(docId, await bcrypt.hash(String(pin), 12));
+      member.pinHash = await bcrypt.hash(String(pin), 12);
     }
+    const docId = id || `m${Date.now()}`;
+    await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
     await writeActivity(user, "member_saved", { memberName: member.name, passwordChanged: Boolean(pin) });
     return ok({ member: { id: docId, ...stripPrivateMember(member) } }, 201);
   }
@@ -292,7 +265,6 @@ export async function routeApi({ method, segments, body, authorization }) {
   if (first === "members" && second && method === "DELETE") {
     assertAdmin(user);
     await getDb().collection("members").doc(second).delete();
-    await deleteMemberPinHash(second);
     await writeActivity(user, "member_deleted", { memberId: second });
     return noContent();
   }
