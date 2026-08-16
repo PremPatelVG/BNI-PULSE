@@ -112,6 +112,27 @@ export async function setMetaDoc(docId, data, merge = true) {
   return getMetaDoc(docId);
 }
 
+// meta/dues and meta/tlr hold one row per chapter for the whole region. They are
+// documents rather than collections, so the collection-level scoping above misses
+// them: without this a single-chapter director received every chapter's membership
+// dues and traffic-light scores.
+const SCOPED_META_ROWS = {
+  dues: { listField: "members", chapterField: "chapter" },
+  tlr: { listField: "rows", chapterField: "name" }
+};
+
+function scopeMetaDoc(user, docId, doc) {
+  const spec = SCOPED_META_ROWS[docId];
+  if (!spec || !doc) return doc;
+  const rows = doc[spec.listField];
+  if (!Array.isArray(rows)) return doc;
+  const scoped = filterRowsToScope(
+    user,
+    rows.map(row => ({ ...row, chapter: row[spec.chapterField] }))
+  ).map(({ chapter: _synthetic, ...row }) => row);
+  return { ...doc, [spec.listField]: scoped };
+}
+
 // One round trip that backs every live view in the dashboard. Everything is filtered
 // to the caller's scope here, on the server, so the browser never receives rows the
 // user is not entitled to see.
@@ -141,7 +162,7 @@ export async function buildSnapshot(user) {
       }
       return [name, rows];
     })),
-    Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, await getMetaDoc(id)]))
+    Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, scopeMetaDoc(user, id, await getMetaDoc(id))]))
   ]);
 
   return {
