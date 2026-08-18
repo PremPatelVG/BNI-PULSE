@@ -97,7 +97,7 @@ for (const chapter of chapters) {
   }
 }
 
-function rl(r) { return r === "sa1" ? "Launch Ambassador" : r === "sa2" ? "Support Ambassador" : r; }
+function rl(r) { return r === "sa1" ? "SA1" : r === "sa2" ? "SA2" : r; }
 
 const header = ["Member ID", "Name", "Role", "Chapter", "PIN"];
 const csv = [header, ...rows.map(r => [r.id, r.name, r.role, r.chapter, r.pin])]
