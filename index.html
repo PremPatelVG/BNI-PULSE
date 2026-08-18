@@ -652,8 +652,8 @@ async function boot(){
     await startLocalLoginPreview();
     return;
   }
-  if(previewMode==='srdc'){
-    startSrdcPreview();
+  if(['srdc','dc','sa1','sa2'].includes(previewMode)){
+    startSrdcPreview(previewMode);
     return;
   }
   setSyncState('connecting');
@@ -6981,8 +6981,9 @@ function renderMiyagiTab(){
   el.innerHTML=h;
 }
 
-function startSrdcPreview(){
-  S.user={id:'preview-srdc',name:'Senior Director Preview',role:'srdc',chapter:null,chapters:[]};
+function startSrdcPreview(rolePreview){
+  rolePreview=rolePreview||'srdc';
+  S.localPreview=true;
   S.chapters=MY_CHAPTERS.map(function(name,i){
     var days=['Tuesday','Tuesday','Tuesday','Tuesday','Tuesday','Wednesday','Wednesday','Wednesday','Friday'];
     var targets=[38,22,110,20,46,36,34,104,54];
@@ -6998,8 +6999,18 @@ function startSrdcPreview(){
     {id:'dc-obsidian',name:'Rohit Nair',role:'dc',chapter:'Obsidian',chapters:['Obsidian'],reportsTo:'Senior Director Preview'},
     {id:'dc-ares',name:'Alpesh Shah',role:'dc',chapter:'Ares',chapters:['Ares'],reportsTo:'Senior Director Preview'},
     {id:'dc-prometheus',name:'Dr Rashmin Sadrani',role:'dc',chapter:'Prometheus',chapters:['Prometheus'],reportsTo:'Senior Director Preview'},
-    {id:'dc-lincoln',name:'Hardik Khamar',role:'dc',chapter:'Lincoln',chapters:['Lincoln'],reportsTo:'Senior Director Preview'}
+    {id:'dc-lincoln',name:'Hardik Khamar',role:'dc',chapter:'Lincoln',chapters:['Lincoln'],reportsTo:'Senior Director Preview'},
+    {id:'sa1-faustus',name:'Launch Ambassador Preview',role:'sa1',chapter:'Faustus',chapters:['Faustus'],reportsTo:'Senior Director Preview'},
+    {id:'sa2-faustus',name:'Support Ambassador Preview',role:'sa2',chapter:'Faustus',chapters:['Faustus'],reportsTo:'Senior Director Preview'}
   ];
+  S.user=Object.assign({},{
+    srdc:S.members.find(function(m){return m.id==='preview-srdc';}),
+    dc:S.members.find(function(m){return m.id==='dc-faustus';}),
+    sa1:S.members.find(function(m){return m.id==='sa1-faustus';}),
+    sa2:S.members.find(function(m){return m.id==='sa2-faustus';})
+  }[rolePreview]||S.members[0]);
+  ensureUserChapterScope();
+  if(isDC())S.dcActiveChapter=S.user.chapters?.[0]||S.user.chapter;
   S.weeklyData=HIST.slice();
   S.tlrData=[
     {name:'Faustus',score:75,chapterSize:48,memberGrowth:3,retention:72,referrals:1.1,visitors:1.8,conversion:28,absenteeism:6},
@@ -7034,7 +7045,7 @@ function startSrdcPreview(){
   var dot=document.getElementById('syncDot'),txt=document.getElementById('syncTxt');
   if(dot)dot.classList.add('off');
   if(txt)txt.textContent='Preview';
-  document.getElementById('userChip').textContent='* Senior Director Preview';
+  document.getElementById('userChip').textContent=(isSrdc()?'* ':'')+S.user.name+' - '+rl(S.user.role);
   buildNav();
   popSelects();
   applyBranding();
