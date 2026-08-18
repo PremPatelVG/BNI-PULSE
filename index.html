@@ -2487,16 +2487,6 @@ function chapterTeam(chName){
     supportAmbassador:mems.find(function(m){return m.role==='sa2';})||null
   };
 }
-// "Director · SA1 · SA2" one-liner for chapter headers/summaries.
-function chapterTeamSummary(chName,opts){
-  var t=chapterTeam(chName);
-  var parts=[];
-  var dcName=t.director?t.director.name:(function(){var c=S.chapters.find(function(x){return x.name===chName;});return c?chapterDirectorName(c):'-';})();
-  parts.push('<span class="tm">Director:</span> '+esc(dcName||'-'));
-  if(t.launchAmbassador)parts.push(esc(t.launchAmbassador.name));
-  if(t.supportAmbassador)parts.push(esc(t.supportAmbassador.name));
-  return parts.join((opts&&opts.sep)||' &nbsp;·&nbsp; ');
-}
 function seniorDirectorOptionsForChapters(chapters){
   var seen={};
   return chapters.map(chapterSeniorDirectorName).filter(function(name){
@@ -4321,14 +4311,19 @@ function parseDuesRows(rows){
     var iChapter=colIndex(h,['Chapter Name','Chapter']);
     var iFirst=colIndex(h,['First Name','First']);
     var iLast=colIndex(h,['Last Name','Last']);
-    var iName=colIndex(h,['Full Name','Member Name','Member','Name']);
+    // Only unambiguous combined-name columns. Bare 'Member'/'Name' were removed
+    // because they substring-match 'Membership Type', 'First Name' and 'Chapter Name',
+    // which pulled the wrong column when a report uses separate First/Last columns.
+    var iName=colIndex(h,['Full Name','Member Name','Participant Name']);
     var iIndustry=colIndex(h,['Industry','Classification','Category','Profession','Company','Business']);
-    var iType=colIndex(h,['Membership Type','Member Type','Type']);
+    var iType=colIndex(h,['Membership Type','Member Type']);
     var iStatus=colIndex(h,['Status']);
     var iDue=colIndex(h,['Renewal Due','Due Date','Renewal Date','Expiry Date','Paid Through','Membership Due']);
     rows.slice(hi+1).forEach(function(row){
       var chapter=matchChapterName(cellAt(row,iChapter));
-      var name=iName>=0?cellAt(row,iName):(cellAt(row,iFirst)+' '+cellAt(row,iLast)).trim();
+      // Prefer First+Last (matches the standalone importer); fall back to a combined
+      // name column only when there are no separate name columns.
+      var name=(iFirst>=0||iLast>=0)?(cellAt(row,iFirst)+' '+cellAt(row,iLast)).trim():(iName>=0?cellAt(row,iName):'');
       var status=cellAt(row,iStatus)||'Active';
       var dueDate=toIsoDate(cellAt(row,iDue));
       if(chapter&&name&&dueDate&&(iStatus<0||/active/i.test(status))){
@@ -4602,8 +4597,8 @@ async function importHistorical(){
     toImport.slice(i,i+20).forEach(r=>{batch.set(db.collection('weeklyData').doc(r.chapter+'_'+r.date),r);done++;});
     await batch.commit();st.textContent=`Importing... ${Math.min(i+20,toImport.length)}/${toImport.length}`;
   }
-  st.textContent=`Yes ${done} imported. ${HIST.length-toImport.length} already existed.`;
-  toast(`Yes ${done} historical entries imported`);
+  st.textContent=`${done} imported. ${HIST.length-toImport.length} already existed.`;
+  toast(`${done} historical entries imported`);
   btn.disabled=false;btn.textContent='⬆ Import Historical Data';
 }
 
@@ -6498,27 +6493,6 @@ function parseLOMLegacy(text){
 }
 
 // AUTO-SYNC: ADD / GRADUATE / DROP ────────────────────────
-async function repairMiyagiStalledDates(){
-  // One-time correction: members created before the lastActivityDate fix had it set to
-  // their chapter join date instead of the date Miyagi tracking began. Reset to today
-  // for anyone who genuinely has zero recorded activity yet.
-  var today=todayISO();
-  var toFix=S.miyagiMembers.filter(function(m){
-    if((m.status||'active')!=='active')return false;
-    var hasCheckpoints=m.checkpoints&&Object.keys(m.checkpoints).some(function(k){return m.checkpoints[k]&&m.checkpoints[k].done;});
-    var hasCheckins=m.checkins&&Object.keys(m.checkins).length>0;
-    if(hasCheckpoints||hasCheckins)return false; // has real activity, leave it alone
-    return m.lastActivityDate===m.joinDate; // still showing the old buggy value
-  });
-  if(!toFix.length){toast('Nothing to repair - all clear');return;}
-  if(!confirm('Reset "last activity" to today for '+toFix.length+' members with no recorded activity yet? This clears the incorrect stalled flag caused by a sync bug.'))return;
-  for(var i=0;i<toFix.length;i++){
-    try{await db.collection('miyagiMembers').doc(toFix[i].id).update({lastActivityDate:today});}
-    catch(e){console.warn('Repair error:',e);}
-  }
-  toast('Repaired '+toFix.length+' member records');
-}
-
 async function syncMiyagiMembers(lomRows){
   var teamChapters=visibleChapterNames();
   var relevantRows=(lomRows||S.lomData).filter(function(r){return teamChapters.includes(r.chapter);});
