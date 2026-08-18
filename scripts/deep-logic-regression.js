@@ -197,6 +197,14 @@ async function runInApp(code) {
   return vm.runInContext(`(async()=>{${code}\n})()`, context);
 }
 
+// Dates derive from the current week so the pipeline->scorecard assertions (which
+// stamp inductions with today's date) stay valid whenever the suite runs.
+const WK = await runInApp("return getWeekKey(todayISO());");
+const MONTH = WK.slice(0, 7);
+const [__y, __m] = MONTH.split("-").map(Number);
+const DUE1 = `${MONTH}-01`;
+const DUE2 = `${__m === 12 ? __y + 1 : __y}-${String(__m === 12 ? 1 : __m + 1).padStart(2, "0")}-01`;
+
 await runInApp(`
   S.localPreview=true;
   S.user={id:'ad-yash',name:'Yash Vasant',role:'ad',chapters:[],chapter:''};
@@ -211,19 +219,19 @@ await runInApp(`
     {id:'dc-one',name:'Director One',role:'dc',chapter:'Alpha',chapters:['Alpha']}
   ];
   S.weeklyData=[{
-    chapter:'Alpha',date:'2026-08-11',filledBy:'Director One',filledByRole:'dc',
+    chapter:'Alpha',date:'${WK}',filledBy:'Director One',filledByRole:'dc',
     visitors_list:[],membersStart:10,inductions:0,drops:0,membersClose:10,membersConnect:10,
     visitors:2,posVisitors:2,concall:'Yes',tlr:75,conversionPct:40,onetwentyone:5,
     references:10,tyfcb:100000,eoiYes:2,eoiMaybe:0,eoiNo:0,eoiPending:0,eoi:2,pipeline:0,
     renewals:0,training:0,successStory:''
   }];
   S.visitorPipeline=[
-    {id:'p1',chapter:'Alpha',name:'Visitor One',category:'IT',addedDate:'2026-08-11',stage:'pipeline',stageChangedDate:'2026-08-11'},
-    {id:'p2',chapter:'Alpha',name:'Visitor Two',category:'Finance',addedDate:'2026-08-11',stage:'pipeline',stageChangedDate:'2026-08-11'}
+    {id:'p1',chapter:'Alpha',name:'Visitor One',category:'IT',addedDate:'${WK}',stage:'pipeline',stageChangedDate:'${WK}'},
+    {id:'p2',chapter:'Alpha',name:'Visitor Two',category:'Finance',addedDate:'${WK}',stage:'pipeline',stageChangedDate:'${WK}'}
   ];
   S.duesData=[
-    {chapter:'Alpha',name:'Due One',industry:'IT',dueDate:'2026-08-01'},
-    {chapter:'Alpha',name:'Due Two',industry:'Finance',dueDate:'2026-09-01'}
+    {chapter:'Alpha',name:'Due One',industry:'IT',dueDate:'${DUE1}'},
+    {chapter:'Alpha',name:'Due Two',industry:'Finance',dueDate:'${DUE2}'}
   ];
   S.renewalsDone={};
   S.tlrData=[{name:'Alpha',score:75,chapterSize:10,tyfcb:'100000'}];
@@ -233,7 +241,7 @@ await runInApp(`
 
 await runInApp(`await markContactStage('p1','inducted');`);
 let state = await runInApp(`
-  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='2026-08-11');
+  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='${WK}');
   return {stage:S.visitorPipeline.find(p=>p.id==='p1').stage,filter:S.pipelineFilterStage,inductions:entry.inductions,close:entry.membersClose,ids:entry.pipelineInductedIds||[]};
 `);
 assert(state.stage === "inducted", "Pipeline p1 moves to inducted");
@@ -243,21 +251,21 @@ assert(state.ids.includes("p1"), "Pipeline p1 counted ID stored on weekly scorec
 
 await runInApp(`await markContactStage('p1','inducted');`);
 state = await runInApp(`
-  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='2026-08-11');
+  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='${WK}');
   return {inductions:entry.inductions,close:entry.membersClose,ids:entry.pipelineInductedIds||[]};
 `);
 assert(state.inductions === 1 && state.ids.filter((id) => id === "p1").length === 1, "Repeated inducted action does not double count");
 
 await runInApp(`S.pipelineFilterStage='pipeline'; await markContactStage('p2','inducted');`);
 state = await runInApp(`
-  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='2026-08-11');
+  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='${WK}');
   return {inductions:entry.inductions,close:entry.membersClose,ids:entry.pipelineInductedIds||[]};
 `);
 assert(state.inductions === 2 && state.close === 12, "Two inducted pipeline contacts count as two scorecard inductions");
 
 await runInApp(`await markContactStage('p1','pipeline');`);
 state = await runInApp(`
-  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='2026-08-11');
+  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='${WK}');
   return {stage:S.visitorPipeline.find(p=>p.id==='p1').stage,inductions:entry.inductions,close:entry.membersClose,ids:entry.pipelineInductedIds||[]};
 `);
 assert(state.stage === "pipeline", "Reopen returns p1 to pipeline");
@@ -265,14 +273,14 @@ assert(state.inductions === 1 && state.close === 11 && !state.ids.includes("p1")
 
 await runInApp(`await markContactStage('p1','dropped');`);
 state = await runInApp(`
-  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='2026-08-11');
+  const entry=S.weeklyData.find(e=>e.chapter==='Alpha'&&e.date==='${WK}');
   return {stage:S.visitorPipeline.find(p=>p.id==='p1').stage,inductions:entry.inductions,close:entry.membersClose};
 `);
 assert(state.stage === "dropped" && state.inductions === 1 && state.close === 11, "Dropped non-inducted contact does not change scorecard count");
 
 const scorecard = await runInApp(`
-  document.getElementById('rFrom').value='2026-08-01';
-  document.getElementById('rTo').value='2026-08-31';
+  document.getElementById('rFrom').value='${MONTH}-01';
+  document.getElementById('rTo').value='${MONTH}-31';
   document.getElementById('rChap').value='';
   runScorecard();
   return document.getElementById('reportContent').innerHTML;
@@ -286,14 +294,14 @@ assert(/active member movement/.test(adTargets), "AD cumulative net card renders
 await runInApp(`S.tab='renewals'; renderRenewals();`);
 let renewalsHtml = await runInApp(`return document.getElementById('tab-renewals').innerHTML;`);
 assert(/Total Due/.test(renewalsHtml) && /Due One/.test(renewalsHtml), "Renewals list renders due members in current range");
-await runInApp(`await markRenewalDone('Alpha',encodeURIComponent('Due One'),'2026-08-01');`);
+await runInApp(`await markRenewalDone('Alpha',encodeURIComponent('Due One'),'${DUE1}');`);
 renewalsHtml = await runInApp(`return document.getElementById('tab-renewals').innerHTML;`);
 assert(/Complete/.test(renewalsHtml), "Renewal marked done renders Complete badge");
 
 const retentionHtml = await runInApp(`return renderAreaDirectorRetention(S.chapters);`);
 assert(/Retention Tracker/.test(retentionHtml) && /Renewals Done/.test(retentionHtml), "Retention module renders from dues and renewalsDone data");
 
-const retro = await runInApp(`return getChapterMonthRetro(S.chapters[0],'2026-08');`);
+const retro = await runInApp(`return getChapterMonthRetro(S.chapters[0],'${MONTH}');`);
 assert(retro.inductions === 1 && retro.netAdd === 1 && retro.closeMembers === 11, "Monthly retrospective uses synced induction and cascaded close count");
 
 const cascaded = await runInApp(`return getCascadedEntries('Alpha')[0];`);
