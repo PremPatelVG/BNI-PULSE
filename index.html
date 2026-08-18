@@ -2004,12 +2004,15 @@ function renderLoginMembers(rawMembers,opts){
       return ro||a.name.localeCompare(b.name);
     }).forEach(m=>{
       const chapters=(m.chapters&&m.chapters.length)?m.chapters:(m.chapter?[m.chapter]:[]);
-      const details=[rl(m.role)];
+      // Skip the role label when the name already ends with it (e.g. "Lincoln SA1"),
+      // so the option isn't "Lincoln SA1 - SA1 - Lincoln".
+      const _roleLbl=rl(m.role);
+      const details=String(m.name||'').trim().endsWith(_roleLbl)?[]:[_roleLbl];
       if(chapters.length)details.push(chapters.join(', '));
       if(m.reportsTo)details.push('Reports to '+m.reportsTo);
       const o=document.createElement('option');
       o.value=m.id;
-      o.textContent=m.name+' - '+details.join(' - ');
+      o.textContent=details.length?m.name+' - '+details.join(' - '):m.name;
       g.appendChild(o);
     });
     sel.appendChild(g);
@@ -2490,8 +2493,8 @@ function chapterTeamSummary(chName,opts){
   var parts=[];
   var dcName=t.director?t.director.name:(function(){var c=S.chapters.find(function(x){return x.name===chName;});return c?chapterDirectorName(c):'-';})();
   parts.push('<span class="tm">Director:</span> '+esc(dcName||'-'));
-  if(t.launchAmbassador)parts.push('<span class="tm">SA1:</span> '+esc(t.launchAmbassador.name));
-  if(t.supportAmbassador)parts.push('<span class="tm">SA2:</span> '+esc(t.supportAmbassador.name));
+  if(t.launchAmbassador)parts.push(esc(t.launchAmbassador.name));
+  if(t.supportAmbassador)parts.push(esc(t.supportAmbassador.name));
   return parts.join((opts&&opts.sep)||' &nbsp;·&nbsp; ');
 }
 function seniorDirectorOptionsForChapters(chapters){
@@ -2888,7 +2891,7 @@ function renderDCOverview(el){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div class="dc-hero-title">${ch}</div>
-          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · SA1: ${esc(sa1?.name||'-')} · SA2: ${esc(sa2?.name||'-')}</div>
+          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · ${esc(sa1?.name||'SA1 -')} · ${esc(sa2?.name||'SA2 -')}</div>
         </div>
         ${curr?`<span class="tlr-pill ${tlrPillCls(+curr.tlr)} " style="font-size:14px;padding:5px 12px;">TLR ${curr.tlr}</span>`:''}
       </div>
@@ -3393,7 +3396,7 @@ function renderCallContent(){
   }
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(S.callChapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
   const dc=chMems.find(m=>isChapterDirectorRole(m.role));const sa1=chMems.find(m=>m.role==='sa1');const sa2=chMems.find(m=>m.role==='sa2');
-  const teamStr=[dc?'Director: '+dc.name:'',sa1?'SA1: '+sa1.name:'',sa2?'SA2: '+sa2.name:''].filter(Boolean).join(' - ');
+  const teamStr=[dc?'Director: '+dc.name:'',sa1?sa1.name:'',sa2?sa2.name:''].filter(Boolean).join(' - ');
   if(!curr){el.innerHTML='<div style="color:rgba(255,255,255,.4);padding:40px 16px;text-align:center;">No data yet for '+S.callChapter+'</div>';return;}
   const net=(+curr.inductions||0)-(+curr.drops||0);
   const tlr=+curr.tlr||0;const tc=tlrColor(tlr);
@@ -5848,7 +5851,7 @@ function renderSDReport(){
     var moNetCol=moNet>0?'var(--green)':moNet<0?'var(--red)':'var(--muted)';
     h+='<tr>';
     var _team=chapterTeam(ch.name);
-    var _amb=[_team.launchAmbassador?'<span class="tm">SA1:</span> '+esc(_team.launchAmbassador.name):'',_team.supportAmbassador?'<span class="tm">SA2:</span> '+esc(_team.supportAmbassador.name):''].filter(Boolean).join('<br>')||'-';
+    var _amb=[_team.launchAmbassador?esc(_team.launchAmbassador.name):'',_team.supportAmbassador?esc(_team.supportAmbassador.name):''].filter(Boolean).join('<br>')||'-';
     h+='<td style="font-weight:700">'+esc(ch.name)+'</td>';
     h+='<td>'+esc(dc?dc.name:'-')+'</td>';
     h+='<td style="font-size:11px;line-height:1.5;">'+_amb+'</td>';
