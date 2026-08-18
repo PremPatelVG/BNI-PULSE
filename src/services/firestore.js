@@ -133,45 +133,82 @@ function scopeMetaDoc(user, docId, doc) {
   return { ...doc, [spec.listField]: scoped };
 }
 
-// One round trip that backs every live view in the dashboard. Everything is filtered
-// to the caller's scope here, on the server, so the browser never receives rows the
-// user is not entitled to see.
-export async function buildSnapshot(user) {
-  const [collections, metaEntries] = await Promise.all([
-    Promise.all(SNAPSHOT_COLLECTIONS.map(async name => {
-      const orderBy = name === "chapters" ? { field: "order" }
-        : name === "weeklyData" ? { field: "date", direction: "desc" }
-          : null;
-      let rows = await listCollection(name, orderBy);
-      if (name === "members") {
-        rows = rows.map(member => ({ id: member.id, ...stripPrivateMember(member) }));
-      }
-      if (name === "activityLog") {
-        rows = rows
-          .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
-          .slice(0, 500);
-      }
-      // `attendance` is keyed by week with member ids as fields, so it carries no
-      // chapter of its own and is left intact; every other collection is scoped.
-      if (name === "chapters") {
-        // Chapter documents name themselves in `name` rather than `chapter`.
-        rows = filterRowsToScope(user, rows.map(row => ({ ...row, chapter: row.name })))
-          .map(({ chapter: _synthetic, ...row }) => row);
-      } else if (name !== "attendance") {
-        rows = filterRowsToScope(user, rows);
-      }
-      return [name, rows];
-    })),
-    Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, scopeMetaDoc(user, id, await getMetaDoc(id))]))
-  ]);
+// The whole dashboard reads the entire dataset on every poll, which on the Firebase
+// free tier (50k reads/day) is easily exhausted by a few open tabs. The raw reads are
+// identical for every user (scoping happens afterwards in memory), so they are cached
+// briefly and shared across all concurrent requests. Any write invalidates the cache,
+// so an edit is visible on the next poll rather than after the TTL.
+const RAW_SNAPSHOT_TTL_MS = Number(process.env.SNAPSHOT_CACHE_MS || 30000);
+let rawSnapshotCache = null; // { data, expiresAt }
+let rawSnapshotInFlight = null;
 
-  return {
-    collections: Object.fromEntries(collections),
-    meta: Object.fromEntries(metaEntries)
-  };
+export function invalidateSnapshotCache() {
+  rawSnapshotCache = null;
+}
+
+// Unscoped, credential-free snapshot of every collection and meta document. Safe to
+// share: members are stripped of pinHash and meta of its private fields before caching.
+async function fetchRawSnapshot() {
+  if (rawSnapshotCache && rawSnapshotCache.expiresAt > Date.now()) return rawSnapshotCache.data;
+  if (rawSnapshotInFlight) return rawSnapshotInFlight;
+
+  rawSnapshotInFlight = (async () => {
+    try {
+      const [collections, metaEntries] = await Promise.all([
+        Promise.all(SNAPSHOT_COLLECTIONS.map(async name => {
+          const orderBy = name === "chapters" ? { field: "order" }
+            : name === "weeklyData" ? { field: "date", direction: "desc" }
+              : null;
+          let rows = await listCollection(name, orderBy);
+          if (name === "members") {
+            rows = rows.map(member => ({ id: member.id, ...stripPrivateMember(member) }));
+          }
+          if (name === "activityLog") {
+            rows = rows
+              .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
+              .slice(0, 500);
+          }
+          return [name, rows];
+        })),
+        Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, await getMetaDoc(id)]))
+      ]);
+      const data = { collections: Object.fromEntries(collections), meta: Object.fromEntries(metaEntries) };
+      rawSnapshotCache = { data, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS };
+      return data;
+    } finally {
+      rawSnapshotInFlight = null;
+    }
+  })();
+  return rawSnapshotInFlight;
+}
+
+// Applies the caller's scope to the shared raw snapshot. Filtering is a cheap in-memory
+// pass, so every user can share one set of Firestore reads.
+export async function buildSnapshot(user) {
+  const raw = await fetchRawSnapshot();
+
+  const collections = Object.fromEntries(Object.entries(raw.collections).map(([name, rows]) => {
+    if (name === "chapters") {
+      // Chapter documents name themselves in `name` rather than `chapter`.
+      const scoped = filterRowsToScope(user, rows.map(row => ({ ...row, chapter: row.name })))
+        .map(({ chapter: _synthetic, ...row }) => row);
+      return [name, scoped];
+    }
+    // `attendance` is keyed by week with member ids as fields, so it carries no chapter
+    // of its own and is left intact; every other collection is scoped.
+    if (name === "attendance") return [name, rows];
+    return [name, filterRowsToScope(user, rows)];
+  }));
+
+  const meta = Object.fromEntries(Object.entries(raw.meta).map(([id, doc]) => [id, scopeMetaDoc(user, id, doc)]));
+
+  return { collections, meta };
 }
 
 export async function writeActivity(user, action, details = {}) {
+  // Every write handler routes through here, so this is the single point that drops
+  // the shared snapshot cache - the write becomes visible on the next poll.
+  invalidateSnapshotCache();
   await getDb().collection("activityLog").add({
     team: "bni_chapter_pulse",
     action,

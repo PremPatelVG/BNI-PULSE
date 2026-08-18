@@ -333,7 +333,7 @@ async function apiFetch(path,options){
 // (collection/doc/get/set/update/delete/onSnapshot) so call sites stay unchanged,
 // but every operation is an authenticated API call. Live updates are served from a
 // single /api/snapshot poll that fans out to all registered listeners.
-const SNAPSHOT_POLL_MS=20000;
+const SNAPSHOT_POLL_MS=120000;
 let SNAP={collections:{},meta:{}};
 let SNAP_LISTENERS=[];
 let SNAP_TIMER=null;
@@ -408,7 +408,10 @@ function stopPolling(){
 function startSync(){
   stopPolling();
   refreshSnapshot();
-  SNAP_TIMER=setInterval(refreshSnapshot,SNAPSHOT_POLL_MS);
+  // Only poll while the tab is actually visible. A backgrounded/forgotten tab polling
+  // every few seconds was the main driver of the Firestore read quota being exhausted;
+  // hidden tabs now cost nothing and catch up via onVisibilityRefresh when refocused.
+  SNAP_TIMER=setInterval(function(){if(!document.hidden)refreshSnapshot();},SNAPSHOT_POLL_MS);
   document.addEventListener('visibilitychange',onVisibilityRefresh);
 }
 
