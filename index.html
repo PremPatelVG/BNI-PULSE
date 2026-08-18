@@ -5823,7 +5823,7 @@ function renderSDReport(){
   h+='<div style="overflow-x:auto;margin-bottom:16px;"><table class="rtbl">';
   var _pmDate=new Date(selMonth+'-15');_pmDate.setMonth(_pmDate.getMonth()-1);
   var prevMonth=_pmDate.toISOString().substring(0,7);
-  h+='<thead><tr><th>Chapter</th><th>Director</th><th>Ambassadors</th><th>Current</th><th>Prev Mo Close</th><th>Mo Ind</th><th>Mo Drop</th><th>Mo Net</th><th>TLR</th><th>Jul Renewals</th><th>Aug Renewals</th></tr></thead><tbody>';
+  h+='<thead><tr><th>Chapter</th><th>Director</th><th>Ambassadors</th><th>Current</th><th>Prev Mo Close</th><th>Mo Ind</th><th>Mo Drop</th><th>Mo Net</th><th>TLR</th><th>Jul Renewals</th><th>Aug Renewals</th><th>Last Submitted</th></tr></thead><tbody>';
   var totalMembers=0; var totalJul=0; var totalAug=0;
   visChapters.forEach(function(ch){
     var latest=latestPerChap[ch.name];
@@ -5857,6 +5857,10 @@ function renderSDReport(){
     h+='<td><span class="pill '+tlrPillCls(tlr)+'">'+(tlr!==null?tlr:'-')+'</span></td>';
     h+='<td style="color:'+(julRen>5?'var(--red)':julRen>2?'var(--amber)':'var(--text)')+'">'+julRen+'</td>';
     h+='<td style="color:'+(augRen>5?'var(--red)':augRen>2?'var(--amber)':'var(--text)')+'">'+augRen+'</td>';
+    // Who last submitted this chapter's scorecard, and when - so a wrong figure can be
+    // traced to the person who entered it. Full history lives in the Activity Log tab.
+    var _sub=latest?('<span style="font-weight:600">'+esc(latest.filledBy||'-')+'</span> <span class="tm">('+rl(latest.filledByRole||'')+')</span><br><span class="tm">'+fmtD(latest.date)+'</span>'):'<span class="tm">Not submitted</span>';
+    h+='<td style="font-size:11px;line-height:1.5;">'+_sub+'</td>';
     h+='</tr>';
   });
   // Calculate MoM totals
@@ -5883,6 +5887,7 @@ function renderSDReport(){
   h+='<td></td>';
   h+='<td>'+totalJul+'</td>';
   h+='<td>'+totalAug+'</td>';
+  h+='<td></td>';
   h+='</tr>';
   h+='</tbody></table></div>';
 
