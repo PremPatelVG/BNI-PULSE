@@ -27,12 +27,16 @@ const args = new Map(
   })
 );
 const WRITE = args.get("write") === "true";
+// Rename mode: update only the display name of existing accounts (preserving PINs).
+const RENAME_ONLY = args.get("rename-only") === "true";
 const OUT = args.get("out") || "ambassador-pins.csv";
 const BCRYPT_COST = 12;
 
+// `nameSuffix` is what appears in the account name ("{Chapter} SA1"); `label` is the
+// human-readable role description used in the credential list.
 const AMBASSADORS = [
-  { role: "sa1", label: "Launch Ambassador", idPrefix: "la" },
-  { role: "sa2", label: "Support Ambassador", idPrefix: "sa" }
+  { role: "sa1", label: "Launch Ambassador", nameSuffix: "SA1", idPrefix: "la" },
+  { role: "sa2", label: "Support Ambassador", nameSuffix: "SA2", idPrefix: "sa" }
 ];
 
 function slug(name) {
@@ -63,7 +67,15 @@ const rows = [];
 for (const chapter of chapters) {
   for (const a of AMBASSADORS) {
     const id = `${a.idPrefix}-${slug(chapter.name)}`;
-    const name = `${chapter.name} ${a.label}`;
+    const name = `${chapter.name} ${a.nameSuffix}`;
+
+    // Rename mode: touch only the display name, leaving PIN and everything else intact.
+    if (RENAME_ONLY) {
+      if (WRITE) await db.collection("members").doc(id).set({ name }, { merge: true });
+      rows.push({ id, name, role: rl(a.role), chapter: chapter.name, pin: "" });
+      continue;
+    }
+
     const record = {
       name,
       role: a.role,
@@ -91,7 +103,11 @@ const header = ["Member ID", "Name", "Role", "Chapter", "PIN"];
 const csv = [header, ...rows.map(r => [r.id, r.name, r.role, r.chapter, r.pin])]
   .map(cols => cols.map(csvField).join(",")).join("\r\n");
 
-if (WRITE) {
+if (RENAME_ONLY) {
+  console.log(`${WRITE ? "Renamed" : "Would rename"} ${rows.length} ambassador accounts (PINs unchanged). Sample:\n`);
+  rows.slice(0, 4).forEach(r => console.log(`  ${r.id.padEnd(26)} ${r.name}`));
+  if (!WRITE) console.log(`\nRe-run with --write --rename-only to apply.`);
+} else if (WRITE) {
   fs.writeFileSync(OUT, csv, "utf8");
   console.log(`Created/updated ${rows.length} ambassador accounts.`);
   console.log(`Credential list written to ${OUT}`);
