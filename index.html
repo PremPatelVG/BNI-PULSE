@@ -2485,6 +2485,14 @@ function chapterTeam(chName){
     supportAmbassador:mems.find(function(m){return m.role==='sa2';})||null
   };
 }
+// Renders an SA slot as "SA1: {name}". When the account still carries a placeholder
+// name that already ends with the slot ("Crios SA1"), the prefix is dropped so it
+// doesn't read "SA1: Crios SA1".
+function saTag(m,slot){
+  if(!m||!m.name)return slot+': -';
+  var n=String(m.name);
+  return n.endsWith(slot)?esc(n):slot+': '+esc(n);
+}
 function seniorDirectorOptionsForChapters(chapters){
   var seen={};
   return chapters.map(chapterSeniorDirectorName).filter(function(name){
@@ -2879,7 +2887,7 @@ function renderDCOverview(el){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div class="dc-hero-title">${ch}</div>
-          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · ${esc(sa1?.name||'SA1 -')} · ${esc(sa2?.name||'SA2 -')}</div>
+          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · ${saTag(sa1,'SA1')} · ${saTag(sa2,'SA2')}</div>
         </div>
         ${curr?`<span class="tlr-pill ${tlrPillCls(+curr.tlr)} " style="font-size:14px;padding:5px 12px;">TLR ${curr.tlr}</span>`:''}
       </div>
@@ -3384,7 +3392,7 @@ function renderCallContent(){
   }
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(S.callChapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
   const dc=chMems.find(m=>isChapterDirectorRole(m.role));const sa1=chMems.find(m=>m.role==='sa1');const sa2=chMems.find(m=>m.role==='sa2');
-  const teamStr=[dc?'Director: '+dc.name:'',sa1?sa1.name:'',sa2?sa2.name:''].filter(Boolean).join(' - ');
+  const teamStr=[dc?'Director: '+esc(dc.name):'',sa1?saTag(sa1,'SA1'):'',sa2?saTag(sa2,'SA2'):''].filter(Boolean).join(' - ');
   if(!curr){el.innerHTML='<div style="color:rgba(255,255,255,.4);padding:40px 16px;text-align:center;">No data yet for '+S.callChapter+'</div>';return;}
   const net=(+curr.inductions||0)-(+curr.drops||0);
   const tlr=+curr.tlr||0;const tc=tlrColor(tlr);
@@ -5844,7 +5852,7 @@ function renderSDReport(){
     var moNetCol=moNet>0?'var(--green)':moNet<0?'var(--red)':'var(--muted)';
     h+='<tr>';
     var _team=chapterTeam(ch.name);
-    var _amb=[_team.launchAmbassador?esc(_team.launchAmbassador.name):'',_team.supportAmbassador?esc(_team.supportAmbassador.name):''].filter(Boolean).join('<br>')||'-';
+    var _amb=[_team.launchAmbassador?saTag(_team.launchAmbassador,'SA1'):'',_team.supportAmbassador?saTag(_team.supportAmbassador,'SA2'):''].filter(Boolean).join('<br>')||'-';
     h+='<td style="font-weight:700">'+esc(ch.name)+'</td>';
     h+='<td>'+esc(dc?dc.name:'-')+'</td>';
     h+='<td style="font-size:11px;line-height:1.5;">'+_amb+'</td>';
