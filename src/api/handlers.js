@@ -119,7 +119,8 @@ async function login(body) {
       err.status = 401;
       throw err;
     }
-    const user = { id: SR_LOGIN_ID, name: "Senior Director (master)", role: "srdc", chapter: null, chapters: [] };
+    // BNI office master login: full region-wide access (Area Director role).
+    const user = { id: SR_LOGIN_ID, name: "BNI Office", role: "ad", chapter: null, chapters: [] };
     return ok({ token: signSession(user), user });
   }
 

@@ -253,7 +253,6 @@ html,body{max-width:100%;overflow-x:hidden;}
     <div class="brand">
       <div class="b1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
       <div class="b2">Regional Leadership Dashboard</div>
-      <div class="b3">Regional Leadership Dashboard</div>
     </div>
     <div class="fg"><label>Your Name</label>
       <select id="loginName"><option value="">-- Select --</option></select>
@@ -2023,7 +2022,7 @@ function renderLoginMembers(rawMembers,opts){
     const mg=document.createElement('optgroup');mg.label='Master Access';
     const mo=document.createElement('option');
     mo.value='__srdc__';
-    mo.textContent='Sr. DC Master Login - Senior Director';
+    mo.textContent='BNI Office Login - Full Access';
     mg.appendChild(mo);sel.appendChild(mg);
   }
   sel.onchange=()=>{
@@ -2317,8 +2316,7 @@ function buildNav(){
       {id:'miyagi',label:'Miyagi'},
       {id:'reports',label:'My Reports'},
       {id:'retro',label:'Retrospective'},
-      {id:'goals',label:'Goals'},
-      {id:'upload',label:'Upload'}
+      {id:'goals',label:'Goals'}
     ];
   }
   document.getElementById('navBar').innerHTML=tabs.filter(t=>!t.hidden).map(t=>`<div class="nt${t.id==='overview'?' active':''}" data-tab="${t.id}" onclick="switchTab('${t.id}')">${t.label}</div>`).join('');
@@ -3606,7 +3604,7 @@ async function markAttendance(week,memberId,memberName,attended){
 function renderRenewals(){
   const el=document.getElementById('tab-renewals');if(!el)return;
   const tlrLbl=S.tlrData.length?(S.tlrData[0]?.uploadedAt?'Uploaded '+fmtD(S.tlrData[0]?.uploadedAt):''):'';
-  if(!S.duesData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Upcoming Renewals</div></div><div class="empty">Upload a Membership Dues report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab('upload')">Upload</button></div></div>`;return;}
+  if(!S.duesData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Upcoming Renewals</div></div><div class="empty">${isSrdc()?'Upload a Membership Dues report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab(\'upload\')">Upload</button>':'No membership dues data available yet.'}</div></div>`;return;}
   const today=new Date(todayISO()+'T00:00:00');
   const windowDays=+S.renewalWindowDays||90;
   const rangeEnd=new Date(today);rangeEnd.setDate(rangeEnd.getDate()+windowDays);
@@ -3696,7 +3694,7 @@ async function markRenewalDone(chapter,nameEnc,dueDate){
 // TLR ──
 function renderTLR(){
   const el=document.getElementById('tab-tlr');if(!el)return;
-  if(!S.tlrData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div><div class="empty">Upload a TLR report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab('upload')">Upload</button></div></div>`;return;}
+  if(!S.tlrData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div><div class="empty">${isSrdc()?'Upload a TLR report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab(\'upload\')">Upload</button>':'No TLR data available yet.'}</div></div>`;return;}
   const myNames=visibleChapterNames().map(c=>c.toLowerCase());
   const rows=S.tlrData.filter(r=>myNames.some(n=>r.name.toLowerCase().includes(n)||n.includes(r.name.toLowerCase().replace('bni ',''))));
   const show=rows;
@@ -4647,7 +4645,7 @@ function renderSettings(){
   h+='<div class="fg"><label>Tenure</label><select id="fTenure"><option value="apr">Apr-Sep</option><option value="oct">Oct-Mar</option></select></div>';
   h+='<div class="fg"><label>Member Target</label><input type="number" id="fTarget"></div>';
   h+='</div><div class="btn-row"><button class="btn btn-primary" onclick="saveChapter()">Save</button><button class="btn btn-secondary" onclick="cancelChapterForm()">Cancel</button></div></div>';
-  h+='<div class="card"><div class="card-t">Your PIN (Sr. DC)</div>';
+  h+='<div class="card"><div class="card-t">BNI Office Login PIN</div>';
   h+='<div style="display:flex;gap:8px;max-width:260px;"><input type="password" id="newSrPin" placeholder="New PIN" maxlength="6" style="flex:1;"><button class="btn btn-navy btn-sm" onclick="changeSrPin()">Update</button></div></div>';
   h+='<div class="card"><div class="card-t">Team Call Day</div>';
   h+='<div class="tm" style="margin-bottom:12px;">The day you run your weekly team call. This only changes wording shown to you in-app (e.g. the Attendance report) - chapter meeting days stay set per chapter, and week/data calculations are unaffected.</div>';
@@ -4760,7 +4758,7 @@ async function changeSrPin(){
   try{await apiFetch('/auth/sr-pin',{method:'PUT',body:{pin:pin}});}
   catch(e){toast('Could not change PIN: '+e.message,5000);return;}
   document.getElementById('newSrPin').value='';
-  toast('Sr. DC master PIN changed successfully\nScope: Senior Director fallback login\nNew password/PIN: '+pin,10000);
+  toast('BNI Office login PIN changed successfully\nScope: full-access master login\nNew password/PIN: '+pin,10000);
 }
 async function saveSrCallDay(){const day=document.getElementById('srCallDaySelect')?.value;if(!day)return;await db.collection('meta').doc('config').set({srCallDay:day},{merge:true});logActivity('sr_call_day_changed',{day:day});toast('Call day updated');}
 
