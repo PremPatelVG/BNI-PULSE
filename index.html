@@ -2477,21 +2477,16 @@ function chapterDirectorName(ch){
 }
 // The people who run a chapter: its Director plus the two Ambassadors. Ambassadors
 // (roles sa1/sa2) have the same rights as the Director; this is purely for display.
-function chapterTeam(chName){
-  var mems=S.members.filter(function(m){return(m.chapters||[m.chapter]).includes(chName);});
-  return{
-    director:mems.find(function(m){return isChapterDirectorRole(m.role);})||null,
-    launchAmbassador:mems.find(function(m){return m.role==='sa1';})||null,
-    supportAmbassador:mems.find(function(m){return m.role==='sa2';})||null
-  };
+// All Support Ambassadors for a chapter. A chapter can have any number (they are all
+// role sa1/sa2 with the same rights as the Director).
+function chapterAmbassadors(chName){
+  return S.members.filter(function(m){return['sa1','sa2'].includes(m.role)&&(m.chapters||[m.chapter]).includes(chName);})
+    .sort(function(a,b){return String(a.id).localeCompare(String(b.id));});
 }
-// Renders an SA slot as "SA1: {name}". When the account still carries a placeholder
-// name that already ends with the slot ("Crios SA1"), the prefix is dropped so it
-// doesn't read "SA1: Crios SA1".
-function saTag(m,slot){
-  if(!m||!m.name)return slot+': -';
-  var n=String(m.name);
-  return n.endsWith(slot)?esc(n):slot+': '+esc(n);
+// Comma-separated ambassador names for a chapter header (escaped). "-" when none.
+function ambassadorNamesHtml(chName){
+  var list=chapterAmbassadors(chName);
+  return list.length?list.map(function(m){return esc(m.name);}).join(', '):'-';
 }
 function seniorDirectorOptionsForChapters(chapters){
   var seen={};
@@ -2870,8 +2865,6 @@ function renderDCOverview(el){
   const mNet=monthEntriesDC.length?((+monthEntriesDC[monthEntriesDC.length-1].membersClose||0)-(+monthEntriesDC[0].membersStart||0)):0;
   const wNet=curr?((+curr.membersClose||0)-(+curr.membersStart||0)):0;
   const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&isChapterDirectorRole(m.role));
-  const sa1=S.members.find(m=>m.chapter===ch&&m.role==='sa1');
-  const sa2=S.members.find(m=>m.chapter===ch&&m.role==='sa2');
   // Upcoming renewals count
   const today=new Date();const plus30=new Date(today);plus30.setDate(today.getDate()+30);
   const upcomingRen=(S.duesData||[]).filter(m=>{
@@ -2887,7 +2880,7 @@ function renderDCOverview(el){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div>
           <div class="dc-hero-title">${ch}</div>
-          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · ${saTag(sa1,'SA1')} · ${saTag(sa2,'SA2')}</div>
+          <div class="dc-hero-sub">${chObj?.day||''} · Director: ${esc(dc?.name||'-')} · SAs: ${ambassadorNamesHtml(ch)}</div>
         </div>
         ${curr?`<span class="tlr-pill ${tlrPillCls(+curr.tlr)} " style="font-size:14px;padding:5px 12px;">TLR ${curr.tlr}</span>`:''}
       </div>
@@ -3391,8 +3384,8 @@ function renderCallContent(){
     histBanner='<div style="background:rgba(244,162,97,.15);border:1px solid rgba(244,162,97,.3);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#fbbf24;font-weight:600;">No data for selected week - showing last submitted: Week of '+fmtWeekChip(getWeekKey(curr.date))+'</div>';
   }
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(S.callChapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
-  const dc=chMems.find(m=>isChapterDirectorRole(m.role));const sa1=chMems.find(m=>m.role==='sa1');const sa2=chMems.find(m=>m.role==='sa2');
-  const teamStr=[dc?'Director: '+esc(dc.name):'',sa1?saTag(sa1,'SA1'):'',sa2?saTag(sa2,'SA2'):''].filter(Boolean).join(' - ');
+  const dc=chMems.find(m=>isChapterDirectorRole(m.role));const sas=chMems.filter(m=>['sa1','sa2'].includes(m.role));
+  const teamStr=[dc?'Director: '+esc(dc.name):'',sas.length?'SAs: '+sas.map(m=>esc(m.name)).join(', '):''].filter(Boolean).join(' - ');
   if(!curr){el.innerHTML='<div style="color:rgba(255,255,255,.4);padding:40px 16px;text-align:center;">No data yet for '+S.callChapter+'</div>';return;}
   const net=(+curr.inductions||0)-(+curr.drops||0);
   const tlr=+curr.tlr||0;const tc=tlrColor(tlr);
@@ -3421,7 +3414,7 @@ function renderCallContent(){
   const attKey=getWeekKey(curr.date);
   const attData=S.attendance[attKey]||{};
   const attendHTML=(isSrdc())?`<div class="attend-section"><div class="attend-title">Done CALL ATTENDANCE - Week ${fmtWeekChip(attKey)}</div>
-    ${[dc,sa1,sa2].filter(Boolean).map(m=>`<div class="attend-row"><div><span class="attend-name">${esc(m.name)}</span><span class="attend-role">${rl(m.role)}</span></div><input type="checkbox" class="attend-check" ${attData[m.id]?'checked':''} onchange="markAttendance('${attKey}','${m.id}','${esc(m.name)}',this.checked)"></div>`).join('')}
+    ${[dc,...sas].filter(Boolean).map(m=>`<div class="attend-row"><div><span class="attend-name">${esc(m.name)}</span><span class="attend-role">${rl(m.role)}</span></div><input type="checkbox" class="attend-check" ${attData[m.id]?'checked':''} onchange="markAttendance('${attKey}','${m.id}','${esc(m.name)}',this.checked)"></div>`).join('')}
   </div>`:'';
   // Upcoming renewals in call mode
   const today=new Date(todayISO()+'T00:00:00');const plus60=new Date(today);plus60.setDate(today.getDate()+60);
@@ -3930,8 +3923,6 @@ function runSynopsis(){
   const entries=fEntries(from,to,ch).sort((a,b)=>a.date.localeCompare(b.date));
   if(!entries.length){document.getElementById('reportContent').innerHTML='<div class="empty">No data for this chapter in this period</div>';return;}
   const dc=S.members.find(m=>(m.chapters||[m.chapter]).includes(ch)&&isChapterDirectorRole(m.role));
-  const sa1=S.members.find(m=>m.chapter===ch&&m.role==='sa1');
-  const sa2=S.members.find(m=>m.chapter===ch&&m.role==='sa2');
   const first=entries[0],last=entries[entries.length-1];
   const netAdd=entries.reduce((s,e)=>s+(+e.inductions||0)-(+e.drops||0),0);
   const totInd=entries.reduce((s,e)=>s+(+e.inductions||0),0);
@@ -3955,7 +3946,7 @@ function runSynopsis(){
       <div style="font-size:12px;opacity:.5;margin-top:3px;">${fmtD(from)} to ${fmtD(to)} - ${entries.length} weeks</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-      <div class="card" style="margin:0;"><div class="card-t">Chapter Team</div><div style="font-size:13px;line-height:2.1;">DC: <strong>${dc?.name||'-'}</strong><br>SA1: <strong>${sa1?.name||'-'}</strong><br>SA2: <strong>${sa2?.name||'-'}</strong><br>Day: <strong>${chObj?.day||'-'}</strong></div></div>
+      <div class="card" style="margin:0;"><div class="card-t">Chapter Team</div><div style="font-size:13px;line-height:2.1;">DC: <strong>${esc(dc?.name||'-')}</strong><br>SAs: <strong>${ambassadorNamesHtml(ch)}</strong><br>Day: <strong>${chObj?.day||'-'}</strong></div></div>
       <div class="card" style="margin:0;"><div class="card-t">Member Movement</div><div style="font-size:13px;line-height:2.1;">Start: <strong>${+first.membersStart||+first.membersClose}</strong><br>End: <strong>${+last.membersClose}</strong><br>Net: <strong style="color:${netAdd>=0?'var(--green)':'var(--red)'}">${netAdd>0?'+':''}${netAdd}</strong><br>Up ${totInd} inducted Down ${totDrop} dropped</div></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;margin-bottom:14px;">
@@ -5851,11 +5842,11 @@ function renderSDReport(){
     var moNet=curStrength-prevMoClose;
     var moNetCol=moNet>0?'var(--green)':moNet<0?'var(--red)':'var(--muted)';
     h+='<tr>';
-    var _team=chapterTeam(ch.name);
-    var _amb=[_team.launchAmbassador?saTag(_team.launchAmbassador,'SA1'):'',_team.supportAmbassador?saTag(_team.supportAmbassador,'SA2'):''].filter(Boolean).join('<br>')||'-';
+    var _amb=chapterAmbassadors(ch.name);
+    var _ambHtml=_amb.length?_amb.map(function(m){return esc(m.name);}).join('<br>'):'-';
     h+='<td style="font-weight:700">'+esc(ch.name)+'</td>';
     h+='<td>'+esc(dc?dc.name:'-')+'</td>';
-    h+='<td style="font-size:11px;line-height:1.5;">'+_amb+'</td>';
+    h+='<td style="font-size:11px;line-height:1.5;">'+_ambHtml+'</td>';
     h+='<td style="font-weight:700">'+curStrength+'</td>';
     h+='<td style="color:var(--muted);">'+(prevMoClose||'-')+'</td>';
     h+='<td style="color:var(--green);">+'+moInd+'</td>';
