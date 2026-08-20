@@ -16,3 +16,6 @@ firebase-service-account-base64.txt
 # Generated credential lists - never commit these
 member-pins*.csv
 ambassador-pins*.csv
+
+# SA login credential list - never commit
+sa-logins*.csv
