@@ -6,6 +6,7 @@ import { config, requireProductionSecrets } from "../config.js";
 import { getDb } from "../firebaseAdmin.js";
 import { signSession } from "../middleware/auth.js";
 import {
+  applyTlrForMonth,
   buildSnapshot,
   docToData,
   getMetaDoc,
@@ -22,6 +23,8 @@ import {
   assertCanWriteChapter,
   badRequest,
   filterRowsToScope,
+  forbidden,
+  isAreaDirector,
   isViewer,
   notFound
 } from "../services/scope.js";
@@ -34,7 +37,9 @@ const COLLECTION_DELETE_ALLOWLIST = new Set(["visitorPipeline", "miyagiMembers"]
 const ADMIN_META_DOCS = new Set(["branding", "config"]);
 // Meta documents holding per-chapter rows, merged server-side so a writer can only
 // ever replace the slice of the document their scope covers.
-const SCOPED_META_DOCS = { dues: { listField: "members", chapterField: "chapter" }, tlr: { listField: "rows", chapterField: "name" } };
+const SCOPED_META_DOCS = { dues: { listField: "members", chapterField: "chapter" } };
+// The TLR is region-wide and only the Area Director / BNI Office account may upload it.
+const AD_ONLY_META = new Set(["tlr"]);
 
 const SR_LOGIN_ID = "__srdc__";
 
@@ -119,8 +124,9 @@ async function login(body) {
       err.status = 401;
       throw err;
     }
-    // BNI office master login: full region-wide access (Area Director role).
-    const user = { id: SR_LOGIN_ID, name: "BNI Office", role: "ad", chapter: null, chapters: [] };
+    // BNI Office master account: full region-wide access (Area Director role) - the
+    // top of the system, can do anything an Area Director can across every chapter.
+    const user = { id: SR_LOGIN_ID, name: "BNI Office Account", role: "ad", chapter: null, chapters: [] };
     return ok({ token: signSession(user), user });
   }
 
@@ -220,6 +226,17 @@ export async function routeApi({ method, segments, body, authorization }) {
     return ok({ ok: true });
   }
 
+  // Region-wide monthly TLR upload. Area Director / BNI Office account only.
+  if (first === "tlr-upload" && method === "POST") {
+    if (!isAreaDirector(user)) throw forbidden("Only the Area Director / BNI Office account can upload the TLR");
+    const { monthIso, monthLabel, rows } = body || {};
+    if (!/^\d{4}-\d{2}$/.test(String(monthIso || ""))) throw badRequest("A valid report month is required");
+    if (!Array.isArray(rows) || !rows.length) throw badRequest("No chapter rows in the TLR");
+    const result = await applyTlrForMonth(user, { monthIso, monthLabel, rows });
+    await writeActivity(user, "tlr_report_uploaded", { month: monthIso, chaptersUpdated: result.chaptersUpdated, weeklyEntriesUpdated: result.weeklyEntriesUpdated });
+    return ok(result);
+  }
+
   if (first === "snapshot" && method === "GET") return ok(await buildSnapshot(user));
 
   if (first === "bootstrap" && method === "GET") {
@@ -296,6 +313,7 @@ export async function routeApi({ method, segments, body, authorization }) {
   if (first === "meta" && second && method === "PUT") {
     assertCanWrite(user);
     if (ADMIN_META_DOCS.has(second)) assertAdmin(user);
+    if (AD_ONLY_META.has(second) && !isAreaDirector(user)) throw forbidden("Only the Area Director / BNI Office account can update the TLR");
     if (SCOPED_META_DOCS[second]) return writeScopedMeta(user, second, body);
     // srPin is only settable through the dedicated hashed endpoint above.
     const { srPin: _blockedPin, srPinHash: _blockedHash, ...safeBody } = body || {};

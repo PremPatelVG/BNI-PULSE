@@ -2022,7 +2022,7 @@ function renderLoginMembers(rawMembers,opts){
     const mg=document.createElement('optgroup');mg.label='Master Access';
     const mo=document.createElement('option');
     mo.value='__srdc__';
-    mo.textContent='BNI Office Login - Full Access';
+    mo.textContent='BNI Office Account - Full Access';
     mg.appendChild(mo);sel.appendChild(mg);
   }
   sel.onchange=()=>{
@@ -4016,14 +4016,15 @@ function renderUpload(){
         <input type="file" id="duesFile" accept=".xls,.xlsx" onchange="handleDuesUpload(this)">
       </div><div id="duesStatus" class="tm mt2"></div>
     </div>
-    <div class="card"><div class="card-t">Traffic Light Report</div>
+    ${isAreaDirector()?`
+    <div class="card"><div class="card-t">Region Traffic Light Report</div>
       <div class="dropz" onclick="document.getElementById('tlrFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">🚦</div>
-        <div style="font-size:14px;font-weight:600;">Upload Traffic Light Report PDF</div>
-        <div class="tm mt2">PDF rows merge with existing chapter scores automatically</div>
-        <input type="file" id="tlrFile" accept=".pdf" multiple onchange="handleTLRUpload(this)">
+        <div style="font-size:14px;font-weight:600;">Upload Region TLR Excel</div>
+        <div class="tm mt2">Reads the Month/Year in the sheet and updates that month's data for the whole region. Area Director / BNI Office account only.</div>
+        <input type="file" id="tlrFile" accept=".xls,.xlsx" onchange="handleTLRUpload(this)">
       </div><div id="tlrStatus" class="tm mt2"></div>
-    </div>
+    </div>`:''}
     <div class="card"><div class="card-t">Length of Membership Report (Miyagi Sync)</div>
       <div class="dropz" onclick="document.getElementById('lomFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">📏</div>
@@ -4377,32 +4378,37 @@ function parseDuesLegacy(text){
 
 async function handleTLRUpload(input){
   const files=Array.from(input.files||[]);if(!files.length)return;
-  const st=document.getElementById('tlrStatus');st.textContent='Parsing '+files.length+' PDF'+(files.length>1?'s':'')+'...';
+  // TLR upload is region-wide and restricted to the Area Director / BNI Office account.
+  if(!isAreaDirector()){toast('Only the Area Director / BNI Office account can upload the TLR',5000);input.value='';return;}
+  const st=document.getElementById('tlrStatus');
+  const file=files[0];
+  st.textContent='Reading '+file.name+'...';
   try{
-    var newRows=[];
-    for(var fi=0;fi<files.length;fi++){
-      st.textContent='Parsing '+(fi+1)+'/'+files.length+': '+files[fi].name;
-      var rows=parseTLRText(await readPdfText(files[fi]),files[fi].name);
-      newRows=newRows.concat(rows);
+    // The region TLR export is an XML-Spreadsheet (.xls) or .xlsx workbook.
+    var rows;
+    try{rows=await readExcelRows(file);}catch(e){rows=readXmlSpreadsheetRows(await readTextFile(file));}
+    if(!rows||!rows.length)throw new Error('Could not read any rows from the file');
+    var parsed=parseTLRExcelRows(rows);
+    // The report's own Month/Year decides which month is updated. Uploading anything
+    // other than the current or previous month asks for confirmation first.
+    var currentIso=todayISO().slice(0,7);
+    var pd=new Date(todayISO()+'T00:00:00');pd.setMonth(pd.getMonth()-1);
+    var prevIso=toLocalISODate(pd).slice(0,7);
+    if(parsed.monthIso!==currentIso&&parsed.monthIso!==prevIso){
+      var msg='Warning: this is the '+parsed.monthLabel+' TLR.\n\nThe current month is '+monthIsoFull(currentIso)+', so the expected reports are '+monthIsoFull(currentIso)+' or '+monthIsoFull(prevIso)+'.\n\nIf you continue, the data will be updated for '+parsed.monthLabel+'. Continue?';
+      if(!confirm(msg)){st.textContent='Upload cancelled - '+parsed.monthLabel+' TLR was not applied';input.value='';return;}
     }
-    if(!newRows.length)throw new Error('No chapter rows found in PDF');
-    const merged=[...S.tlrData];
-    newRows.forEach(nr=>{const idx=merged.findIndex(er=>er.name.toLowerCase()===nr.name.toLowerCase()||nr.name.toLowerCase().includes(er.name.toLowerCase().replace('bni ',''))||er.name.toLowerCase().includes(nr.name.toLowerCase().replace('bni ','')));if(idx>=0)merged[idx]=nr;else merged.push(nr);});
     if(isLocalPreviewMode()){
-      S.tlrData=merged;
-      applyLocalTlrRowsToWeekly(merged);
-      saveLocalPreviewState();
-      refresh();
-      if(S.tab==='tlr')renderTLR();
-      st.textContent=`Uploaded ${newRows.length} chapters locally, ${merged.length} total`;
-      toast('TLR saved locally');
-      return;
+      S.tlrData=parsed.rows;applyLocalTlrRowsToWeekly(parsed.rows);saveLocalPreviewState();refresh();if(S.tab==='tlr')renderTLR();
+      st.textContent='Loaded '+parsed.rows.length+' chapters for '+parsed.monthLabel+' (local preview)';toast('TLR loaded locally');input.value='';return;
     }
-    try{await db.collection('meta').doc('tlr').set({rows:merged,uploadedAt:todayISO(),uploadedBy:S.user.name});
-      logActivity('tlr_report_uploaded',{chaptersUpdated:newRows.length});
-      st.textContent=`Uploaded ${newRows.length} chapters, ${merged.length} total`;toast('TLR merged & synced');}
-    catch(err){st.textContent='Upload failed: '+err.message;}
-  }catch(err){st.textContent='Could not parse TLR PDF: '+err.message;}
+    st.textContent='Updating '+parsed.rows.length+' chapters for '+parsed.monthLabel+'...';
+    var res=await apiFetch('/tlr-upload',{method:'POST',body:{monthIso:parsed.monthIso,monthLabel:parsed.monthLabel,rows:parsed.rows}});
+    await refreshSnapshot();
+    st.textContent='Updated '+parsed.rows.length+' chapters for '+parsed.monthLabel+((res&&res.weeklyEntriesUpdated)?(' ('+res.weeklyEntriesUpdated+' week entries refreshed)'):'');
+    toast('TLR updated for '+parsed.monthLabel);
+  }catch(err){st.textContent='Could not process TLR: '+err.message;toast('TLR upload failed: '+err.message,5000);}
+  input.value='';
 }
 
 function numericTokens(line){
@@ -4555,6 +4561,55 @@ function parseChapterTrafficLightPdf(lines,sourceFile){
     scoredMembers:scoredMembers,
     memberDetailPages:memberDetailPages
   };
+}
+
+// ── TLR EXCEL PARSER (region-wide monthly upload) ──────────────────────────
+var TLR_MONTH_NUM={january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
+var TLR_MONTH_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function tlrMonthToIso(monthName,year){
+  var m=TLR_MONTH_NUM[String(monthName||'').trim().toLowerCase()];
+  var y=parseInt(String(year||'').replace(/[^0-9]/g,''),10);
+  if(!m||!y)return'';
+  return y+'-'+String(m).padStart(2,'0');
+}
+function isoToMonthLabel(monthIso){ // "Jul-2026"
+  if(!monthIso)return'';var p=String(monthIso).split('-');var mi=parseInt(p[1],10);
+  return(MONTH_SHORT[mi-1]||p[1])+'-'+p[0];
+}
+function monthIsoFull(monthIso){ // "July 2026"
+  if(!monthIso)return'';var p=String(monthIso).split('-');var mi=parseInt(p[1],10);
+  return(TLR_MONTH_FULL[mi-1]||p[1])+' '+p[0];
+}
+// TLR scores are always a multiple of 5 (0..100).
+function roundTlrScore(v){
+  var n=parseFloat(String(v||'').replace('%',''));if(isNaN(n))return'';
+  return String(Math.max(0,Math.min(100,Math.round(n/5)*5)));
+}
+// Parses the region TLR Excel (array of cell-arrays). Reads the Year:/Month: header
+// cells and the chapter table. Returns {monthIso, monthLabel(full), reportLabel, rows}.
+function parseTLRExcelRows(rows){
+  var year='',monthName='',headerIdx=-1;
+  for(var i=0;i<rows.length;i++){
+    var c0=cleanCellValue(rows[i][0]).toLowerCase().replace(/[:\s]+$/,'');
+    if(c0==='year')year=cleanCellValue(rows[i][1]);
+    else if(c0==='month')monthName=cleanCellValue(rows[i][1]);
+    else if(c0.indexOf('chapter')>=0&&rows[i].some(function(x){return /score/i.test(cleanCellValue(x));})){headerIdx=i;break;}
+  }
+  if(headerIdx<0)throw new Error('Not a region TLR export - the "Chapter Name ... Score" header row was not found');
+  var h=rows[headerIdx];
+  var iName=colIndex(h,['Chapter Name','Chapter']),iScore=colIndex(h,['Score']);
+  if(iName<0||iScore<0)throw new Error('TLR export is missing the Chapter Name or Score column');
+  var iSize=colIndex(h,['Chapter Size']),iGrowth=colIndex(h,['Member Growth']),iRet=colIndex(h,['Retention']),iRef=colIndex(h,['Referrals']),iVis=colIndex(h,['Visitors']),iConv=colIndex(h,['Conversion']),iAbs=colIndex(h,['Absenteeism']);
+  var monthIso=tlrMonthToIso(monthName,year);
+  if(!monthIso)throw new Error('Could not read the Month/Year from the TLR sheet (expected "Year:" and "Month:" cells at the top)');
+  var out=[];
+  rows.slice(headerIdx+1).forEach(function(row){
+    var raw=cellAt(row,iName);
+    if(!raw||/^(total|region|average|grand)/i.test(raw))return;
+    out.push({name:matchChapterName(raw),chapterSize:cellAt(row,iSize),memberGrowth:cellAt(row,iGrowth),retention:cellAt(row,iRet),referrals:cellAt(row,iRef),visitors:cellAt(row,iVis),conversion:cellAt(row,iConv),absenteeism:cellAt(row,iAbs),score:roundTlrScore(cellAt(row,iScore)),reportMonth:isoToMonthLabel(monthIso)});
+  });
+  if(!out.length)throw new Error('No chapter rows found in the TLR sheet');
+  return{monthIso:monthIso,monthLabel:monthIsoFull(monthIso),reportLabel:isoToMonthLabel(monthIso),rows:out};
 }
 
 function parseTLRText(text,sourceFile){

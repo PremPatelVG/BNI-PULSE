@@ -205,6 +205,47 @@ export async function buildSnapshot(user) {
   return { collections, meta };
 }
 
+// Region-wide monthly TLR: stores the snapshot (tagged with its month) and refreshes
+// the tlr/conversion values on every weekly entry in that month, in one batched write.
+export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
+  const db = getDb();
+  await db.collection("meta").doc("tlr").set({
+    rows,
+    reportMonth: monthIso,
+    monthLabel: monthLabel || "",
+    uploadedAt: new Date().toISOString().slice(0, 10),
+    uploadedBy: user?.name || "system"
+  });
+
+  const norm = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").trim();
+  const byChapter = new Map();
+  rows.forEach(r => { if (r.name) byChapter.set(norm(r.name), r); });
+  const lookup = chapter => {
+    const key = norm(chapter);
+    if (byChapter.has(key)) return byChapter.get(key);
+    for (const [k, v] of byChapter) if (k && (k.includes(key) || key.includes(k))) return v;
+    return null;
+  };
+
+  const snap = await db.collection("weeklyData")
+    .where("date", ">=", `${monthIso}-01`).where("date", "<=", `${monthIso}-31`).get();
+  let updated = 0, batch = db.batch(), ops = 0;
+  for (const doc of snap.docs) {
+    const row = lookup(doc.data().chapter);
+    if (!row) continue;
+    const update = { tlr: Number(row.score) || 0 };
+    const conv = parseFloat(String(row.conversion == null ? "" : row.conversion).replace("%", ""));
+    if (!Number.isNaN(conv)) update.conversionPct = Math.round(conv);
+    batch.set(doc.ref, update, { merge: true });
+    updated++; ops++;
+    if (ops >= 400) { await batch.commit(); batch = db.batch(); ops = 0; }
+  }
+  if (ops) await batch.commit();
+
+  invalidateSnapshotCache();
+  return { chaptersUpdated: rows.length, weeklyEntriesUpdated: updated, month: monthIso };
+}
+
 export async function writeActivity(user, action, details = {}) {
   // Every write handler routes through here, so this is the single point that drops
   // the shared snapshot cache - the write becomes visible on the next poll.
