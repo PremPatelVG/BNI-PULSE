@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BNI CHAPTER PULSE">
-<title>BNI CHAPTER PULSE</title>
+<meta name="apple-mobile-web-app-title" content="Sicilian Growth Tracker">
+<title>Sicilian Growth Tracker</title>
 <script src="/vendor/exceljs.min.js"></script>
 <style>
 :root{--navy:#1A1F2E;--red:#E63946;--green:#2D9B6F;--amber:#F4A261;--purple:#7C3AED;--blue:#3B82F6;--surface:#F0F2F7;--card:#fff;--text:#1A1F2E;--muted:#6B7280;--border:#E5E7EB;--r:14px;--sh:0 2px 10px rgba(0,0,0,0.07);}
@@ -15,6 +15,7 @@ body{font-family:Calibri, Arial, sans-serif;background:var(--surface);color:var(
 .loader{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff;gap:12px;}
 .loader-t1{font-size:32px;font-weight:900;letter-spacing:-.5px;}.loader-t1 em{color:var(--red);font-style:normal;}
 .brand-bni{color:var(--red);font-weight:900;}
+.brand-accent{font-weight:900;background:linear-gradient(95deg,var(--red) 0%,var(--purple) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--red);}
 .loader-t2{font-size:11px;opacity:.4;letter-spacing:2px;text-transform:uppercase;}
 .spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
@@ -168,6 +169,7 @@ textarea{resize:vertical;min-height:68px;}
 .ren-title{font-weight:800;font-size:14px;padding-bottom:5px;border-bottom:2px solid var(--border);margin-bottom:7px;}
 .ren-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);}
 .ren-item:last-child{border-bottom:none;}
+.ren-item.overdue{background:#fef2f2;border-left:3px solid var(--red);border-radius:8px;padding:8px 10px;margin:3px 0;}
 .ub{font-size:11px;font-weight:700;padding:3px 7px;border-radius:7px;}
 .ur{background:#fee2e2;color:#991b1b;}.ua{background:#fef3c7;color:#92400e;}.ug{background:#dcfce7;color:#166534;}
 .s-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);}
@@ -234,24 +236,25 @@ html,body{max-width:100%;overflow-x:hidden;}
 </head>
 <body>
 <div class="loader" id="loaderScreen">
-  <div class="loader-t1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+  <div class="loader-t1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
   <div class="loader-t2">Regional Leadership Dashboard</div>
   <div class="spin"></div>
 </div>
 
 <div class="login-wrap hidden" id="loginScreen">
-  <!-- Top logos bar -->
-  <div style="position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:16px 20px;z-index:10;">
-    <div id="loginBNILogoWrap" style="background:#fff;border-radius:12px;padding:8px 14px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:none;"><img id="loginBNILogo" src="" alt="BNI Ahmedabad" style="max-height:56px;max-width:130px;object-fit:contain;display:block;"></div>
-    <div id="loginSVLogoWrap" style="background:#fff;border-radius:12px;padding:8px 14px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:none;"><img id="loginSVLogo" src="" alt="Sicilian Ventures" style="max-height:56px;max-width:130px;object-fit:contain;display:block;"></div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:20px;width:100%;max-width:380px;">
+  <!-- Co-branding logos, centered above the sign-in card -->
+  <div style="display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div id="loginBNILogoWrap" style="background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 12px rgba(0,0,0,.15);"><img id="loginBNILogo" src="/vendor/bni-ahmedabad-logo.png" alt="BNI Ahmedabad" style="max-height:54px;max-width:140px;object-fit:contain;display:block;"></div>
+    <div id="loginSVLogoWrap" style="background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 12px rgba(0,0,0,.15);"><img id="loginSVLogo" src="/vendor/sicilian-ventures-logo.png" alt="Sicilian Ventures" style="max-height:54px;max-width:140px;object-fit:contain;display:block;"></div>
   </div>
-  <div class="login-box">
-    <!-- Chapter Pulse logo above form -->
+  <div class="login-box" style="margin:0;">
+    <!-- Sicilian Growth Tracker logo above form -->
     <div class="login-arg-logo">
       <img id="loginArgLogo" src="" alt="" style="max-height:96px;max-width:220px;object-fit:contain;display:none;">
     </div>
     <div class="brand">
-      <div class="b1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+      <div class="b1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
       <div class="b2">Regional Leadership Dashboard</div>
     </div>
     <div class="fg"><label>Your Name</label>
@@ -264,6 +267,7 @@ html,body{max-width:100%;overflow-x:hidden;}
     <div class="err-msg hidden" id="loginErr">Incorrect PIN. Try again.</div>
     <div class="mt3"><button class="btn btn-navy btn-block" id="loginBtn" onclick="doLogin()">Sign In</button></div>
   </div>
+  </div>
 </div>
 
 <div id="app" class="hidden">
@@ -271,7 +275,7 @@ html,body{max-width:100%;overflow-x:hidden;}
     <div class="hdr-brand" style="display:flex;align-items:center;">
       <img id="hdrArgLogo" src="" alt="" class="hdr-logo" style="display:none;">
       <div>
-        <div class="h1"><span class="brand-bni">BNI</span> CHAPTER PULSE</div>
+        <div class="h1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
         <div class="h2">Regional Leadership Dashboard</div>
       </div>
     </div>
@@ -2003,15 +2007,22 @@ function renderLoginMembers(rawMembers,opts){
       return ro||a.name.localeCompare(b.name);
     }).forEach(m=>{
       const chapters=(m.chapters&&m.chapters.length)?m.chapters:(m.chapter?[m.chapter]:[]);
-      // Skip the role label when the name already ends with it (e.g. "Lincoln SA1"),
-      // so the option isn't "Lincoln SA1 - SA1 - Lincoln".
-      const _roleLbl=rl(m.role);
-      const details=String(m.name||'').trim().endsWith(_roleLbl)?[]:[_roleLbl];
-      if(chapters.length)details.push(chapters.join(', '));
-      if(m.reportsTo)details.push('Reports to '+m.reportsTo);
+      const _name=String(m.name||'').trim();
       const o=document.createElement('option');
       o.value=m.id;
-      o.textContent=details.length?m.name+' - '+details.join(' - '):m.name;
+      if(['sa1','sa2'].includes(m.role)){
+        // Chapter SA logins are named "<Chapter> SA" - show that as-is, with no
+        // redundant role or chapter suffix.
+        o.textContent=_name;
+      }else{
+        // Skip the role label when the name already ends with it, so the option
+        // isn't "Lincoln DC - Chapter Director - Lincoln".
+        const _roleLbl=rl(m.role);
+        const details=_name.endsWith(_roleLbl)?[]:[_roleLbl];
+        if(chapters.length)details.push(chapters.join(', '));
+        if(m.reportsTo)details.push('Reports to '+m.reportsTo);
+        o.textContent=details.length?_name+' - '+details.join(' - '):_name;
+      }
       g.appendChild(o);
     });
     sel.appendChild(g);
@@ -3130,7 +3141,7 @@ function renderNameFields(){
 function buildVisDD(chapter){
   S.visSel=[];
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(chapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
-  const opts=[{id:'no_visit',name:'No Visit'},{id:'dinesh_member',name:'Dinesh Sitlani (Member)'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
+  const opts=[{id:'no_visit',name:'No Visit'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
   const dd=document.getElementById('msDD');if(!dd)return;
   dd.innerHTML=opts.map(o=>`<div class="ms-opt" onclick="toggleVis('${o.id}','${o.name.replace(/'/g,"\\'")}')"><input type="checkbox" id="vc_${o.id}" onclick="event.stopPropagation()"><span>${esc(o.name)}</span></div>`).join('');
   updateVisDisplay();
@@ -3314,7 +3325,7 @@ function loadEdit(ch,date){
   const concEl=document.getElementById('eConcall');if(concEl)concEl.value=e.concall||'Yes';
   const stEl=document.getElementById('eStory');if(stEl)stEl.value=e.successStory||'';
   buildVisDD(ch);
-  if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);else if(name.includes('Dinesh'))toggleVis('dinesh_member','Dinesh Sitlani');});}
+  if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);});}
   // Determine if Members at Start should be locked: check if a prior week exists before this entry's date
   const priorExists=S.weeklyData.some(x=>x.chapter===ch&&x.date<date);
   const ms=document.getElementById('eMStart');
@@ -3628,11 +3639,13 @@ function renderRenewals(){
     html+=`<div class="ren-sec"><div class="ren-title">${name} <span class="tm">(${chDone}/${mems.length} complete)</span></div>
     ${mems.map(m=>{const due=new Date(m.dueDate+'T00:00:00'),days=Math.ceil((due-today)/86400000);
       const done=isRenewalDone(m);
-      if(!done&&days<0)totalOverdue++;
+      const overdue=!done&&days<0;
+      if(overdue)totalOverdue++;
       const cls=days<=14?'ur':days<=30?'ua':'ug';
-      return`<div class="ren-item"><div><div style="font-size:13px;font-weight:600;">${esc(m.name)}</div><div class="tm">${esc(m.industry)} - Due: ${fmtD(m.dueDate)}</div></div>
+      const phoneHtml=m.phone?' <span class="tm" style="font-weight:500;">📞 '+esc(m.phone)+'</span>':' <span class="tm" style="color:var(--amber);font-weight:700;">⚠ Update contact details on BNI Connect</span>';
+      return`<div class="ren-item${overdue?' overdue':''}"><div><div style="font-size:13px;font-weight:600;">${esc(m.name)}${phoneHtml}</div><div class="tm">${esc(m.industry)} - Due: ${fmtD(m.dueDate)}</div></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        ${done?'<span class="ub ug" style="background:#dcfce7;color:#166534;">Complete</span>':'<span class="ub '+cls+'">'+(days<0?'OVERDUE':days===0?'TODAY':days+'d')+'</span>'}
+        ${done?'<span class="ub ug" style="background:#dcfce7;color:#166534;">Complete</span>':overdue?'<span class="ub ur">OVERDUE '+days+'d</span>':'<span class="ub '+cls+'">'+(days===0?'TODAY':days+'d')+'</span>'}
         ${!isViewer()&&!done?`<button class="btn btn-green btn-sm" onclick="markRenewalDone('${jsArg(m.chapter)}','${encodeURIComponent(m.name)}','${jsArg(m.dueDate)}')">Mark Done</button>`:''}
       </div></div>`;
     }).join('')}</div>`;
@@ -4028,7 +4041,7 @@ function renderUpload(){
     <div class="card"><div class="card-t">Length of Membership Report (Miyagi Sync)</div>
       <div class="dropz" onclick="document.getElementById('lomFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">📏</div>
-        <div style="font-size:14px;font-weight:600;">Upload Miyagi / 1YRC Excel</div>
+        <div style="font-size:14px;font-weight:600;">Upload Membership Length Report</div>
         <div class="tm mt2">Auto-adds members under 12 months, auto-graduates at 12mo, auto-drops if missing from reports</div>
         <input type="file" id="lomFile" accept=".xls,.xlsx" onchange="handleLOMUpload(this)">
       </div><div id="lomStatus" class="tm mt2"></div>
@@ -4265,13 +4278,48 @@ function fScorecardEntries(from,to){
   return Object.values(byWeek);
 }
 
+// Member identity is the phone number (names repeat across the region; a phone does
+// not). We keep the last 10 digits so "+91 99999 99999", "+919999999999" and
+// "9999999999" all resolve to the same member.
+function normalizePhone(p){
+  var digits=String(p||'').replace(/\D/g,'');
+  return digits.length>10?digits.slice(-10):digits;
+}
+
+// Merge a freshly uploaded dues report into the stored dataset. Rules:
+//  - Previous records are never deleted (full renewal history is kept).
+//  - A member (matched by phone) may have only ONE outstanding renewal at a time:
+//    a new entry is only accepted once the prior one's decision is made (renewed).
+//  - The same renewal (same phone + same due date) is de-duplicated.
+//  - A row with no phone cannot be matched, so it is always accepted; the renewals
+//    view flags it with an "update contact details on BNI Connect" warning.
 function mergeDuesUpload(existing,incoming){
+  existing=(existing||[]).slice();
   incoming=uniqueDuesMembers(incoming||[]);
-  var uploadedChapters=[...new Set(incoming.map(function(m){return m.chapter;}).filter(Boolean))];
-  var preserved=(existing||[]).filter(function(m){
-    return !uploadedChapters.some(function(ch){return sameChapterName(m.chapter,ch);});
+  var byPhone={};
+  existing.forEach(function(m){
+    var ph=normalizePhone(m.phone);if(!ph)return;
+    (byPhone[ph]=byPhone[ph]||[]).push(m);
   });
-  return uniqueDuesMembers(preserved.concat(incoming));
+  var accepted=[];
+  incoming.forEach(function(m){
+    var ph=normalizePhone(m.phone);
+    if(!ph){accepted.push(m);return;}                                  // no phone -> accept + warn on render
+    var prior=byPhone[ph]||[];
+    if(prior.some(function(p){return p.dueDate===m.dueDate;}))return;  // exact same renewal -> duplicate
+    if(prior.some(function(p){return !isRenewalDone(p);}))return;      // prior decision not made -> hold
+    accepted.push(m);
+    (byPhone[ph]=byPhone[ph]||[]).push(m);                             // so later rows in this batch see it
+  });
+  return uniqueDuesMembers(existing.concat(accepted));
+}
+
+// Stable fingerprint of a dues dataset (chapter|name|dueDate|phone), order-independent.
+// Used to skip re-writing Firestore when an identical report is uploaded again.
+function duesSignature(list){
+  return (list||[]).map(function(m){
+    return [(m.chapter||'').toLowerCase().trim(),(m.name||'').toLowerCase().replace(/\s+/g,' ').trim(),m.dueDate||'',m.phone||''].join('|');
+  }).sort().join('\n');
 }
 
 async function handleDuesUpload(input){
@@ -4285,18 +4333,28 @@ async function handleDuesUpload(input){
     const chapterCount=[...new Set(filtered.map(function(m){return m.chapter;}))].length;
     if(!filtered.length)throw new Error('No matching chapter rows found for your upload scope');
     const merged=mergeDuesUpload(S.duesData,filtered);
+    // Idempotent upload: if the resulting data is identical to what is already on
+    // file, skip the write so re-uploading the same report does not churn the record.
+    if(duesSignature(merged)===duesSignature(S.duesData)){
+      st.textContent=`This report matches the data already on file - nothing to update (${filtered.length} members, ${chapterCount} chapter${chapterCount>1?'s':''}).`;
+      toast('Already up to date');
+      return;
+    }
+    const addedCount=merged.length-S.duesData.length;
+    const heldCount=Math.max(0,filtered.length-addedCount);
+    const summary=`${addedCount} new renewal${addedCount!==1?'s':''} added${heldCount>0?`, ${heldCount} already tracked or awaiting a decision`:''}. Previous records preserved.`;
     if(isLocalPreviewMode()){
       S.duesData=merged;
       saveLocalPreviewState();
       if(S.tab==='renewals')renderRenewals();
-      st.textContent=`Uploaded ${filtered.length} members across ${chapterCount} chapter${chapterCount>1?'s':''} locally. Other chapter dues preserved.`;
+      st.textContent=summary+' (saved locally)';
       toast('Dues saved locally');
       return;
     }
     try{await db.collection('meta').doc('dues').set({members:merged,uploadedAt:todayISO(),uploadedBy:S.user.name,lastUploadChapters:[...new Set(filtered.map(function(m){return m.chapter;}))]});
       S.duesData=merged;
       logActivity('dues_report_uploaded',{memberCount:filtered.length,chapterCount:chapterCount,totalMembers:merged.length});
-      st.textContent=`Uploaded ${filtered.length} members across ${chapterCount} chapter${chapterCount>1?'s':''}. Other chapter dues preserved.`;toast('Dues synced');}
+      st.textContent=summary;toast('Dues synced');}
     catch(err){st.textContent='Upload failed: '+err.message;}
   }catch(err){st.textContent='Could not parse dues report: '+err.message;}
 }
@@ -4317,6 +4375,7 @@ function parseDuesRows(rows){
     var iType=colIndex(h,['Membership Type','Member Type']);
     var iStatus=colIndex(h,['Status']);
     var iDue=colIndex(h,['Renewal Due','Due Date','Renewal Date','Expiry Date','Paid Through','Membership Due']);
+    var iPhone=colIndex(h,['Phone Number','Phone','Mobile','Contact']);
     rows.slice(hi+1).forEach(function(row){
       var chapter=matchChapterName(cellAt(row,iChapter));
       // Prefer First+Last (matches the standalone importer); fall back to a combined
@@ -4325,7 +4384,7 @@ function parseDuesRows(rows){
       var status=cellAt(row,iStatus)||'Active';
       var dueDate=toIsoDate(cellAt(row,iDue));
       if(chapter&&name&&dueDate&&(iStatus<0||/active/i.test(status))){
-        members.push({chapter:chapter,name:name,industry:cellAt(row,iIndustry),type:cellAt(row,iType),status:status,dueDate:dueDate});
+        members.push({chapter:chapter,name:name,industry:cellAt(row,iIndustry),type:cellAt(row,iType),status:status,dueDate:dueDate,phone:cellAt(row,iPhone)});
       }
     });
     return members;
@@ -4704,12 +4763,10 @@ function renderSettings(){
   h+='<div class="card"><div class="card-t">Team Call Day</div>';
   h+='<div class="tm" style="margin-bottom:12px;">The day you run your weekly team call. This only changes wording shown to you in-app (e.g. the Attendance report) - chapter meeting days stay set per chapter, and week/data calculations are unaffected.</div>';
   h+='<div style="display:flex;gap:8px;max-width:260px;"><select id="srCallDaySelect" style="flex:1;">'+DAYS.map(function(d){return '<option'+(S.srCallDay===d?' selected':'')+'>'+d+'</option>';}).join('')+'</select><button class="btn btn-navy btn-sm" onclick="saveSrCallDay()">Update</button></div></div>';
-  h+='<div class="card"><div class="card-t">Branding - Logo URLs</div>';
-  h+='<div class="tm" style="margin-bottom:12px;">Paste any direct image URL. Updates everywhere instantly.</div>';
-  h+='<div class="fg"><label>BNI Ahmedabad Logo URL</label><input type="url" id="bniLogoUrl" placeholder="https://..." value="'+(BRANDING.bniLogo||'')+'"></div>';
-  h+='<div class="fg"><label>Sicilian Ventures Logo URL</label><input type="url" id="svLogoUrl" placeholder="https://..." value="'+(BRANDING.svLogo||'')+'"></div>';
-  h+='<div class="fg"><label>BNI Chapter Pulse Logo URL</label><input type="url" id="argLogoUrl" placeholder="https://..." value="'+(BRANDING.argLogo||'')+'"></div>';
-  h+='<div class="btn-row"><button class="btn btn-navy" onclick="saveBranding()">Save Logos</button></div></div>';
+  h+='<div class="card"><div class="card-t">Branding - Chapter Logo</div>';
+  h+='<div class="tm" style="margin-bottom:12px;">The BNI Ahmedabad and Sicilian Ventures logos are built into the login page. This optional URL adds a chapter logo to the header and login card.</div>';
+  h+='<div class="fg"><label>Chapter Logo URL</label><input type="url" id="argLogoUrl" placeholder="https://..." value="'+(BRANDING.argLogo||'')+'"></div>';
+  h+='<div class="btn-row"><button class="btn btn-navy" onclick="saveBranding()">Save Logo</button></div></div>';
   el.innerHTML=h;
   popSelects();
 }
@@ -4925,7 +4982,7 @@ function tlrColor(v){if(v===null||v===undefined||v==='')return'#9CA3AF';if(v>=70
 function fmtD(s){if(!s)return'-';return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'});}
 function fmtM(s){if(!s)return'-';return new Date(s+'-01').toLocaleDateString('en-IN',{month:'short',year:'2-digit'});}
 function fmtL(n){n=+n||0;if(n>=10000000)return(n/10000000).toFixed(1)+'Cr';if(n>=100000)return(n/100000).toFixed(1)+'L';if(n>=1000)return Math.round(n/1000)+'K';return n+'';}
-function rl(r){return r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':r==='sa1'?'SA1':r==='sa2'?'SA2':r==='viewer'?'Viewer':r||'';}
+function rl(r){return r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':(r==='sa1'||r==='sa2')?'SA':r==='viewer'?'Viewer':r||'';}
 var TOAST_TIMER=null;
 function toast(msg,duration){
   const t=document.getElementById('toast');
@@ -4976,14 +5033,8 @@ function applyBranding(){
   try{
     var hdrL=document.getElementById('hdrArgLogo');
     if(hdrL){hdrL.src=BRANDING.argLogo||'';hdrL.style.display=BRANDING.argLogo?'block':'none';}
-    var ll=document.getElementById('loginBNILogo');
-    var llw=document.getElementById('loginBNILogoWrap');
-    if(ll){ll.src=BRANDING.bniLogo||'';}
-    if(llw){llw.style.display=BRANDING.bniLogo?'block':'none';}
-    var rl=document.getElementById('loginSVLogo');
-    var rlw=document.getElementById('loginSVLogoWrap');
-    if(rl){rl.src=BRANDING.svLogo||'';}
-    if(rlw){rlw.style.display=BRANDING.svLogo?'block':'none';}
+    // BNI Ahmedabad & Sicilian Ventures logos are baked into the login page as
+    // static assets (/vendor/*.png), so they are no longer driven by BRANDING.
     var cl=document.getElementById('loginArgLogo');
     if(cl){cl.src=BRANDING.argLogo||'';cl.style.display=BRANDING.argLogo?'block':'none';}
   }catch(e){console.warn('applyBranding:',e);}
@@ -4992,12 +5043,10 @@ function applyBranding(){
 // already fires applyBranding() on every change, live.
 
 async function saveBranding(){
-  var bni=document.getElementById('bniLogoUrl')?document.getElementById('bniLogoUrl').value:'';
-  var sv=document.getElementById('svLogoUrl')?document.getElementById('svLogoUrl').value:'';
   var arg=document.getElementById('argLogoUrl')?document.getElementById('argLogoUrl').value:'';
-  await db.collection('meta').doc('branding').set({bniLogo:bni,svLogo:sv,argLogo:arg},{merge:true});
+  await db.collection('meta').doc('branding').set({argLogo:arg},{merge:true});
   logActivity('branding_updated',{});
-  toast('Logos saved'); applyBranding();
+  toast('Logo saved'); applyBranding();
 }
 
 // HEALTH SCORE ─────────────────────────────────────────
@@ -5506,7 +5555,7 @@ function generateWhatsAppReport(){
   var submitted=submittedChs.length;
 
   var lines=[];
-  lines.push('BNI CHAPTER PULSE - Week of '+fmtWeekChip(weekKey));
+  lines.push('Sicilian Growth Tracker - Week of '+fmtWeekChip(weekKey));
   lines.push('--------------------');
   lines.push('Members: '+totM+' | '+submitted+'/'+visChapters.length+' submitted');
   if(notSubmittedChs.length){
@@ -5608,7 +5657,7 @@ function generateWhatsAppReport(){
     lines.push('--------------------');
   }
 
-  lines.push('BNI CHAPTER PULSE');
+  lines.push('Sicilian Growth Tracker');
   var report=lines.join('\n');
   var modal=document.createElement('div');
   modal.id='waModal';
@@ -6226,7 +6275,7 @@ function exportGoalsExcel(){
   });
   // Build CSV (Excel-compatible)
   var csv=rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
-  dl('\uFEFF'+csv,'BNI_Chapter_Pulse_Chapter_Goals_Jul26_Jun27.csv','text/csv;charset=utf-8');
+  dl('\uFEFF'+csv,'Sicilian_Growth_Tracker_Chapter_Goals_Jul26_Jun27.csv','text/csv;charset=utf-8');
   toast('Goals exported');
 }
 
@@ -6353,7 +6402,7 @@ function exportMonthlyGoalsExcel(){
   var csv=rows.map(function(r){
     return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');
   }).join('\n');
-  dl('\uFEFF'+csv,'BNI_Chapter_Pulse_12Month_Goals.csv','text/csv;charset=utf-8');
+  dl('\uFEFF'+csv,'Sicilian_Growth_Tracker_12Month_Goals.csv','text/csv;charset=utf-8');
   toast('12-Month Goals exported');
 }
 
@@ -6434,7 +6483,7 @@ async function handleLOMUpload(input){
   const st=document.getElementById('lomStatus');if(st)st.textContent='Parsing...';
   try{
     var rows=[];
-    try{rows=parseLOMRows(await readExcelRows(file));}
+    try{rows=parseLOMRows(await readExcelRows(file));if(!rows.length)rows=parseLOMLegacy(await readTextFile(file));}
     catch(xlsxErr){rows=parseLOMLegacy(await readTextFile(file));}
     rows=filterRowsToScope(rows).filter(function(r){return r.chapter&&r.name;});
     if(isLocalPreviewMode()){
@@ -6521,6 +6570,15 @@ function parseLOMRows(rows){
 }
 
 function parseLOMLegacy(text){
+  // Preferred: DOM-based, ss:Index-aware reader + header-mapped parser. This handles
+  // reordered / renamed columns and skipped empty cells (which shift the old
+  // fixed-position parser and silently drop members). Mirrors the dues / TLR path.
+  var xmlRows=readXmlSpreadsheetRows(text);
+  if(xmlRows.length){
+    var mapped=parseLOMRows(xmlRows);
+    if(mapped.length)return mapped;
+  }
+  // Last-resort fallback: fixed 7-column regex for the classic export shape.
   const rows=text.match(/<(?:ss:)?Row[^>]*>[\s\S]*?<\/(?:ss:)?Row>/g)||[];
   const results=[];let hdr=false;
   rows.forEach(function(row){

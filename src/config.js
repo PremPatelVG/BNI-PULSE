@@ -15,8 +15,10 @@ const publicFirebase = {
   appId: env("PUBLIC_FIREBASE_APP_ID")
 };
 
+const appEnv = env("NODE_ENV") || "development";
+
 export const config = {
-  env: env("NODE_ENV") || "development",
+  env: appEnv,
   port: Number(env("PORT") || 3000),
   jwtSecret: env("APP_JWT_SECRET") || "dev-only-change-me",
   corsOrigin: env("CORS_ORIGIN"),
@@ -26,7 +28,8 @@ export const config = {
     projectId: env("FIREBASE_PROJECT_ID") || publicFirebase.projectId || ""
   },
   publicFirebase,
-  srAdminPin: env("SR_ADMIN_PIN")
+  srAdminPin: env("SR_ADMIN_PIN"),
+  localPreviewPin: appEnv === "production" ? "" : env("LOCAL_PREVIEW_PIN")
 };
 
 // Values that must never sign production sessions: they are public, so a token
