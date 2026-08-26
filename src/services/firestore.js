@@ -126,10 +126,16 @@ function scopeMetaDoc(user, docId, doc) {
   if (!spec || !doc) return doc;
   const rows = doc[spec.listField];
   if (!Array.isArray(rows)) return doc;
-  const scoped = filterRowsToScope(
+  const filtered = filterRowsToScope(
     user,
     rows.map(row => ({ ...row, chapter: row[spec.chapterField] }))
-  ).map(({ chapter: _synthetic, ...row }) => row);
+  );
+  // Strip only the *synthetic* `chapter` key we added for scoping. When the row's real
+  // chapter field is already named `chapter` (dues), that key IS the real value, so
+  // stripping it would leave every renewal with no chapter and drop it from the UI.
+  const scoped = spec.chapterField === "chapter"
+    ? filtered
+    : filtered.map(({ chapter: _synthetic, ...row }) => row);
   return { ...doc, [spec.listField]: scoped };
 }
 

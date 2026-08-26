@@ -19,3 +19,7 @@ ambassador-pins*.csv
 
 # SA login credential list - never commit
 sa-logins*.csv
+
+# Generated Word documents (regenerate: node docs/build_user_guides.js) + Word temp files
+docs/*.docx
+~$*.docx
