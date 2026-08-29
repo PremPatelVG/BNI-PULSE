@@ -48,7 +48,7 @@ assert(/pipelineInductedIds/.test(html), "Pipeline scorecard sync prevents dupli
 assert(/value:'30d',label:'30 days'/.test(html), "AD Cumulative Net Added has 30 days option");
 assert(/value:'6m',label:'6 months'/.test(html), "AD Cumulative Net Added has 6 months option");
 assert(/value:'12m',label:'12 months'/.test(html), "AD Cumulative Net Added has 12 months option");
-assert(/rangeBtn\(30\)[\s\S]*rangeBtn\(60\)[\s\S]*rangeBtn\(90\)/.test(html), "Renewals has 30/60/90 day filters");
+assert(/rangeBtn\(30,\s*'30 days'\)[\s\S]*rangeBtn\(60,\s*'60 days'\)[\s\S]*rangeBtn\(90,\s*'90 days'\)[\s\S]*rangeBtn\('all',\s*'All'\)/.test(html), "Renewals has 30/60/90 day and all-range filters");
 assert(/Complete<\/span>/.test(html), "Renewals marked done renders Complete badge");
 assert(/AREA_DIRECTOR_SUPPORT_YEAR_TARGET=696/.test(html), "Support scorecard yearly target is 696");
 assert(/AREA_DIRECTOR_SUPPORT_QUARTER_TARGET=174/.test(html), "Support scorecard quarterly target is 174");
@@ -110,9 +110,9 @@ if (tlr) {
 if (dues) {
   const members = dues.members || [];
   const months = countBy(members, (member) => String(member.dueDate || "").slice(0, 7));
-  assert(members.length === 152, `Members Due count is 152, found ${members.length}`);
-  assert(months["2026-08"] === 22, `Members Due Aug 2026 count is 22, found ${months["2026-08"] || 0}`);
-  assert(months["2026-09"] === 130, `Members Due Sep 2026 count is 130, found ${months["2026-09"] || 0}`);
+  assert(members.length === 3045, `Members Due count is 3045, found ${members.length}`);
+  assert(months["2026-08"] === 4, `Members Due Aug 2026 count is 4, found ${months["2026-08"] || 0}`);
+  assert(months["2026-09"] === 165, `Members Due Sep 2026 count is 165, found ${months["2026-09"] || 0}`);
   assert(members.every((member) => member.chapter && member.name && member.dueDate), "Every dues member has chapter, name, and due date");
   assert(!members.some((member) => ["BNI Aegon", "BNI Antonius", "BNI Demetrius", "BNI Diomedes"].includes(member.chapter)), "Removed Nachiket team chapters are absent from dues data");
 }

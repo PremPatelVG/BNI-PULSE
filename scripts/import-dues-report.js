@@ -10,6 +10,7 @@
 // Dry run (default): node scripts/import-dues-report.js --file="C:/path/report.xlsx"
 // Apply:             node scripts/import-dues-report.js --file="C:/path/report.xlsx" --write
 
+import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ExcelJS = require("exceljs");
@@ -17,11 +18,13 @@ import { getDb } from "../src/firebaseAdmin.js";
 
 const WRITE = process.argv.includes("--write");
 const FILE = process.argv.find(a => a.startsWith("--file="))?.slice(7) || "C:/Users/Admin/Downloads/Membership Due report.xlsx";
+const OUTPUT = process.argv.find(a => a.startsWith("--output="))?.slice(9) || "";
 const TODAY = new Date().toISOString().slice(0, 10);
 
 const norm = s => String(s == null ? "" : s).toLowerCase().replace(/[^a-z0-9]+/g, "");
 const cellVal = v => (v && typeof v === "object") ? (v.text !== undefined ? v.text : (v.result !== undefined ? v.result : "")) : v;
 const key = m => norm(m.chapter) + "|" + norm(m.name);
+const doneKey = m => `${m.chapter || ""}_${m.name || ""}_${m.dueDate || ""}`.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "_");
 function toDate(v) {
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   const s = String(cellVal(v) || "").replace(/["']/g, "").trim();
@@ -76,7 +79,13 @@ for (const m of newMembers) { if (!m.phone) { const o = oldByKey.get(key(m)); if
 
 // preserve lapsed members that dropped off the new report
 const newKeys = new Set(newMembers.map(key));
-const lapsed = oldMembers.filter(o => !newKeys.has(key(o)) && o.dueDate && o.dueDate < TODAY && !renewedKeys.has(key(o)));
+const lapsed = oldMembers.filter(o =>
+  o.chapter && o.name && o.dueDate &&
+  !newKeys.has(key(o)) &&
+  o.dueDate < TODAY &&
+  !renewedKeys.has(doneKey(o)) &&
+  !renewedKeys.has(`${o.chapter}_${o.name}_${o.dueDate}`)
+);
 const merged = [...newMembers, ...lapsed];
 
 // --- report ---
@@ -92,6 +101,17 @@ console.log(`  existing dues members: ${oldMembers.length} | lapsed preserved: $
 console.log(`  MERGED total: ${merged.length}  (due within 90d: ${dueSoon}, overdue: ${overdue}, with phone: ${withPhone}, missing dueDate: ${noDue})`);
 console.log(`  sample:`, JSON.stringify(newMembers.slice(0, 2)));
 
+if (OUTPUT) {
+  const summary = { total: merged.length, chapters: chapters.length, dueWithin90: dueSoon, overdue };
+  await fs.writeFile(OUTPUT, `${JSON.stringify({
+    importedAt: new Date().toISOString(),
+    source: FILE,
+    members: merged,
+    summary
+  }, null, 2)}\n`);
+  console.log(`\nWrote local preview data: ${OUTPUT}`);
+}
+
 if (!WRITE) { console.log("\nRe-run with --write to save to meta/dues."); process.exit(0); }
 
 await db.collection("meta").doc("dues").set({
@@ -101,6 +121,6 @@ await db.collection("meta").doc("dues").set({
   lastUploadChapters: chapters,
   uploadedAt: new Date().toISOString(),
   uploadedBy: "Membership Due Report import"
-}, { merge: true });
+});
 console.log(`\nApplied. meta/dues now has ${merged.length} members.`);
 process.exit(0);

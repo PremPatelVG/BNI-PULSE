@@ -44,6 +44,12 @@ app.get("/", (req, res) => res.sendFile(path.join(rootDir, "index.html")));
 app.get("/index.html", (req, res) => res.sendFile(path.join(rootDir, "index.html")));
 app.use("/vendor", express.static(path.join(rootDir, "vendor"), staticOptions));
 
+if (config.env !== "production") {
+  app.get(["/local-dues-data.json", "/local-tlr-data.json"], (req, res) => {
+    res.sendFile(path.join(rootDir, req.path.slice(1)));
+  });
+}
+
 // Single-page app fallback. Anything that is not an API route or a known asset
 // renders the dashboard rather than exposing a file from disk.
 app.get("*", (req, res) => {

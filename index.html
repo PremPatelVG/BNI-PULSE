@@ -3618,7 +3618,9 @@ function renderRenewals(){
   const tlrLbl=S.tlrData.length?(S.tlrData[0]?.uploadedAt?'Uploaded '+fmtD(S.tlrData[0]?.uploadedAt):''):'';
   if(!S.duesData.length){el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Upcoming Renewals</div></div><div class="empty">${isSrdc()?'Upload a Membership Dues report first.<br><button class="btn btn-navy btn-sm mt2" onclick="switchTab(\'upload\')">Upload</button>':'No membership dues data available yet.'}</div></div>`;return;}
   const today=new Date(todayISO()+'T00:00:00');
-  const windowDays=+S.renewalWindowDays||90;
+  const winSel=S.renewalWindowDays||90;
+  const isAllWin=winSel==='all';
+  const windowDays=isAllWin?36500:(+winSel||90);
   const rangeEnd=new Date(today);rangeEnd.setDate(rangeEnd.getDate()+windowDays);
   const visChaps=myChapters();
   const byChap={};S.duesData.forEach(m=>{if(!byChap[m.chapter])byChap[m.chapter]=[];byChap[m.chapter].push(m);});
@@ -3650,12 +3652,12 @@ function renderRenewals(){
       </div></div>`;
     }).join('')}</div>`;
   });
-  var rangeBtn=function(days){
-    return'<button class="btn btn-sm '+(windowDays===days?'btn-navy':'btn-secondary')+'" onclick="S.renewalWindowDays='+days+';renderRenewals()">'+days+' days</button>';
+  var rangeBtn=function(val,label){
+    return'<button class="btn btn-sm '+(String(winSel)===String(val)?'btn-navy':'btn-secondary')+'" onclick="S.renewalWindowDays=\''+val+'\';renderRenewals()">'+label+'</button>';
   };
-  el.innerHTML=`<div class="card"><div class="sec-hdr"><div><div class="sec-title">Renewals</div><div class="tm">Outstanding renewals plus the next ${windowDays} days${tlrLbl?' - '+tlrLbl:''}</div></div><span class="tm" id="duesLbl">${totalDone}/${totalShown} complete</span></div>
+  el.innerHTML=`<div class="card"><div class="sec-hdr"><div><div class="sec-title">Renewals</div><div class="tm">Outstanding renewals ${isAllWin?'- all upcoming':'plus the next '+windowDays+' days'}${tlrLbl?' - '+tlrLbl:''}</div></div><span class="tm" id="duesLbl">${totalDone}/${totalShown} complete</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      ${rangeBtn(30)}${rangeBtn(60)}${rangeBtn(90)}
+      ${rangeBtn(30,'30 days')}${rangeBtn(60,'60 days')}${rangeBtn(90,'90 days')}${rangeBtn('all','All')}
     </div>
     <div class="month-grid">
       <div class="month-card"><div class="month-lbl">Total Due</div><div class="month-val">${totalShown}</div></div>
@@ -3663,7 +3665,7 @@ function renderRenewals(){
       <div class="month-card"><div class="month-lbl">Pending</div><div class="month-val" style="color:var(--amber);">${totalPending}</div></div>
       <div class="month-card"><div class="month-lbl">Overdue</div><div class="month-val" style="color:var(--red);">${totalOverdue}</div></div>
     </div>
-    ${html||`<div class="empty">No outstanding or upcoming renewals in the next ${windowDays} days.</div>`}</div>`;
+    ${html||`<div class="empty">No outstanding or upcoming renewals${isAllWin?'':' in the next '+windowDays+' days'}.</div>`}</div>`;
 }
 
 async function setFeeCompliance(chapter,date,value){
