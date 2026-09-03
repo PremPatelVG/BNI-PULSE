@@ -3625,7 +3625,7 @@ function renderRenewals(){
   const rangeEnd=new Date(today);rangeEnd.setDate(rangeEnd.getDate()+windowDays);
   const visChaps=myChapters();
   const byChap={};S.duesData.forEach(m=>{if(!byChap[m.chapter])byChap[m.chapter]=[];byChap[m.chapter].push(m);});
-  var totalShown=0,totalDone=0,totalPending=0,totalOverdue=0;
+  var totalShown=0,totalDone=0,totalPending=0,totalOverdue=0,totalDropped=0;
   let html='';
   visChaps.forEach(name=>{
     // Anything still outstanding stays listed no matter how long ago it lapsed.
@@ -3638,18 +3638,22 @@ function renderRenewals(){
     }).sort((a,b)=>new Date(a.dueDate)-new Date(b.dueDate));
     if(!mems.length)return;
     var chDone=mems.filter(isRenewalDone).length;
-    totalShown+=mems.length;totalDone+=chDone;totalPending+=mems.length-chDone;
-    html+=`<div class="ren-sec"><div class="ren-title">${name} <span class="tm">(${chDone}/${mems.length} complete)</span></div>
+    var chDropped=mems.filter(x=>!isRenewalDone(x)&&isRenewalDropped(x)).length;
+    totalShown+=mems.length;totalDone+=chDone;totalDropped+=chDropped;totalPending+=mems.length-chDone-chDropped;
+    html+=`<div class="ren-sec"><div class="ren-title">${name} <span class="tm">(${chDone}/${mems.length} complete${chDropped?', '+chDropped+' dropped':''})</span></div>
     ${mems.map(m=>{const due=new Date(m.dueDate+'T00:00:00'),days=Math.ceil((due-today)/86400000);
       const done=isRenewalDone(m);
-      const overdue=!done&&days<0;
+      const dropped=!done&&isRenewalDropped(m);
+      const overdue=!done&&!dropped&&days<0;
       if(overdue)totalOverdue++;
       const cls=days<=14?'ur':days<=30?'ua':'ug';
       const phoneHtml=m.phone?' <span class="tm" style="font-weight:500;">📞 '+esc(m.phone)+'</span>':' <span class="tm" style="color:var(--amber);font-weight:700;">⚠ Update contact details on BNI Connect</span>';
-      return`<div class="ren-item${overdue?' overdue':''}"><div><div style="font-size:13px;font-weight:600;">${esc(m.name)}${phoneHtml}</div><div class="tm">${esc(m.industry)} - Due: ${fmtD(m.dueDate)}</div></div>
+      return`<div class="ren-item${overdue?' overdue':''}" style="${dropped?'opacity:.6;':''}"><div><div style="font-size:13px;font-weight:600;">${esc(m.name)}${phoneHtml}</div><div class="tm">${esc(m.industry)} - Due: ${fmtD(m.dueDate)}</div></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        ${done?'<span class="ub ug" style="background:#dcfce7;color:#166534;">Complete</span>':overdue?'<span class="ub ur">OVERDUE '+days+'d</span>':'<span class="ub '+cls+'">'+(days===0?'TODAY':days+'d')+'</span>'}
-        ${!isViewer()&&!done?`<button class="btn btn-green btn-sm" onclick="markRenewalDone('${jsArg(m.chapter)}','${encodeURIComponent(m.name)}','${jsArg(m.dueDate)}')">Mark Done</button>`:''}
+        ${done?'<span class="ub ug" style="background:#dcfce7;color:#166534;">Complete</span>':dropped?'<span class="ub ur" style="background:var(--red);color:#fff;">Dropped</span>':overdue?'<span class="ub ur">OVERDUE '+days+'d</span>':'<span class="ub '+cls+'">'+(days===0?'TODAY':days+'d')+'</span>'}
+        ${!isViewer()&&!done&&!dropped?`<button class="btn btn-green btn-sm" onclick="markRenewalDone('${jsArg(m.chapter)}','${encodeURIComponent(m.name)}','${jsArg(m.dueDate)}')">Mark Done</button>`:''}
+        ${!isViewer()&&!done&&!dropped?`<button class="btn btn-sm" style="background:rgba(239,68,68,.12);color:var(--red);font-weight:600;" onclick="markRenewalDropped('${jsArg(m.chapter)}','${encodeURIComponent(m.name)}','${jsArg(m.dueDate)}')">Drop</button>`:''}
+        ${!isViewer()&&dropped?`<button class="btn btn-sm btn-secondary" onclick="unmarkRenewalDropped('${jsArg(m.chapter)}','${encodeURIComponent(m.name)}','${jsArg(m.dueDate)}')">Undo</button>`:''}
       </div></div>`;
     }).join('')}</div>`;
   });
@@ -3665,6 +3669,7 @@ function renderRenewals(){
       <div class="month-card"><div class="month-lbl">Complete</div><div class="month-val" style="color:var(--green);">${totalDone}</div></div>
       <div class="month-card"><div class="month-lbl">Pending</div><div class="month-val" style="color:var(--amber);">${totalPending}</div></div>
       <div class="month-card"><div class="month-lbl">Overdue</div><div class="month-val" style="color:var(--red);">${totalOverdue}</div></div>
+      <div class="month-card"><div class="month-lbl">Dropped</div><div class="month-val" style="color:var(--red);">${totalDropped}</div></div>
     </div>
     ${html||`<div class="empty">No outstanding or upcoming renewals${isAllWin?'':' in the next '+windowDays+' days'}.</div>`}</div>`;
 }
