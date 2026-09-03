@@ -215,6 +215,15 @@ export async function buildSnapshot(user) {
 // the tlr/conversion values on every weekly entry in that month, in one batched write.
 export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
   const db = getDb();
+  // De-duplicate chapter rows so one chapter can never end up with two TLR rows.
+  // The report can be parsed with duplicate rows, or an older client could send
+  // some; keep one (richest) row per chapter. This replaces the whole doc, so the
+  // stored TLR is always exactly one row per chapter for the uploaded month.
+  const _tn = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+  const _rich = r => Object.values(r).filter(v => v !== "" && v != null).length;
+  const _idx = new Map(); const _rows = [];
+  (rows || []).forEach(r => { const k = _tn(r.name); if (!k) return; if (_idx.has(k)) { const j = _idx.get(k); if (_rich(r) > _rich(_rows[j])) _rows[j] = r; return; } _idx.set(k, _rows.length); _rows.push(r); });
+  rows = _rows;
   await db.collection("meta").doc("tlr").set({
     rows,
     reportMonth: monthIso,

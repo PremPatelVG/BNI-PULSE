@@ -4535,6 +4535,7 @@ async function handleTLRUpload(input){
     try{rows=await readExcelRows(file);}catch(e){rows=readXmlSpreadsheetRows(await readTextFile(file));}
     if(!rows||!rows.length)throw new Error('Could not read any rows from the file');
     var parsed=parseTLRExcelRows(rows);
+    parsed.rows=dedupeTlrRows(parsed.rows);
     // The report's own Month/Year decides which month is updated. Uploading anything
     // other than the current or previous month asks for confirmation first.
     var currentIso=todayISO().slice(0,7);
@@ -4733,6 +4734,15 @@ function roundTlrScore(v){
 }
 // Parses the region TLR Excel (array of cell-arrays). Reads the Year:/Month: header
 // cells and the chapter table. Returns {monthIso, monthLabel(full), reportLabel, rows}.
+// Collapse duplicate chapter rows so a TLR upload never stores two rows for one
+// chapter (keeps the richest row). Applied to both local preview and the payload.
+function dedupeTlrRows(rows){
+  var norm=function(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'').trim();};
+  var rich=function(r){return Object.values(r).filter(function(v){return v!==''&&v!=null&&v!==undefined;}).length;};
+  var idx={},out=[];
+  (rows||[]).forEach(function(r){var k=norm(r.name);if(!k)return;if(idx[k]!==undefined){var j=idx[k];if(rich(r)>rich(out[j]))out[j]=r;return;}idx[k]=out.length;out.push(r);});
+  return out;
+}
 function parseTLRExcelRows(rows){
   var year='',monthName='',headerIdx=-1;
   for(var i=0;i<rows.length;i++){
