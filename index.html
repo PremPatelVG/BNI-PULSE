@@ -3655,10 +3655,12 @@ function renderRenewals(){
   const windowDays=isAllWin?36500:(+winSel||90);
   const rangeEnd=new Date(today);rangeEnd.setDate(rangeEnd.getDate()+windowDays);
   const visChaps=myChapters();
+  const chapFilter=S.renewalFilterChapter||'';
   const byChap={};S.duesData.forEach(m=>{if(!byChap[m.chapter])byChap[m.chapter]=[];byChap[m.chapter].push(m);});
   var totalShown=0,totalDone=0,totalPending=0,totalOverdue=0,totalDropped=0;
   let html='';
   visChaps.forEach(name=>{
+    if(chapFilter&&name!==chapFilter)return;
     // Anything still outstanding stays listed no matter how long ago it lapsed.
     // Bounding the low end at the start of the current month silently dropped
     // renewals that were already overdue, which is exactly what must not be missed.
@@ -3691,9 +3693,12 @@ function renderRenewals(){
   var rangeBtn=function(val,label){
     return'<button class="btn btn-sm '+(String(winSel)===String(val)?'btn-navy':'btn-secondary')+'" onclick="S.renewalWindowDays=\''+val+'\';renderRenewals()">'+label+'</button>';
   };
-  el.innerHTML=`<div class="card"><div class="sec-hdr"><div><div class="sec-title">Renewals</div><div class="tm">Outstanding renewals ${isAllWin?'- all upcoming':'plus the next '+windowDays+' days'}${tlrLbl?' - '+tlrLbl:''}</div></div><span class="tm" id="duesLbl">${totalDone}/${totalShown} complete</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+  // Chapter filter for multi-chapter users (AD / Senior DC); single-chapter DC/SA don't need it.
+  var chapSel=visChaps.length>1?('<select onchange="S.renewalFilterChapter=this.value;renderRenewals()" style="padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px;min-width:170px;"><option value="">All Chapters ('+visChaps.length+')</option>'+visChaps.slice().sort().map(function(c){return'<option value="'+esc(c)+'"'+(chapFilter===c?' selected':'')+'>'+esc(c)+'</option>';}).join('')+'</select>'):'';
+  el.innerHTML=`<div class="card"><div class="sec-hdr"><div><div class="sec-title">Renewals</div><div class="tm">Outstanding renewals ${isAllWin?'- all upcoming':'plus the next '+windowDays+' days'}${chapFilter?' - '+esc(chapFilter):''}${tlrLbl?' - '+tlrLbl:''}</div></div><span class="tm" id="duesLbl">${totalDone}/${totalShown} complete</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
       ${rangeBtn(30,'30 days')}${rangeBtn(60,'60 days')}${rangeBtn(90,'90 days')}${rangeBtn('all','All')}
+      ${chapSel}
     </div>
     <div class="month-grid">
       <div class="month-card"><div class="month-lbl">Total Due</div><div class="month-val">${totalShown}</div></div>
@@ -3792,14 +3797,14 @@ function renderTLR(){
   const isPdfMode=show.some(function(r){return r.pdfFormat==='chapter_member_tlr';});
   if(isPdfMode){
     el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
-      <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Chapter</th><th>Month</th><th>Score</th><th>Members</th><th>Green</th><th>Amber</th><th>Red</th><th>Grey</th><th>Referrals</th><th>Visitors</th></tr></thead>
-      <tbody>${show.map(r=>{const s=+r.score||0;return`<tr><td style="font-weight:700">${esc(r.name)}</td><td>${r.reportMonth||'-'}</td><td><span class="pill ${tlrPillCls(s)}">${s||'-'}</span></td><td>${r.chapterSize||'-'}</td><td>${r.greenPct?r.greenPct+'%':'-'}</td><td>${r.amberPct?r.amberPct+'%':'-'}</td><td>${r.redPct?r.redPct+'%':'-'}</td><td>${r.greyPct?r.greyPct+'%':'-'}</td><td>${r.lastMonthReferrals||r.avgReferrals||'-'}</td><td>${r.lastMonthVisitors||r.avgVisitors||'-'}</td></tr>`;}).join('')}</tbody></table></div></div>
+      <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>#</th><th>Chapter</th><th>Month</th><th>Score</th><th>Members</th><th>Green</th><th>Amber</th><th>Red</th><th>Grey</th><th>Referrals</th><th>Visitors</th></tr></thead>
+      <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td>${r.reportMonth||'-'}</td><td><span class="pill ${tlrPillCls(s)}">${s||'-'}</span></td><td>${r.chapterSize||'-'}</td><td>${r.greenPct?r.greenPct+'%':'-'}</td><td>${r.amberPct?r.amberPct+'%':'-'}</td><td>${r.redPct?r.redPct+'%':'-'}</td><td>${r.greyPct?r.greyPct+'%':'-'}</td><td>${r.lastMonthReferrals||r.avgReferrals||'-'}</td><td>${r.lastMonthVisitors||r.avgVisitors||'-'}</td></tr>`;}).join('')}</tbody></table></div></div>
       <div class="card"><div class="card-t">PDF TLR Notes</div><div class="tm">This report uses the chapter member traffic-light PDF format. Score is the current month average from the Six Month Score table. Members are counted from member detail pages. Color percentages, referrals, and visitors come from the chapter summary pages.</div></div>`;
     return;
   }
   el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
-    <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Chapter</th><th>Score</th><th>Size</th><th>Growth</th><th>Retention</th><th>Referrals</th><th>Visitors</th><th>Conversion</th><th>Absent</th></tr></thead>
-    <tbody>${show.map(r=>{const s=+r.score||0;return`<tr><td style="font-weight:700">${esc(r.name)}</td><td><span class="pill ${tlrPillCls(s)}">${s}</span></td><td>${Math.round(parseFloat(r.chapterSize)||0)}</td><td style="color:${parseFloat(r.memberGrowth)>=0?'var(--green)':'var(--red)'}">${Math.round(parseFloat(r.memberGrowth)||0)}%</td><td>${r.retention}%</td><td>${r.referrals}</td><td>${r.visitors}</td><td>${r.conversion}%</td><td>${r.absenteeism}%</td></tr>`;}).join('')}</tbody></table></div></div>
+    <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>#</th><th>Chapter</th><th>Score</th><th>Size</th><th>Growth</th><th>Retention</th><th>Referrals</th><th>Visitors</th><th>Conversion</th><th>Absent</th></tr></thead>
+    <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td><span class="pill ${tlrPillCls(s)}">${s}</span></td><td>${Math.round(parseFloat(r.chapterSize)||0)}</td><td style="color:${parseFloat(r.memberGrowth)>=0?'var(--green)':'var(--red)'}">${Math.round(parseFloat(r.memberGrowth)||0)}%</td><td>${r.retention}%</td><td>${r.referrals}</td><td>${r.visitors}</td><td>${r.conversion}%</td><td>${r.absenteeism}%</td></tr>`;}).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-t">BNI TLR Scoring Guide</div><div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Parameter</th><th>0 pts</th><th>5 pts</th><th>10 pts</th><th>15 pts</th></tr></thead><tbody>
     <tr><td><b>Chapter Size</b></td><td>&lt;20</td><td>20-24</td><td>25-29</td><td>30+</td></tr>
     <tr><td><b>Member Growth</b></td><td>&lt;1%</td><td>1-1.99%</td><td>2-3.99%</td><td>4%+</td></tr>
