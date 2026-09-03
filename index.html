@@ -2350,6 +2350,7 @@ function subAll(){
   });
   const u6=db.collection('attendance').onSnapshot(s=>{S.attendance={};s.docs.forEach(d=>{S.attendance[d.id]=d.data();});if(S.tab==='call')renderCallMode();});
   const u7=db.collection('renewalsDone').onSnapshot(s=>{S.renewalsDone={};s.docs.forEach(d=>{S.renewalsDone[d.id]=d.data();});if(S.tab==='renewals')renderRenewals();});
+  const u7b=db.collection('renewalsDropped').onSnapshot(s=>{S.renewalsDropped={};s.docs.forEach(d=>{S.renewalsDropped[d.id]=d.data();});if(S.tab==='renewals')renderRenewals();});
   const u8=db.collection('meta').doc('monthlyTargets').onSnapshot(d=>{if(d.exists)S.monthlyTargets=d.data();else S.monthlyTargets={};});
   const u9=db.collection('visitorPipeline').onSnapshot(s=>{S.visitorPipeline=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='pipeline')renderPipelineVelocity();});
   const u10=db.collection('miyagiMembers').onSnapshot(s=>{S.miyagiMembers=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='miyagi')renderMiyagiTab();if(S.tab==='call')renderCallContent();});
@@ -3707,6 +3708,44 @@ async function markRenewalDone(chapter,nameEnc,dueDate){
   }
 }
 
+async function markRenewalDropped(chapter,nameEnc,dueDate){
+  const name=decodeURIComponent(nameEnc);
+  const key=renewalDoneKey(chapter,name,dueDate);
+  if(isLocalPreviewMode()){
+    S.renewalsDropped=S.renewalsDropped||{};
+    S.renewalsDropped[key]={chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()};
+    saveLocalPreviewState();
+    toast(`${name} marked dropped locally`);
+    renderRenewals();
+    return;
+  }
+  try{
+    await db.collection('renewalsDropped').doc(key).set({chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()});
+    logActivity('renewal_marked_dropped',{chapter:chapter,name:name,dueDate:dueDate});
+    toast(`${name} marked dropped`);
+    renderRenewals();
+  }catch(e){
+    toast('Could not mark dropped: '+e.message,5000);
+  }
+}
+
+async function unmarkRenewalDropped(chapter,nameEnc,dueDate){
+  const name=decodeURIComponent(nameEnc);
+  const key=renewalDoneKey(chapter,name,dueDate);
+  if(isLocalPreviewMode()){
+    if(S.renewalsDropped)delete S.renewalsDropped[key];
+    saveLocalPreviewState();
+    renderRenewals();
+    return;
+  }
+  try{
+    await db.collection('renewalsDropped').doc(key).delete();
+    renderRenewals();
+  }catch(e){
+    toast('Could not undo drop: '+e.message,5000);
+  }
+}
+
 // TLR ──
 function renderTLR(){
   const el=document.getElementById('tab-tlr');if(!el)return;
@@ -4255,6 +4294,11 @@ function renewalDoneKey(chapter,name,dueDate){
 function isRenewalDone(m){
   if(!m)return false;
   return !!S.renewalsDone[renewalDoneKey(m.chapter,m.name,m.dueDate)]||!!S.renewalsDone[m.chapter+'_'+m.name+'_'+m.dueDate];
+}
+function isRenewalDropped(m){
+  if(!m)return false;
+  var d=S.renewalsDropped||{};
+  return !!d[renewalDoneKey(m.chapter,m.name,m.dueDate)]||!!d[m.chapter+'_'+m.name+'_'+m.dueDate];
 }
 
 function uniqueDuesMembers(rows){
@@ -6627,30 +6671,15 @@ async function syncMiyagiMembers(lomRows){
     }
   });
 
-  // Auto-graduate members who crossed 12 months
-  S.miyagiMembers.forEach(function(m){
-    if(m.status!=='active')return;
-    var row=currentByKey[m.id];
-    if(row&&row.recentMonths!==null&&row.recentMonths>=12){
-      ops.push({id:m.id,data:{status:'graduated',statusChangedDate:todayISO(),finalScore:m.score||0,finalBelt:getMiyagiBelt(m.score||0).name}});
-    }
-  });
-
-  // Auto-drop members missing from both Length-of-Membership AND Dues report
-  S.miyagiMembers.forEach(function(m){
-    if(m.status!=='active')return;
-    var inLOM=!!currentByKey[m.id];
-    var inDues=(S.duesData||[]).some(function(d){return d.chapter===m.chapter&&d.name.toLowerCase()===m.name.toLowerCase();});
-    if(!inLOM&&!inDues){
-      ops.push({id:m.id,data:{status:'dropped',statusChangedDate:todayISO(),finalScore:m.score||0,finalBelt:getMiyagiBelt(m.score||0).name}});
-    }
-  });
-
+  // A Length-of-Membership upload ONLY adds newly eligible members. It never
+  // modifies the Miyagi data of members already in the program - no overwrite of
+  // their checkpoints/score, and no auto-graduate or auto-drop. Graduation and
+  // drops are handled manually (drops via the Renewals "Drop" button).
   for(var i=0;i<ops.length;i++){
     try{await db.collection('miyagiMembers').doc(ops[i].id).set(ops[i].data,{merge:true});}
     catch(e){console.warn('Miyagi sync error:',e);}
   }
-  toast('Miyagi sync complete: '+ops.length+' updates');
+  toast('Miyagi sync: '+ops.length+' new member'+(ops.length===1?'':'s')+' added');
 }
 
 // CHECKPOINT MARKING ──────────────────────────────────────
@@ -6668,6 +6697,88 @@ async function toggleMiyagiCheckpoint(memberId,taskKey){
     logActivity('miyagi_checkpoint_toggled',{memberName:member.name,task:taskKey,done:!isDone});
     toast(isDone?'Checkpoint unmarked':'Yes Checkpoint marked');
   }catch(e){toast('Failed: '+e.message);}
+}
+
+// STAGED CHECKPOINT EDITS - toggles are held locally, written on Save ──
+let MIYAGI_PENDING={}; // memberId -> { taskKey: bool }
+function miyagiPendingScore(member){
+  var cp=Object.assign({},member.checkpoints||{});
+  var pend=MIYAGI_PENDING[member.id]||{};
+  Object.keys(pend).forEach(function(k){cp[k]={done:!!pend[k]};});
+  return calcMiyagiScore(cp);
+}
+function stageMiyagiCheckpoint(memberId,taskKey,checked){
+  MIYAGI_PENDING[memberId]=MIYAGI_PENDING[memberId]||{};
+  MIYAGI_PENDING[memberId][taskKey]=checked;
+  var m=S.miyagiMembers.find(function(x){return x.id===memberId;});
+  if(!m)return;
+  var sc=miyagiPendingScore(m),b=getMiyagiBelt(sc);
+  var pv=document.getElementById('miyagiPreview_'+memberId);
+  if(pv){pv.textContent='Unsaved: '+b.name+' - '+sc+'pt';pv.style.color=b.color;}
+  var sv=document.getElementById('miyagiSave_'+memberId);
+  if(sv)sv.disabled=false;
+}
+async function saveMiyagiCheckpoints(memberId){
+  var pend=MIYAGI_PENDING[memberId];
+  var m=S.miyagiMembers.find(function(x){return x.id===memberId;});
+  if(!m)return;
+  if(!pend){toast('No changes to save');return;}
+  var cp=Object.assign({},m.checkpoints||{});
+  Object.keys(pend).forEach(function(k){cp[k]=pend[k]?{done:true,date:todayISO(),markedBy:S.user.name}:{done:false};});
+  var sc=calcMiyagiScore(cp);
+  if(isLocalPreviewMode()){m.checkpoints=cp;m.score=sc;m.lastActivityDate=todayISO();delete MIYAGI_PENDING[memberId];if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast('Miyagi progress saved');renderMiyagiTab();return;}
+  try{
+    await db.collection('miyagiMembers').doc(memberId).update({checkpoints:cp,score:sc,lastActivityDate:todayISO()});
+    logActivity('miyagi_checkpoints_saved',{memberName:m.name,score:sc});
+    delete MIYAGI_PENDING[memberId];
+    toast('Miyagi progress saved ('+sc+' pts)');
+  }catch(e){toast('Failed: '+e.message);}
+}
+
+// MANUAL DROP - a member who leaves stops receiving updates; record the milestone ──
+function miyagiMonthsSinceJoin(member){
+  if(!member.joinDate)return null;
+  var join=new Date(member.joinDate+'T00:00:00'),now=new Date(todayISO()+'T00:00:00');
+  return (now.getFullYear()-join.getFullYear())*12+(now.getMonth()-join.getMonth());
+}
+function miyagiDropMilestone(member){
+  var mo=miyagiMonthsSinceJoin(member);
+  if(mo===null)return '';
+  var ms=[3,6,9,12].filter(function(x){return mo>=x;});
+  return ms.length?ms[ms.length-1]+' month':'before 3 month';
+}
+async function markMiyagiDropped(memberId){
+  var m=S.miyagiMembers.find(function(x){return x.id===memberId;});
+  if(!m)return;
+  if(!confirm('Mark '+m.name+' as dropped? Their Miyagi account will stop receiving updates.'))return;
+  var data={status:'dropped',statusChangedDate:todayISO(),droppedAtMilestone:miyagiDropMilestone(m),finalScore:m.score||0,finalBelt:getMiyagiBelt(m.score||0).name};
+  if(isLocalPreviewMode()){Object.assign(m,data);if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast(m.name+' marked dropped');renderMiyagiTab();return;}
+  try{
+    await db.collection('miyagiMembers').doc(memberId).update(data);
+    logActivity('miyagi_member_dropped',{memberName:m.name,milestone:data.droppedAtMilestone});
+    toast(m.name+' marked dropped');
+  }catch(e){toast('Failed: '+e.message);}
+}
+async function reactivateMiyagiMember(memberId){
+  var m=S.miyagiMembers.find(function(x){return x.id===memberId;});
+  if(!m)return;
+  var data={status:'active',statusChangedDate:todayISO()};
+  if(isLocalPreviewMode()){Object.assign(m,data);if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast(m.name+' reactivated');renderMiyagiTab();return;}
+  try{await db.collection('miyagiMembers').doc(memberId).update(data);toast(m.name+' reactivated');}catch(e){toast('Failed: '+e.message);}
+}
+
+// CHECK-IN PREFILL - derive answers from the member's current task completion ──
+function miyagiCheckinPrefill(member){
+  var cp=member.checkpoints||{},done=function(k){return !!(cp[k]&&cp[k].done);},score=member.score||0;
+  return {
+    mspAttended: done('msp')?'Yes':'',
+    powerTeamAdded: done('powerTeam')?'Yes':'',
+    earlyRenewal: done('renewEarly')?'Yes':'',
+    advancedTraining: done('otherTraining')?'Yes':'',
+    achievedBlackBelt: score>=100?'Yes':'No',
+    met1YRC:'Yes',
+    meetingDate: todayISO()
+  };
 }
 
 // CHECK-IN DUE DETECTION (3/6/9/12mo, ±2wk grace) ─────────
@@ -6758,27 +6869,30 @@ function openMiyagiCheckin(memberId,checkinKey){
   h+='<div style="font-size:13px;color:var(--muted);margin-bottom:4px;">'+esc(member.name)+' - '+esc(member.chapter)+'</div>';
   h+='<div style="font-size:12px;color:'+belt.color+';font-weight:700;margin-bottom:14px;">Current Belt: '+esc(belt.name)+' ('+(member.score||0)+' pts)</div>';
 
+  var pf=miyagiCheckinPrefill(member);
+  h+='<div style="font-size:11px;color:var(--muted);background:var(--surface);border-radius:8px;padding:8px 10px;margin-bottom:12px;">Answers are pre-filled from this member\'s completed tasks where possible. Review, edit anything that needs changing, then Save.</div>';
   fields.forEach(function(f){
+    var pv=(pf[f.key]!==undefined&&pf[f.key]!==null)?pf[f.key]:'';
     h+='<div style="margin-bottom:12px;">';
-    h+='<label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;">'+f.label+'</label>';
+    h+='<label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:5px;">'+f.label+(pv!==''?' <span class="tm" style="color:var(--green);font-weight:600;">(pre-filled)</span>':'')+'</label>';
     if(f.type==='yn'){
-      h+='<select id="mci_'+f.key+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">- Select -</option><option value="Yes">Yes</option><option value="No">No</option></select>';
+      h+='<select id="mci_'+f.key+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">- Select -</option><option value="Yes"'+(pv==='Yes'?' selected':'')+'>Yes</option><option value="No"'+(pv==='No'?' selected':'')+'>No</option></select>';
     } else if(f.type==='select'){
       h+='<select id="mci_'+f.key+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"><option value="">- Select -</option>';
-      f.options.forEach(function(o){h+='<option value="'+o+'">'+o+'</option>';});
+      f.options.forEach(function(o){h+='<option value="'+o+'"'+(pv===o?' selected':'')+'>'+o+'</option>';});
       h+='</select>';
     } else if(f.type==='date'){
-      h+='<input type="date" id="mci_'+f.key+'" value="'+todayISO()+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">';
+      h+='<input type="date" id="mci_'+f.key+'" value="'+(pv||todayISO())+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">';
     } else if(f.type==='number'){
-      h+='<input type="number" id="mci_'+f.key+'" min="0" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">';
+      h+='<input type="number" id="mci_'+f.key+'" min="0" value="'+(pv||'')+'" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">';
     } else {
-      h+='<textarea id="mci_'+f.key+'" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;"></textarea>';
+      h+='<textarea id="mci_'+f.key+'" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;">'+esc(pv||'')+'</textarea>';
     }
     h+='</div>';
   });
 
   h+='<div style="display:flex;gap:8px;margin-top:16px;">';
-  h+='<button class="btn btn-primary" onclick="submitMiyagiCheckin()">Submit Check-in</button>';
+  h+='<button class="btn btn-primary" onclick="submitMiyagiCheckin()">Save Check-in</button>';
   h+='<button class="btn btn-secondary" onclick="closeMiyagiCheckin()">Cancel</button>';
   h+='</div>';
   h+='</div></div>';
@@ -7010,13 +7124,14 @@ function renderMiyagiTab(){
   h+='<div style="display:flex;flex-direction:column;gap:8px;">';
   filtered.forEach(function(m){
     var belt=getMiyagiBelt(m.score||0);
+    var dropped=m.status==='dropped';
     var checkpointsDone=MIYAGI_TASKS.filter(function(t){return m.checkpoints&&m.checkpoints[t.key]&&m.checkpoints[t.key].done;}).length;
-    var checkinsDue=getMiyagiCheckinsDue(m);
+    var checkinsDue=dropped?[]:getMiyagiCheckinsDue(m);
     var stalled=(m.status||'active')==='active'&&isMiyagiStalled(m);
     var neverStarted=(m.status||'active')==='active'&&isMiyagiNeverStarted(m);
     var isExpanded=MIYAGI_EXPANDED===m.id;
 
-    h+='<div style="border:1px solid '+(stalled?'rgba(239,68,68,.3)':neverStarted?'rgba(251,191,36,.3)':'var(--border)')+';border-radius:10px;padding:12px 14px;'+(stalled?'background:rgba(239,68,68,.03);':neverStarted?'background:rgba(251,191,36,.03);':'')+'">';
+    h+='<div style="border:1px solid '+(dropped?'rgba(239,68,68,.55)':stalled?'rgba(239,68,68,.3)':neverStarted?'rgba(251,191,36,.3)':'var(--border)')+';border-radius:10px;padding:12px 14px;'+(dropped?'background:rgba(239,68,68,.07);':stalled?'background:rgba(239,68,68,.03);':neverStarted?'background:rgba(251,191,36,.03);':'')+'">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleMiyagiExpand(\''+m.id+'\')">';
     h+='<div>';
     h+='<span style="font-weight:700;">'+esc(m.name)+'</span> ';
@@ -7024,7 +7139,7 @@ function renderMiyagiTab(){
     if(stalled)h+=' <span style="color:var(--red);font-size:11px;font-weight:700;">Warning: Stalled 2+ wks</span>';
     if(neverStarted)h+=' <span style="color:var(--amber);font-size:11px;font-weight:700;">Not Started Never Started</span>';
     if(m.status==='graduated')h+=' <span style="color:var(--green);font-size:11px;font-weight:700;">Yes Graduated</span>';
-    if(m.status==='dropped')h+=' <span style="color:var(--red);font-size:11px;font-weight:700;">No Dropped</span>';
+    if(dropped)h+=' <span style="color:#fff;background:var(--red);font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;">Dropped'+(m.droppedAtMilestone?' at '+esc(m.droppedAtMilestone):'')+'</span>';
     h+='</div>';
     h+='<div style="display:flex;align-items:center;gap:10px;">';
     if(checkinsDue.length)h+='<span style="font-size:10px;font-weight:700;color:'+(checkinsDue.some(function(c){return c.overdue;})?'var(--red)':'var(--amber)')+';background:'+(checkinsDue.some(function(c){return c.overdue;})?'rgba(239,68,68,.1)':'rgba(251,191,36,.1)')+';padding:3px 8px;border-radius:6px;">'+checkinsDue.length+' check-in due</span>';
@@ -7036,25 +7151,46 @@ function renderMiyagiTab(){
     if(isExpanded){
       h+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">';
 
-      if(checkinsDue.length){
-        h+='<div style="margin-bottom:12px;">';
-        h+='<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;">DIRECTOR CHECK-INS DUE</div>';
-        checkinsDue.forEach(function(c){
-          h+='<button class="btn btn-sm" style="background:'+(c.overdue?'rgba(239,68,68,.12)':'rgba(251,191,36,.12)')+';color:'+(c.overdue?'var(--red)':'var(--amber)')+';margin-right:6px;margin-bottom:4px;" onclick="event.stopPropagation();openMiyagiCheckin(\''+m.id+'\',\''+c.key+'\')">'+c.months+'-Month Check-in'+(c.overdue?' (Overdue)':'')+'</button>';
-        });
+      if(dropped){
+        h+='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);border-radius:8px;padding:10px 12px;margin-bottom:10px;">';
+        h+='<div style="color:var(--red);font-weight:700;font-size:13px;">Dropped'+(m.droppedAtMilestone?' at the '+esc(m.droppedAtMilestone)+' mark':'')+(m.statusChangedDate?' - '+fmtD(m.statusChangedDate):'')+'</div>';
+        h+='<div class="tm" style="margin-top:2px;">This account no longer receives updates. Final: '+esc(m.finalBelt||belt.name)+' - '+(m.finalScore!=null?m.finalScore:(m.score||0))+' pts.</div>';
+        if(canEdit)h+='<button class="btn btn-sm btn-secondary" style="margin-top:8px;" onclick="event.stopPropagation();reactivateMiyagiMember(\''+m.id+'\')">Reactivate member</button>';
         h+='</div>';
       }
 
-      h+='<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;">CHECKPOINTS ('+checkpointsDone+'/'+MIYAGI_TASKS.length+')</div>';
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;align-items:stretch;gap:6px;">';
-      MIYAGI_TASKS.forEach(function(t){
-        var done=m.checkpoints&&m.checkpoints[t.key]&&m.checkpoints[t.key].done;
-        h+='<label style="display:flex;align-items:flex-start;gap:7px;font-size:12px;padding:5px 7px;border-radius:6px;min-width:0;width:100%;'+(done?'background:rgba(45,155,111,.08);':'')+'cursor:pointer;">';
-        h+='<input type="checkbox" style="flex-shrink:0;width:16px;height:16px;padding:0;margin-top:2px;" '+(done?'checked':'')+' '+(canEdit?'':'disabled')+' onclick="event.stopPropagation();toggleMiyagiCheckpoint(\''+m.id+'\',\''+t.key+'\')">';
-        h+='<span style="flex:1;min-width:0;word-break:break-word;'+(done?'color:var(--green);font-weight:600;':'')+'">'+t.label+' <span class="tm">('+t.points+'pt)</span></span>';
-        h+='</label>';
-      });
-      h+='</div>';
+      if(!dropped){
+        if(checkinsDue.length){
+          h+='<div style="margin-bottom:12px;">';
+          h+='<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;">DIRECTOR CHECK-INS DUE</div>';
+          checkinsDue.forEach(function(c){
+            h+='<button class="btn btn-sm" style="background:'+(c.overdue?'rgba(239,68,68,.12)':'rgba(251,191,36,.12)')+';color:'+(c.overdue?'var(--red)':'var(--amber)')+';margin-right:6px;margin-bottom:4px;" onclick="event.stopPropagation();openMiyagiCheckin(\''+m.id+'\',\''+c.key+'\')">'+c.months+'-Month Check-in'+(c.overdue?' (Overdue)':'')+'</button>';
+          });
+          h+='</div>';
+        }
+
+        var pend=MIYAGI_PENDING[m.id]||{};
+        var hasPending=!!MIYAGI_PENDING[m.id];
+        h+='<div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;">CHECKPOINTS ('+checkpointsDone+'/'+MIYAGI_TASKS.length+') - tick tasks, then Save</div>';
+        h+='<div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;align-items:stretch;gap:6px;">';
+        MIYAGI_TASKS.forEach(function(t){
+          var saved=m.checkpoints&&m.checkpoints[t.key]&&m.checkpoints[t.key].done;
+          var done=(t.key in pend)?pend[t.key]:saved;
+          h+='<label style="display:flex;align-items:flex-start;gap:7px;font-size:12px;padding:5px 7px;border-radius:6px;min-width:0;width:100%;'+(done?'background:rgba(45,155,111,.08);':'')+'cursor:pointer;">';
+          h+='<input type="checkbox" style="flex-shrink:0;width:16px;height:16px;padding:0;margin-top:2px;" '+(done?'checked':'')+' '+(canEdit?'':'disabled')+' onclick="event.stopPropagation();stageMiyagiCheckpoint(\''+m.id+'\',\''+t.key+'\',this.checked)">';
+          h+='<span style="flex:1;min-width:0;word-break:break-word;'+(done?'color:var(--green);font-weight:600;':'')+'">'+t.label+' <span class="tm">('+t.points+'pt)</span></span>';
+          h+='</label>';
+        });
+        h+='</div>';
+
+        if(canEdit){
+          h+='<div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap;">';
+          h+='<button id="miyagiSave_'+m.id+'" class="btn btn-sm btn-green" '+(hasPending?'':'disabled')+' onclick="event.stopPropagation();saveMiyagiCheckpoints(\''+m.id+'\')">Save changes</button>';
+          h+='<span id="miyagiPreview_'+m.id+'" class="tm">'+(hasPending?'Unsaved: '+esc(getMiyagiBelt(miyagiPendingScore(m)).name)+' - '+miyagiPendingScore(m)+'pt':'')+'</span>';
+          h+='<button class="btn btn-sm" style="margin-left:auto;background:rgba(239,68,68,.12);color:var(--red);font-weight:600;" onclick="event.stopPropagation();markMiyagiDropped(\''+m.id+'\')">Drop member</button>';
+          h+='</div>';
+        }
+      }
 
       // Show completed check-ins summary
       var doneCheckins=Object.keys(m.checkins||{});
