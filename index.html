@@ -257,8 +257,11 @@ html,body{max-width:100%;overflow-x:hidden;}
       <div class="b1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
       <div class="b2">Regional Leadership Dashboard</div>
     </div>
+    <div class="fg"><label>Login As</label>
+      <select id="loginRole"><option value="">-- Select Role --</option></select>
+    </div>
     <div class="fg"><label>Your Name</label>
-      <select id="loginName"><option value="">-- Select --</option></select>
+      <select id="loginName" disabled><option value="">-- Select role first --</option></select>
     </div>
     <div class="fg hidden" id="pinGroup">
       <label>PIN</label>
@@ -1968,80 +1971,88 @@ function isOfflinePreviewParam(){
   catch(e){return false;}
 }
 
+let LOGIN_MEMBERS=[];
+const LOGIN_ROLE_GROUPS=[
+  {key:'ad',label:'Area Director',roles:['ad']},
+  {key:'srdc',label:'Senior Director',roles:['srdc']},
+  {key:'dc',label:'Chapter Director',roles:['dc','cd']},
+  {key:'sa',label:'Support Ambassador',roles:['sa1','sa2']},
+  {key:'viewer',label:'Viewer',roles:['viewer']}
+];
+// Two-step login: pick a role, then pick a name within that role, then PIN.
 function renderLoginMembers(rawMembers,opts){
+  const roleSel=document.getElementById('loginRole');
   const sel=document.getElementById('loginName');
-  if(!sel)return;
-  sel.innerHTML='<option value="">-- Select Your Name --</option>';
-  if(opts&&opts.offline){
-    const warn=document.createElement('option');
-    warn.value='';warn.disabled=true;
-    warn.textContent='(Offline - sign-in unavailable until the server is reachable)';
-    sel.appendChild(warn);
-  }
-  const byChap={};
-  const seen={};
-  rawMembers.forEach(m=>{
+  if(!roleSel||!sel)return;
+  LOGIN_MEMBERS=(rawMembers||[]).map(function(m){
     m=Object.assign({},m);
     m.name=(m.name||'').trim();
     m.role=(m.role||'').trim().toLowerCase();
     m.chapters=(m.chapters||[]).filter(function(ch){return(ch||'').trim();});
     m.chapter=(m.chapter||m.chapters[0]||'').trim();
-    if(!m.name||!m.role)return;
-    const ch=m.role==='ad'?'Whole Region Access':m.role==='srdc'?'Senior Directors':m.role==='viewer'?'Viewers':(m.chapter||m.chapters[0]||'Chapter Not Assigned');
-    const key=m.id||[m.name,m.role,ch].join('|').toLowerCase();
-    if(seen[key])return;
-    seen[key]=true;
-    if(!byChap[ch])byChap[ch]=[];
-    byChap[ch].push(m);
-  });
-  Object.keys(byChap).sort(function(a,b){
-    const groupOrder={'Whole Region Access':0,'Senior Directors':1,'Viewers':2};
-    const go=(groupOrder[a]??9)-(groupOrder[b]??9);
-    if(go)return go;
-    return a.localeCompare(b);
-  }).forEach(ch=>{
-    const g=document.createElement('optgroup');g.label=ch;
-    byChap[ch].sort(function(a,b){
-      const roleOrder={ad:0,srdc:1,viewer:2,dc:3,cd:3,sa1:4,sa2:5};
-      const ro=(roleOrder[a.role]??9)-(roleOrder[b.role]??9);
-      return ro||a.name.localeCompare(b.name);
-    }).forEach(m=>{
-      const chapters=(m.chapters&&m.chapters.length)?m.chapters:(m.chapter?[m.chapter]:[]);
-      const _name=String(m.name||'').trim();
-      const o=document.createElement('option');
-      o.value=m.id;
-      if(['sa1','sa2'].includes(m.role)){
-        // Chapter SA logins are named "<Chapter> SA" - show that as-is, with no
-        // redundant role or chapter suffix.
-        o.textContent=_name;
-      }else{
-        // Skip the role label when the name already ends with it, so the option
-        // isn't "Lincoln DC - Chapter Director - Lincoln".
-        const _roleLbl=rl(m.role);
-        const details=_name.endsWith(_roleLbl)?[]:[_roleLbl];
-        if(chapters.length)details.push(chapters.join(', '));
-        if(m.reportsTo)details.push('Reports to '+m.reportsTo);
-        o.textContent=details.length?_name+' - '+details.join(' - '):_name;
-      }
-      g.appendChild(o);
-    });
-    sel.appendChild(g);
-  });
-  // Master fallback sign-in. The PIN lives hashed in meta/config and is changed from
-  // Settings; this is the account that entry documents as the first-run fallback.
-  if(!opts||!opts.offline){
-    const mg=document.createElement('optgroup');mg.label='Master Access';
-    const mo=document.createElement('option');
-    mo.value='__srdc__';
-    mo.textContent='BNI Office Account - Full Access';
-    mg.appendChild(mo);sel.appendChild(mg);
+    return m;
+  }).filter(function(m){return m.name&&m.role;});
+
+  roleSel.innerHTML='<option value="">-- Select Role --</option>';
+  if(opts&&opts.offline){
+    const warn=document.createElement('option');warn.value='';warn.disabled=true;
+    warn.textContent='(Offline - sign-in unavailable until the server is reachable)';
+    roleSel.appendChild(warn);
   }
-  sel.onchange=()=>{
+  LOGIN_ROLE_GROUPS.forEach(function(g){
+    var count=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0;}).length;
+    if(!count)return;
+    var o=document.createElement('option');o.value=g.key;o.textContent=g.label+' ('+count+')';
+    roleSel.appendChild(o);
+  });
+  // BNI Office / master full-access sign-in, offered as its own role choice.
+  if(!opts||!opts.offline){
+    var mo=document.createElement('option');mo.value='__master__';mo.textContent='BNI Office (Full Access)';
+    roleSel.appendChild(mo);
+  }
+
+  sel.innerHTML='<option value="">-- Select role first --</option>';
+  sel.disabled=true;
+  document.getElementById('pinGroup').classList.add('hidden');
+
+  roleSel.onchange=function(){
+    populateLoginNames(roleSel.value);
+    document.getElementById('pinGroup').classList.add('hidden');
+    document.getElementById('loginErr').classList.add('hidden');
+  };
+  sel.onchange=function(){
     const v=sel.value!=='';
     document.getElementById('pinGroup').classList.toggle('hidden',!v);
     document.getElementById('loginErr').classList.add('hidden');
-    if(v)setTimeout(()=>document.getElementById('loginPin').focus(),50);
+    if(v)setTimeout(function(){document.getElementById('loginPin').focus();},50);
   };
+}
+function populateLoginNames(roleKey){
+  const sel=document.getElementById('loginName');
+  if(!sel)return;
+  if(!roleKey){sel.disabled=true;sel.innerHTML='<option value="">-- Select role first --</option>';return;}
+  if(roleKey==='__master__'){
+    sel.disabled=false;
+    sel.innerHTML='<option value="">-- Select --</option><option value="__srdc__">BNI Office Account - Full Access</option>';
+    return;
+  }
+  const g=LOGIN_ROLE_GROUPS.find(function(x){return x.key===roleKey;});
+  if(!g){sel.disabled=true;sel.innerHTML='<option value="">-- Select --</option>';return;}
+  var list=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0;})
+    .sort(function(a,b){return a.name.localeCompare(b.name);});
+  sel.disabled=false;
+  sel.innerHTML='<option value="">-- Select Name ('+list.length+') --</option>';
+  list.forEach(function(m){
+    var o=document.createElement('option');o.value=m.id;
+    var chapters=(m.chapters&&m.chapters.length)?m.chapters:(m.chapter?[m.chapter]:[]);
+    var suffix='';
+    if(roleKey==='dc'||roleKey==='sa'){
+      var firstCh=chapters[0]||'';
+      if(firstCh&&m.name.toLowerCase().indexOf(firstCh.toLowerCase())===-1)suffix=' - '+chapters.join(', ');
+    }
+    o.textContent=m.name+suffix;
+    sel.appendChild(o);
+  });
 }
 
 async function doLogin(){
@@ -2094,7 +2105,8 @@ function logout(){
   hide('app');show('loginScreen');
   document.getElementById('loginPin').value='';
   document.getElementById('pinGroup').classList.add('hidden');
-  document.getElementById('loginName').value='';
+  var lr=document.getElementById('loginRole');if(lr)lr.value='';
+  var ln=document.getElementById('loginName');if(ln){ln.value='';ln.disabled=true;ln.innerHTML='<option value="">-- Select role first --</option>';}
 }
 
 // START APP ──
