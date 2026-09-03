@@ -3156,18 +3156,37 @@ function buildVisDD(chapter){
   const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(chapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
   const opts=[{id:'no_visit',name:'No Visit'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
   const dd=document.getElementById('msDD');if(!dd)return;
-  dd.innerHTML=opts.map(o=>`<div class="ms-opt" onclick="toggleVis('${o.id}','${o.name.replace(/'/g,"\\'")}')"><input type="checkbox" id="vc_${o.id}" onclick="event.stopPropagation()"><span>${esc(o.name)}</span></div>`).join('');
+  dd.innerHTML=opts.map(o=>`<div class="ms-opt" onclick="visOptClick(event,'${o.id}','${o.name.replace(/'/g,"\\'")}')"><input type="checkbox" id="vc_${o.id}" onclick="event.stopPropagation();setVis('${o.id}','${o.name.replace(/'/g,"\\'")}',this.checked)"><span>${esc(o.name)}</span></div>`).join('');
   updateVisDisplay();
 }
 function toggleVisDD(){document.getElementById('msDD')?.classList.toggle('hidden');}
-function toggleVis(id,name){
+// Clicking anywhere on the row (except the checkbox) flips the checkbox, then syncs.
+function visOptClick(e,id,name){
   const cb=document.getElementById('vc_'+id);if(!cb)return;
-  if(id==='no_visit'){S.visSel=[];document.querySelectorAll('#msDD input').forEach(c=>c.checked=false);cb.checked=true;S.visSel=[{id:'no_visit',name:'No Visit'}];}
-  else{const nv=document.getElementById('vc_no_visit');if(nv){nv.checked=false;S.visSel=S.visSel.filter(v=>v.id!=='no_visit');}
-    cb.checked=!cb.checked;if(cb.checked)S.visSel.push({id:id,name:name.split(' (')[0]});else S.visSel=S.visSel.filter(v=>v.id!==id);
+  cb.checked=!cb.checked;
+  setVis(id,name,cb.checked);
+}
+// Single source of truth: sync S.visSel from the checkbox's actual checked state.
+// (Previously a direct checkbox click only stopped propagation, so the row handler
+// never ran - the box looked ticked but the visitor was never added to the list.)
+function setVis(id,name,checked){
+  const cleanName=String(name).split(' (')[0];
+  if(id==='no_visit'){
+    if(checked){document.querySelectorAll('#msDD input').forEach(c=>{if(c.id!=='vc_no_visit')c.checked=false;});S.visSel=[{id:'no_visit',name:'No Visit'}];}
+    else{S.visSel=[];}
+  }else{
+    if(checked){
+      const nv=document.getElementById('vc_no_visit');if(nv)nv.checked=false;
+      S.visSel=S.visSel.filter(v=>v.id!=='no_visit'&&v.id!==id);
+      S.visSel.push({id:id,name:cleanName});
+    }else{
+      S.visSel=S.visSel.filter(v=>v.id!==id);
+    }
   }
   updateVisDisplay();
 }
+// Back-compat: loading a saved entry re-checks visitors via toggleVis(id,name).
+function toggleVis(id,name){visOptClick(null,id,name);}
 function updateVisDisplay(){const el=document.getElementById('msDisplay');if(el)el.textContent=S.visSel.length?S.visSel.map(v=>v.name).join(', '):'Select visitors...';}
 document.addEventListener('click',e=>{if(!document.getElementById('visitWrap')?.contains(e.target))document.getElementById('msDD')?.classList.add('hidden');});
 
