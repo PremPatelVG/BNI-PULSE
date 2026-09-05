@@ -170,7 +170,7 @@ async function hierarchy(user) {
   const isChapterDirector = role => role === "dc" || role === "cd";
 
   return ok({
-    areaDirectors: publicMembers.filter(member => member.role === "ad"),
+    areaDirectors: publicMembers.filter(member => member.role === "ad" || member.role === "ed"),
     seniorDirectors: publicMembers.filter(member => member.role === "srdc"),
     chapterDirectors: publicMembers.filter(member => isChapterDirector(member.role)),
     chapters: filterRowsToScope(user, chapters.map(chapter => ({ ...chapter, chapter: chapter.name }))).map(chapter => ({

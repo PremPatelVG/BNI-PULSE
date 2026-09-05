@@ -4829,7 +4829,7 @@ function renderSettings(){
     });
     memHtml+='</div>';
   });
-  var regional=S.members.filter(function(m){return ['ad','srdc','viewer'].includes(m.role)&&(isAreaDirector()||isViewer()||m.id===S.user?.id||m.name===S.user?.reportsTo);});
+  var regional=S.members.filter(function(m){return ['ad','ed','srdc','viewer'].includes(m.role)&&(isAreaDirector()||isViewer()||m.id===S.user?.id||m.name===S.user?.reportsTo);});
   var regionalHtml=regional.length?regional.map(function(m){return '<div class="s-row"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+((m.chapters&&m.chapters.length)?m.chapters.join(', '):'Whole Region')+'</span>'+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+esc(m.reportsTo)+'</span>':'')+'</div><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button><button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';}).join(''):'<div class="tm" style="padding:8px 0;">No regional accounts added yet</div>';
   var chapterListHtml=scopeChapters.map(function(c){return '<div class="s-row"><div><span style="font-weight:700">'+esc(c.name)+'</span><span class="tm"> - '+c.day+' - Target: '+(c.target||'-')+'</span></div><button class="btn btn-secondary btn-sm" onclick="editChapter(this.dataset.id)" data-id="'+c.id+'">Edit</button></div>';}).join('');
   var h='';
