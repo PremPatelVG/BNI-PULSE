@@ -3,12 +3,15 @@
 // the two deployments cannot drift apart.
 
 export const ROLE_AD = "ad";
+export const ROLE_ED = "ed";
 export const ROLE_SRDC = "srdc";
 export const ROLE_VIEWER = "viewer";
 const CHAPTER_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
 
+// The Executive Director sits above the Area Director with the same whole-region
+// access, so isAreaDirector() (the "sees and does everything" gate) also matches ED.
 export function isAreaDirector(user) {
-  return user?.role === ROLE_AD;
+  return user?.role === ROLE_AD || user?.role === ROLE_ED;
 }
 
 export function isSeniorDirector(user) {

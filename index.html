@@ -1346,7 +1346,7 @@ async function seedData(write=true){
   const members=  [
       {
             "name": "Yash Vasant",
-            "role": "ad",
+            "role": "ed",
             "chapters": [],
             "chapter": ""
       },
@@ -1973,6 +1973,7 @@ function isOfflinePreviewParam(){
 
 let LOGIN_MEMBERS=[];
 const LOGIN_ROLE_GROUPS=[
+  {key:'ed',label:'Executive Director',roles:['ed']},
   {key:'ad',label:'Area Director',roles:['ad']},
   {key:'srdc',label:'Senior Director',roles:['srdc']},
   {key:'dc',label:'Chapter Director',roles:['dc','cd']},
@@ -2310,10 +2311,10 @@ function buildNav(){
   if(isSd||isViewer){
     tabs=[
       {id:'overview',label:'Overview'},
-      {id:'entry',label:'Data Entry',hidden:isViewer||role==='ad'},
+      {id:'entry',label:'Data Entry',hidden:isViewer||role==='ad'||role==='ed'},
       {id:'call',label:'Call Mode'},
       {id:'renewals',label:'Renewals'},
-      {id:'retention',label:'Retention',hidden:role!=='ad'},
+      {id:'retention',label:'Retention',hidden:role!=='ad'&&role!=='ed'},
       {id:'tlr',label:'TLR Report'},
       {id:'reports',label:'Reports'},
       {id:'planning',label:'Planning'},
@@ -2455,13 +2456,13 @@ function popSelects(){
   if(mch2){mch2.innerHTML=opts;}
 }
 
-function isAreaDirector(){return S.user?.role==='ad';}
+function isAreaDirector(){return['ad','ed'].includes(S.user?.role);}
 function isSeniorDirector(){return S.user?.role==='srdc';}
-function isSrdc(){return['ad','srdc'].includes(S.user?.role);}
+function isSrdc(){return['ad','ed','srdc'].includes(S.user?.role);}
 function isViewer(){return S.user?.role==='viewer';}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
 function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
-function roleClass(role){return role==='ad'?'ad':role==='srdc'?'srdc':isChapterDirectorRole(role)?'dc':role==='viewer'?'viewer':'sa';}
+function roleClass(role){return(role==='ad'||role==='ed')?'ad':role==='srdc'?'srdc':isChapterDirectorRole(role)?'dc':role==='viewer'?'viewer':'sa';}
 function normPersonName(value){return String(value||'').toLowerCase().replace(/\bpvt\b/g,'private').replace(/\bltd\b/g,'limited').replace(/[^a-z0-9]+/g,' ').trim();}
 function uniqueList(values){return[...new Set((values||[]).filter(Boolean))];}
 function seniorMappedChapters(name){
@@ -4838,7 +4839,7 @@ function renderSettings(){
   h+='<div class="card-t" id="memberFormTitle">Add Member</div><input type="hidden" id="editMemberId">';
   h+='<div class="fgrid">';
   h+='<div class="fg"><label>Full Name</label><input type="text" id="mName"></div>';
-  h+='<div class="fg"><label>Role</label><select id="mRole" onchange="toggleChaptersField()"><option value="ad">Area Director</option><option value="srdc">Senior Director</option><option value="dc">Chapter Director (CD/DC)</option><option value="sa1">SA1</option><option value="sa2">SA2</option><option value="viewer">Viewer</option></select></div>';
+  h+='<div class="fg"><label>Role</label><select id="mRole" onchange="toggleChaptersField()"><option value="ed">Executive Director</option><option value="ad">Area Director</option><option value="srdc">Senior Director</option><option value="dc">Chapter Director (CD/DC)</option><option value="sa1">SA1</option><option value="sa2">SA2</option><option value="viewer">Viewer</option></select></div>';
   h+='<div class="fg" id="singleChapField"><label>Chapter</label><select id="mChapter"></select></div>';
   h+='<div class="fg full hidden" id="multiChapField"><label>Chapters (hold Ctrl/Cmd for multiple)</label><select id="mChapters" multiple style="height:120px;"></select></div>';
   h+='<div class="fg full"><label>Reports To</label><input type="text" id="mReportsTo" placeholder="Area Director or Senior Director name"></div>';
@@ -4871,7 +4872,7 @@ function renderSettings(){
 
 function toggleChaptersField(){
   const role=document.getElementById('mRole')?.value;
-  const isViewer=role==='viewer'||role==='ad';const isDC=role==='dc'||role==='srdc';
+  const isViewer=role==='viewer'||role==='ad'||role==='ed';const isDC=role==='dc'||role==='srdc';
   document.getElementById('singleChapField')?.classList.toggle('hidden',isViewer);
   document.getElementById('multiChapField')?.classList.toggle('hidden',!isDC);
   if(isDC)document.getElementById('singleChapField')?.classList.add('hidden');
@@ -4898,7 +4899,7 @@ function editMember(id){
 function memberSeniorDirectorSummary(memberData){
   var role=memberData.role;
   var chapters=(memberData.chapters&&memberData.chapters.length)?memberData.chapters:(memberData.chapter?[memberData.chapter]:[]);
-  if(role==='ad')return'Whole region access';
+  if(role==='ad'||role==='ed')return'Whole region access';
   if(role==='srdc')return memberData.name+' is the Senior DC for '+(chapters.length?chapters.join(', '):'assigned chapters');
   var mapped=chapters.map(function(chName){
     var mappedSenior=(memberData.chapterReportsTo&&memberData.chapterReportsTo[chName])||'';
@@ -4926,7 +4927,7 @@ async function saveMember(){
   const reportsTo=document.getElementById('mReportsTo')?.value.trim()||'';
   if(!name){toast('Name required');return;}if(!id&&(!pin||pin.length<4)){toast('PIN must be 4+ digits');return;}
   let chapters=[],chapter='';
-  if(role==='viewer'||role==='ad'){chapters=[];chapter='';}
+  if(role==='viewer'||role==='ad'||role==='ed'){chapters=[];chapter='';}
   else if(role==='dc'||role==='srdc'){const sel=document.getElementById('mChapters');chapters=sel?Array.from(sel.selectedOptions).map(o=>o.value):[];chapter=chapters[0]||'';}
   else{chapter=document.getElementById('mChapter')?.value||'';chapters=[chapter];}
   const existing=id?S.members.find(function(x){return x.id===id;}):null;
@@ -5079,7 +5080,7 @@ function tlrColor(v){if(v===null||v===undefined||v==='')return'#9CA3AF';if(v>=70
 function fmtD(s){if(!s)return'-';return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'});}
 function fmtM(s){if(!s)return'-';return new Date(s+'-01').toLocaleDateString('en-IN',{month:'short',year:'2-digit'});}
 function fmtL(n){n=+n||0;if(n>=10000000)return(n/10000000).toFixed(1)+'Cr';if(n>=100000)return(n/100000).toFixed(1)+'L';if(n>=1000)return Math.round(n/1000)+'K';return n+'';}
-function rl(r){return r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':(r==='sa1'||r==='sa2')?'SA':r==='viewer'?'Viewer':r||'';}
+function rl(r){return r==='ed'?'Executive Director':r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':(r==='sa1'||r==='sa2')?'SA':r==='viewer'?'Viewer':r||'';}
 var TOAST_TIMER=null;
 function toast(msg,duration){
   const t=document.getElementById('toast');
