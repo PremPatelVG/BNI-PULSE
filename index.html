@@ -2122,7 +2122,7 @@ function startApp(){
     }
   },100);
   const role=S.user.role;
-  const isSd=['ad','srdc'].includes(role);
+  const isSd=['ad','ed','srdc'].includes(role);
   const isViewer=role==='viewer';
   const isDC=['cd','dc','sa1','sa2'].includes(role);
   document.getElementById('userChip').textContent=(isSd?'* ':'')+S.user.name+' - Logout';
@@ -2304,7 +2304,7 @@ function applyLocalTlrRowsToWeekly(rows,existingRows){
 
 function buildNav(){
   const role=S.user.role;
-  const isSd=['ad','srdc'].includes(role);
+  const isSd=['ad','ed','srdc'].includes(role);
   const isViewer=role==='viewer';
   const isDC=['cd','dc','sa1','sa2'].includes(role);
   let tabs=[];
