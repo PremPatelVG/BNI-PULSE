@@ -2370,9 +2370,12 @@ function subAll(){
   const u11=db.collection('meta').doc('lengthOfMembership').onSnapshot(d=>{if(d.exists)S.lomData=d.data().rows||[];});
   const u12=db.collection('activityLog').orderBy('timestamp','desc').limit(500).onSnapshot(s=>{S.activityLog=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='activitylog')renderActivityLogTab();});
   const u13=db.collection('meta').doc('config').onSnapshot(d=>{S.srCallDay=(d.exists&&d.data().srCallDay)||'Friday';if(S.tab==='reports')renderReportContent();if(S.tab==='settings')renderSettings();});
+  // 12-Month Growth summary (imported from the June-2025 + Commission sheets): powers
+  // the Cumulative Net Add card on the Overview.
+  const u14=db.collection('meta').doc('growthSummary').onSnapshot(d=>{S.growthData=d.exists?d.data():null;if(S.tab==='overview')renderOverview();});
   // Assign before subGoals() pushes onto the list - the previous order threw away
   // the goals unsubscribe, leaking that listener on every logout.
-  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u8,u9,u10,u11,u12,u13];
+  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u10,u11,u12,u13,u14];
   subGoals();
   startSync();
   // Load branding after subscriptions are set up
@@ -2772,6 +2775,59 @@ function renderAreaDirectorRetentionTab(){
   el.innerHTML=renderAreaDirectorOverviewFilters(allChapters,visChapters.length,'renderAreaDirectorRetentionTab')+renderAreaDirectorRetention(visChapters);
 }
 
+// 12-Month Growth card: cumulative net add (imported from the June-2025 + Commission
+// sheets, window Jul 2025 -> Jul 2026) plus live retention % (renewals done / due from
+// SGT). Scoped to the chapters the viewer can see. Returns '' if the data isn't loaded.
+function renderGrowth12mo(visChapters){
+  var g=S.growthData;
+  if(!g||!g.chapters)return'';
+  var chs=(visChapters||visibleChapters()).filter(function(c){return g.chapters[c.name];});
+  if(!chs.length)return'';
+  // retention window: trailing 12 months, same basis as the Retention tab
+  var today=new Date();
+  var rs=new Date(today.getFullYear(),today.getMonth()-11,1);
+  var re=new Date(today.getFullYear(),today.getMonth()+1,0);
+  function iso(d){return new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())).toISOString().split('T')[0];}
+  var from=iso(rs),to=iso(re);
+  var rows=chs.map(function(c){
+    var gd=g.chapters[c.name];
+    var due=(S.duesData||[]).filter(function(m){return m.chapter===c.name&&m.dueDate>=from&&m.dueDate<=to;});
+    var done=due.filter(isRenewalDone);
+    var ret=due.length?Math.round((done.length/due.length)*100):null;
+    return{name:c.name,dir:chapterDirectorName(c),start:gd.start,baseline:gd.baseline,ind:gd.inductions,drop:gd.drops,net:gd.cumNet,current:gd.current,due:due.length,done:done.length,ret:ret};
+  }).sort(function(a,b){return b.net-a.net||a.name.localeCompare(b.name);});
+  var tNet=rows.reduce(function(s,r){return s+r.net;},0);
+  var tCur=rows.reduce(function(s,r){return s+r.current;},0);
+  var tInd=rows.reduce(function(s,r){return s+r.ind;},0);
+  var tDrop=rows.reduce(function(s,r){return s+r.drop;},0);
+  var tDue=rows.reduce(function(s,r){return s+r.due;},0);
+  var tDone=rows.reduce(function(s,r){return s+r.done;},0);
+  var tRet=tDue?Math.round((tDone/tDue)*100):null;
+  var netCol=tNet>=0?'var(--green)':'var(--red)';
+  var retCol=function(v){return v===null?'var(--muted)':v>=85?'var(--green)':v>=70?'var(--amber)':'var(--red)';};
+  return`
+    <div class="card" style="margin-bottom:14px;">
+      <div class="sec-hdr">
+        <div><div class="sec-title">12-Month Growth</div><div class="tm">Cumulative net add ${esc(g.window||'')} - retention from Members Due (last 12 months)</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px;margin-bottom:12px;">
+        <div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:${netCol}">${tNet>0?'+':''}${tNet}</div></div>
+        <div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">${tCur}</div></div>
+        <div class="month-card"><div class="month-lbl">Inductions</div><div class="month-val" style="color:var(--green)">+${tInd}</div></div>
+        <div class="month-card"><div class="month-lbl">Drops</div><div class="month-val" style="color:var(--red)">-${tDrop}</div></div>
+        <div class="month-card"><div class="month-lbl">Retention</div><div class="month-val" style="color:${retCol(tRet)}">${tRet===null?'-':tRet+'%'}</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="rtbl">
+          <thead><tr><th>Chapter</th><th>Director</th><th>Start</th><th>Ind</th><th>Drop</th><th>Net Add</th><th>Current</th><th>Retention</th></tr></thead>
+          <tbody>${rows.map(function(r){
+            return`<tr><td style="font-weight:700">${esc(r.name)}</td><td>${esc(r.dir)}</td><td>${r.baseline?r.start:'<span class="tm">new</span>'}</td><td style="color:var(--green)">+${r.ind}</td><td style="color:var(--red)">-${r.drop}</td><td style="font-weight:800;color:${r.net>=0?'var(--green)':'var(--red)'}">${r.net>0?'+':''}${r.net}</td><td style="font-weight:700">${r.current}</td><td style="font-weight:800;color:${retCol(r.ret)}">${r.ret===null?'-':r.ret+'%'}</td></tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function renderSDOverview(el){
   const allVisChapters=visibleChapters();
   const visChapters=areaFilteredChapters(allVisChapters);
@@ -2814,8 +2870,10 @@ function renderSDOverview(el){
   const _filtersHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length);
   const _wpHTML=(isSeniorDirector()||isViewer())?renderWeeklyPreview()||'':'';
   const _adTargetHTML=isAreaDirector()?renderAreaDirectorTargets(totM,visChapters):'';
+  const _growthHTML=renderGrowth12mo(visChapters);
   el.innerHTML=`
     ${_adTargetHTML}
+    ${_growthHTML}
     ${_filtersHTML}
     ${_wpHTML}
     <div class="sec-hdr">

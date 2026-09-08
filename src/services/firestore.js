@@ -24,6 +24,7 @@ const META_DOCS = new Set([
   "chapterGoals",
   "config",
   "dues",
+  "growthSummary",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"
@@ -48,6 +49,7 @@ export const SNAPSHOT_META_DOCS = [
   "chapterGoals",
   "config",
   "dues",
+  "growthSummary",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"
