@@ -2870,10 +2870,8 @@ function renderSDOverview(el){
   const _filtersHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length);
   const _wpHTML=(isSeniorDirector()||isViewer())?renderWeeklyPreview()||'':'';
   const _adTargetHTML=isAreaDirector()?renderAreaDirectorTargets(totM,visChapters):'';
-  const _growthHTML=renderGrowth12mo(visChapters);
   el.innerHTML=`
     ${_adTargetHTML}
-    ${_growthHTML}
     ${_filtersHTML}
     ${_wpHTML}
     <div class="sec-hdr">
@@ -5885,8 +5883,12 @@ function getChapterMonthRetro(ch,month){
 
 function renderRetroTab(){
   var el=document.getElementById('tab-retro'); if(!el)return;
-  var visChapters=visibleChapters();
-  var visNames=visibleChapterNames();
+  var allVisChapters=visibleChapters();
+  // Area Director / ED can narrow the whole retrospective (filter card, 12-month growth
+  // and monthly table) to one Senior Director's chapters.
+  var visChapters=areaFilteredChapters(allVisChapters);
+  var visNames=visChapters.map(function(c){return c.name;});
+  var filterHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length,'renderRetroTab');
   // 12-Month cumulative growth summary sits at the top of the retrospective.
   var growthHTML=renderGrowth12mo(visChapters);
   var allMonths=[]; var seen={};
@@ -5895,7 +5897,7 @@ function renderRetroTab(){
   var selMonthEl=document.getElementById('retroMonth');
   var selMonth=selMonthEl?selMonthEl.value:'';
   if(!selMonth&&allMonths.length)selMonth=allMonths[0];
-  if(!selMonth){el.innerHTML=growthHTML+'<div class="card"><div class="empty">No monthly data available yet</div></div>';return;}
+  if(!selMonth){el.innerHTML=filterHTML+growthHTML+'<div class="card"><div class="empty">No monthly data available yet</div></div>';return;}
   var chapterData=visChapters.map(function(ch){
     return getChapterMonthRetro(ch,selMonth);
   });
@@ -5910,7 +5912,7 @@ function renderRetroTab(){
   var totRenewDue=withData.reduce(function(s,c){return s+c.renewalsDue;},0);
   var totRenewDone=withData.reduce(function(s,c){return s+c.renewalsDone;},0);
   var monthOpts=allMonths.map(function(m){return '<option value="'+m+'"'+(m===selMonth?' selected':'')+'>'+fmtM(m)+'</option>';}).join('');
-  var h=growthHTML+'<div class="card">';
+  var h=filterHTML+growthHTML+'<div class="card">';
   h+='<div class="sec-hdr"><div class="sec-title">Monthly Retrospective</div><select id="retroMonth" onchange="renderRetroTab()" style="width:auto;padding:7px 12px;font-size:13px;">'+monthOpts+'</select></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;margin-bottom:16px;">';
   h+='<div class="month-card"><div class="month-lbl">Region Net Add</div><div class="month-val" style="color:'+(totNet>=0?'var(--green)':'var(--red)')+'">'+(totNet>0?'+':'')+totNet+'</div></div>';
