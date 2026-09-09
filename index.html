@@ -2788,8 +2788,8 @@ function renderGrowth12mo(visChapters){
   var rows=chs.map(function(c){
     var gd=g.chapters[c.name];
     var ren=gd.renewals||0,drop=gd.drops||0;
-    var denom=ren+drop;
-    var ret=denom>0?Math.round((ren/denom)*100):null;
+    // 0 renewals (no renewal cycle yet) => "-" rather than a misleading 0%.
+    var ret=ren>0?Math.round((ren/(ren+drop))*100):null;
     return{name:c.name,dir:chapterDirectorName(c),start:gd.start,baseline:gd.baseline,ind:gd.inductions,drop:drop,net:gd.cumNet,current:gd.current,ren:ren,ret:ret};
   }).sort(function(a,b){return b.net-a.net||a.name.localeCompare(b.name);});
   var tNet=rows.reduce(function(s,r){return s+r.net;},0);
