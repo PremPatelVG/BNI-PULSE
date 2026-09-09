@@ -1,0 +1,246 @@
+// Check Barter: a region-wide, anonymous marketplace where DCs/SAs trade "checks"
+// (a prospect whose category is full in their chapter) for a category their chapter
+// needs. Strict two-way barter, first-come-first-served, identities hidden until a
+// match confirms. This lives OUTSIDE the shared snapshot on purpose: the snapshot ships
+// the whole dataset to every client, which would break anonymity. Every read here
+// returns only what the caller is allowed to see.
+
+import { getDb } from "../firebaseAdmin.js";
+import { badRequest, forbidden, notFound } from "../services/scope.js";
+
+const MAX_RECIPIENTS = 3;          // a request routes to at most 3 holders (oldest first)
+const CHECK_TTL_DAYS = 30;         // checks auto-expire after 30 days
+const TRADE_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
+
+const ok = (body, status = 200) => ({ status, body });
+const noContent = () => ({ status: 204, body: null });
+const nowIso = () => new Date().toISOString();
+const plusDaysIso = n => new Date(Date.now() + n * 86400000).toISOString();
+const chapterOf = user => user?.chapter || (user?.chapters && user.chapters[0]) || null;
+const notExpired = c => !c.expiresAt || c.expiresAt > nowIso();
+
+function assertCanTrade(user) {
+  if (!TRADE_ROLES.has(user?.role) || !chapterOf(user)) {
+    throw forbidden("Only a Chapter Director or Support Ambassador can trade checks");
+  }
+}
+
+let CAT_CACHE = null; // { at, tree, subToMain, subs:Set }
+async function getCategories() {
+  if (CAT_CACHE && Date.now() - CAT_CACHE.at < 300000) return CAT_CACHE;
+  const doc = await getDb().collection("meta").doc("barterCategories").get();
+  const data = doc.exists ? doc.data() : { tree: [], mainCount: 0, subCount: 0 };
+  const subToMain = new Map();
+  (data.tree || []).forEach(m => (m.subs || []).forEach(s => subToMain.set(s, m.main)));
+  CAT_CACHE = { at: Date.now(), tree: data.tree || [], mainCount: data.mainCount || 0, subCount: data.subCount || 0, subToMain, subs: new Set(subToMain.keys()) };
+  return CAT_CACHE;
+}
+
+async function memberName(id) {
+  if (!id) return "";
+  try { const d = await getDb().collection("members").doc(id).get(); return d.exists ? (d.data().name || id) : id; }
+  catch { return id; }
+}
+
+// ---- reads -------------------------------------------------------------------
+
+async function board() {
+  const snap = await getDb().collection("checks").where("status", "==", "available").get();
+  const counts = {};
+  snap.docs.map(d => d.data()).filter(notExpired).forEach(c => { counts[c.sub] = (counts[c.sub] || 0) + 1; });
+  const cats = await getCategories();
+  const mainTotals = {};
+  for (const [sub, n] of Object.entries(counts)) { const main = cats.subToMain.get(sub) || "Other"; mainTotals[main] = (mainTotals[main] || 0) + n; }
+  const totalAvailable = Object.values(counts).reduce((s, n) => s + n, 0);
+  return ok({ counts, mainTotals, totalAvailable, updatedAt: nowIso() });
+}
+
+async function myAvailableChecks(dcId) {
+  const snap = await getDb().collection("checks").where("dcId", "==", dcId).get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.status === "available" && notExpired(c));
+}
+
+async function mine(user) {
+  const db = getDb();
+  const dcId = user.sub;
+  const checkSnap = await db.collection("checks").where("dcId", "==", dcId).get();
+  const checks = checkSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(c => c.status === "available" || c.status === "matched")
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  const reqSnap = await db.collection("barterRequests").where("requesterDcId", "==", dcId).get();
+  const requests = [];
+  for (const d of reqSnap.docs) {
+    const r = { id: d.id, ...d.data() };
+    if (r.status === "withdrawn") continue;
+    const row = { id: r.id, requestedSub: r.requestedSub, requestedMain: r.requestedMain, status: r.status, recipientCount: (r.recipients || []).length, createdAt: r.createdAt };
+    if (r.status === "confirmed") {
+      // Requester receives the winner's check (wonCheckId); partner revealed.
+      const won = r.wonCheckId ? await db.collection("checks").doc(r.wonCheckId).get() : null;
+      row.match = { partnerChapter: r.confirmedByChapter, partnerName: await memberName(r.confirmedByDcId), receivedProspect: won && won.exists ? won.data().prospectName : "", receivedCategory: r.requestedSub, matchedAt: r.matchedAt };
+    }
+    requests.push(row);
+  }
+  requests.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+  // Enrich matched checks with what the holder received in the trade.
+  const enriched = [];
+  for (const c of checks) {
+    const out = { id: c.id, sub: c.sub, main: c.main, prospectName: c.prospectName, status: c.status, createdAt: c.createdAt, expiresAt: c.expiresAt };
+    if (c.status === "matched" && c.matchedWithCheckId) {
+      const other = await db.collection("checks").doc(c.matchedWithCheckId).get();
+      if (other.exists) { const o = other.data(); out.tradedFor = { category: o.sub, prospect: o.prospectName, partnerChapter: o.chapter, partnerName: await memberName(o.dcId) }; }
+    }
+    enriched.push(out);
+  }
+  return ok({ checks: enriched, requests });
+}
+
+async function inbox(user) {
+  assertCanTrade(user);
+  const db = getDb();
+  const snap = await db.collection("barterRequests").where("recipientDcIds", "array-contains", user.sub).get();
+  const open = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.status === "open");
+  const items = [];
+  for (const r of open) {
+    const mineRecipient = (r.recipients || []).find(x => x.holderDcId === user.sub);
+    if (!mineRecipient) continue;
+    // The requester's CURRENT available checks - category + opaque check id only
+    // (no prospect name, chapter or DC identity until a match confirms).
+    const offered = (await myAvailableChecks(r.requesterDcId)).map(c => ({ sub: c.sub, main: c.main, checkId: c.id }));
+    items.push({ requestId: r.id, requestedSub: r.requestedSub, requestedMain: r.requestedMain, myCheckId: mineRecipient.checkId, offered, createdAt: r.createdAt });
+  }
+  items.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  return ok({ inbox: items });
+}
+
+// ---- writes ------------------------------------------------------------------
+
+async function addCheck(user, body) {
+  assertCanTrade(user);
+  const sub = String(body?.sub || "").trim();
+  const prospectName = String(body?.prospectName || "").trim();
+  const cats = await getCategories();
+  if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
+  if (!prospectName) throw badRequest("Prospect name is required");
+  const check = {
+    sub, main: cats.subToMain.get(sub) || "Other", chapter: chapterOf(user), dcId: user.sub,
+    prospectName, status: "available", createdAt: nowIso(), expiresAt: plusDaysIso(CHECK_TTL_DAYS)
+  };
+  const ref = await getDb().collection("checks").add(check);
+  return ok({ check: { id: ref.id, ...check } }, 201);
+}
+
+async function withdrawCheck(user, checkId) {
+  assertCanTrade(user);
+  const ref = getDb().collection("checks").doc(checkId);
+  const doc = await ref.get();
+  if (!doc.exists) throw notFound("Check not found");
+  if (doc.data().dcId !== user.sub) throw forbidden("That check isn't yours");
+  if (doc.data().status !== "available") throw badRequest("Only an available check can be withdrawn");
+  await ref.set({ status: "withdrawn", withdrawnAt: nowIso() }, { merge: true });
+  return noContent();
+}
+
+async function createRequest(user, body) {
+  assertCanTrade(user);
+  const db = getDb();
+  const sub = String(body?.sub || "").trim();
+  const cats = await getCategories();
+  if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
+  const myChapter = chapterOf(user);
+
+  // Strict barter: you must be holding at least one check to offer in return.
+  const offered = await myAvailableChecks(user.sub);
+  if (!offered.length) throw badRequest("You need at least one available check of your own to barter");
+
+  // One open request per category at a time.
+  const existing = await db.collection("barterRequests").where("requesterDcId", "==", user.sub).get();
+  if (existing.docs.some(d => d.data().status === "open" && d.data().requestedSub === sub)) {
+    throw badRequest("You already have an open request for this category");
+  }
+
+  // Up to MAX_RECIPIENTS available checks for `sub` held by OTHER chapters, oldest first.
+  const holdersSnap = await db.collection("checks").where("sub", "==", sub).get();
+  const holders = holdersSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(c => c.status === "available" && notExpired(c) && c.chapter !== myChapter)
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+    .slice(0, MAX_RECIPIENTS);
+  if (!holders.length) throw badRequest("No other chapter is currently holding that category");
+
+  const recipients = holders.map(c => ({ checkId: c.id, holderDcId: c.dcId, holderChapter: c.chapter }));
+  const req = {
+    requesterDcId: user.sub, requesterChapter: myChapter, requestedSub: sub,
+    requestedMain: cats.subToMain.get(sub) || "Other",
+    recipients, recipientDcIds: [...new Set(recipients.map(r => r.holderDcId))],
+    status: "open", createdAt: nowIso()
+  };
+  const ref = await db.collection("barterRequests").add(req);
+  return ok({ request: { id: ref.id, requestedSub: sub, recipientCount: recipients.length } }, 201);
+}
+
+async function confirmRequest(user, requestId, body) {
+  assertCanTrade(user);
+  const db = getDb();
+  const offeredCheckId = String(body?.offeredCheckId || "");
+  if (!offeredCheckId) throw badRequest("Pick which of the offered checks you want");
+
+  const result = await db.runTransaction(async t => {
+    const reqRef = db.collection("barterRequests").doc(requestId);
+    const reqDoc = await t.get(reqRef);
+    if (!reqDoc.exists) throw notFound("Request not found");
+    const r = reqDoc.data();
+    if (r.status !== "open") throw badRequest("This request has already been matched or withdrawn");
+    const mineRecipient = (r.recipients || []).find(x => x.holderDcId === user.sub);
+    if (!mineRecipient) throw forbidden("This request wasn't routed to you");
+
+    const myCheckRef = db.collection("checks").doc(mineRecipient.checkId);   // goes to the requester
+    const offeredRef = db.collection("checks").doc(offeredCheckId);          // comes to me
+    const [myCheck, offered] = await Promise.all([t.get(myCheckRef), t.get(offeredRef)]);
+    if (!myCheck.exists || myCheck.data().status !== "available" || myCheck.data().dcId !== user.sub) throw badRequest("Your check for this category is no longer available");
+    if (!offered.exists || offered.data().status !== "available" || offered.data().dcId !== r.requesterDcId) throw badRequest("That offered check is no longer available");
+
+    const at = nowIso();
+    t.set(reqRef, { status: "confirmed", confirmedByDcId: user.sub, confirmedByChapter: chapterOf(user), wonCheckId: mineRecipient.checkId, tradedOfferedCheckId: offeredCheckId, matchedAt: at }, { merge: true });
+    t.set(myCheckRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: offeredCheckId, matchedAt: at }, { merge: true });
+    t.set(offeredRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: mineRecipient.checkId, matchedAt: at }, { merge: true });
+    return { requesterDcId: r.requesterDcId, requesterChapter: r.requesterChapter, receivedProspect: offered.data().prospectName, receivedCategory: offered.data().sub, gaveCategory: r.requestedSub };
+  });
+
+  // Winner receives the requester's offered check; requester is revealed to the winner.
+  return ok({ matched: true, partner: { chapter: result.requesterChapter, name: await memberName(result.requesterDcId) }, receivedProspect: result.receivedProspect, receivedCategory: result.receivedCategory });
+}
+
+async function cancelRequest(user, requestId) {
+  assertCanTrade(user);
+  const ref = getDb().collection("barterRequests").doc(requestId);
+  const doc = await ref.get();
+  if (!doc.exists) throw notFound("Request not found");
+  if (doc.data().requesterDcId !== user.sub) throw forbidden("That request isn't yours");
+  if (doc.data().status !== "open") throw badRequest("Only an open request can be cancelled");
+  await ref.set({ status: "withdrawn", withdrawnAt: nowIso() }, { merge: true });
+  return noContent();
+}
+
+// ---- router ------------------------------------------------------------------
+
+export async function routeBarter({ method, segments, body, user }) {
+  const [, second, third, fourth] = segments; // segments[0] === "barter"
+
+  if (second === "categories" && method === "GET") {
+    const c = await getCategories();
+    return ok({ tree: c.tree, mainCount: c.mainCount, subCount: c.subCount });
+  }
+  if (second === "board" && method === "GET") return board();
+  if (second === "mine" && method === "GET") return mine(user);
+  if (second === "inbox" && method === "GET") return inbox(user);
+
+  if (second === "checks" && !third && method === "POST") return addCheck(user, body);
+  if (second === "checks" && third && method === "DELETE") return withdrawCheck(user, third);
+
+  if (second === "requests" && !third && method === "POST") return createRequest(user, body);
+  if (second === "requests" && third && fourth === "confirm" && method === "POST") return confirmRequest(user, third, body);
+  if (second === "requests" && third && fourth === "cancel" && method === "POST") return cancelRequest(user, third);
+
+  throw notFound("Unknown barter route");
+}

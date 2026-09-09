@@ -2,6 +2,7 @@
 // function are thin adapters over this module, so the two deployments cannot drift.
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { routeBarter } from "./barter.js";
 import { config, requireProductionSecrets } from "../config.js";
 import { getDb } from "../firebaseAdmin.js";
 import { signSession } from "../middleware/auth.js";
@@ -362,6 +363,10 @@ export async function routeApi({ method, segments, body, authorization }) {
     await writeActivity(user, `${first}_deleted`, { id: second });
     return noContent();
   }
+
+  // Check Barter: anonymous cross-chapter category exchange. Its own module keeps this
+  // logic (and the anonymity rules) out of the shared snapshot path.
+  if (first === "barter") return routeBarter({ method, segments, body, user });
 
   throw notFound("Unknown API route");
 }

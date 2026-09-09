@@ -2323,6 +2323,7 @@ function buildNav(){
       {id:'miyagi',label:'Miyagi'},
       {id:'sdreport',label:'SD Report'},
       {id:'retro',label:'Retrospective'},
+      {id:'barter',label:'Check Barter',hidden:isViewer},
       {id:'goals',label:'Goals'},
       // Area Directors reach Upload from the empty Renewals and TLR tabs, so the
       // nav entry has to exist for them too.
@@ -2338,6 +2339,7 @@ function buildNav(){
       {id:'renewals',label:'Renewals'},
       {id:'pipeline',label:'Pipeline'},
       {id:'miyagi',label:'Miyagi'},
+      {id:'barter',label:'Check Barter'},
       {id:'reports',label:'My Reports'},
       {id:'retro',label:'Retrospective'},
       {id:'goals',label:'Goals'}
@@ -2440,10 +2442,12 @@ function switchTab(t){
   else if(t==='miyagi')renderMiyagiTab();
   else if(t==='sdreport')renderSDReport();
   else if(t==='retro')renderRetroTab();
+  else if(t==='barter')renderBarter();
   else if(t==='goals')renderGoalsTab();
   else if(t==='upload')renderUpload();
   else if(t==='activitylog')renderActivityLogTab();
   else if(t==='settings')renderSettings();
+  if(t!=='barter'&&window._barterTimer){clearInterval(window._barterTimer);window._barterTimer=null;}
 }
 
 // SELECTS ──
@@ -5875,6 +5879,198 @@ function getChapterMonthRetro(ch,month){
   }).length;
   var weekCount=Object.keys(chEntries.reduce(function(a,e){a[getWeekKey(e.date)]=1;return a;},{})).length;
   return{name:ch.name,director:chapterDirectorName(ch),hasData:true,startMembers:startMembers,closeMembers:closeMembers,inductions:inductions,drops:drops,netAdd:netAdd,totRefs:totRefs,totVis:totVis,totPos:totPos,conv:conv,totTYFCB:totTYFCB,totEOI:totEOIYes+totEOIMaybe+totEOINo,totEOIYes:totEOIYes,totEOIMaybe:totEOIMaybe,totEOINo:totEOINo,tlr:tlr,weeks:weekCount,moTarget:rMoTgt,moGap:rMoGap,renewalsDue:rDue,renewalsDone:rDone};
+}
+
+// ── CHECK BARTER ────────────────────────────────────────────────────────────
+// Anonymous cross-chapter category exchange. All data comes from dedicated
+// /api/barter/* endpoints (never the shared snapshot), so identities stay hidden
+// until a match is confirmed.
+function barterCanTrade(){return['dc','cd','sa1','sa2'].includes(S.user&&S.user.role);}
+function barterState(){if(!S.barter)S.barter={view:'board',search:'',expanded:{},cats:null,board:null,mine:null,inbox:null};return S.barter;}
+
+async function loadBarter(){
+  var st=barterState();
+  try{
+    if(!st.cats)st.cats=await apiFetch('/barter/categories');
+    var jobs=[apiFetch('/barter/board').then(function(b){st.board=b;})];
+    if(barterCanTrade()){
+      jobs.push(apiFetch('/barter/mine').then(function(m){st.mine=m;}).catch(function(){}));
+      jobs.push(apiFetch('/barter/inbox').then(function(i){st.inbox=i;}).catch(function(){}));
+    }
+    await Promise.all(jobs);
+  }catch(e){console.warn('barter load failed',e);}
+}
+
+function renderBarter(){
+  var el=document.getElementById('tab-barter');if(!el)return;
+  el.innerHTML='<div class="card"><div class="empty">Loading Check Barter…</div></div>';
+  loadBarter().then(paintBarter);
+  if(!window._barterTimer){
+    window._barterTimer=setInterval(function(){
+      if(S.tab!=='barter'){clearInterval(window._barterTimer);window._barterTimer=null;return;}
+      // Don't repaint (and clobber) a form the user is actively typing in.
+      var ae=document.activeElement;
+      if(ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName)&&ae.closest&&ae.closest('#tab-barter'))return;
+      loadBarter().then(paintBarter);
+    },20000);
+  }
+}
+
+function paintBarter(){
+  var el=document.getElementById('tab-barter');if(!el||S.tab!=='barter')return;
+  var st=barterState();var trade=barterCanTrade();
+  var inboxCount=(st.inbox&&st.inbox.inbox&&st.inbox.inbox.length)||0;
+  var views=trade?[['board','Available'],['mine','My Checks'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')]]:[['board','Available']];
+  if(!views.some(function(v){return v[0]===st.view;}))st.view='board';
+  var nav=views.map(function(v){return '<button class="btn btn-sm '+(st.view===v[0]?'btn-navy':'btn-secondary')+'" onclick="S.barter.view=\''+v[0]+'\';paintBarter()">'+v[1]+'</button>';}).join(' ');
+  var body=st.view==='mine'?barterMineHTML():st.view==='requests'?barterRequestsHTML():st.view==='inbox'?barterInboxHTML():barterBoardHTML();
+  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Check Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
+}
+
+function barterAfter(msg){toast(msg);loadBarter().then(paintBarter);}
+function barterToggleMain(i){var m=window._bMainMap&&window._bMainMap[i];if(m==null)return;var st=barterState();st.expanded[m]=!st.expanded[m];paintBarter();}
+function barterRequestIdx(i){var s=window._bSubMap&&window._bSubMap[i];if(s)barterRequest(s);}
+
+function barterBoardHTML(){
+  var st=barterState();var b=st.board;var cats=st.cats;
+  if(!b||!cats)return'<div class="card"><div class="empty">No data yet.</div></div>';
+  var counts=b.counts||{},mainTotals=b.mainTotals||{};
+  var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();
+  window._bMainMap=[];window._bSubMap=[];
+  var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
+  h+='<div><span style="font-size:26px;font-weight:900;color:var(--navy)">'+(b.totalAvailable||0)+'</span> <span class="tm">checks available across the region</span></div>';
+  h+='<input type="text" value="'+esc(st.search||'')+'" placeholder="Search classification…" oninput="S.barter.search=this.value;clearTimeout(window._btq);window._btq=setTimeout(paintBarter,200)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;min-width:210px;"></div>';
+  var mains=(cats.tree||[]).slice().sort(function(a,b){return a.main.localeCompare(b.main);});
+  var any=false;
+  mains.forEach(function(m){
+    var subs=(m.subs||[]).filter(function(s){return(counts[s]||0)>0&&(!q||s.toLowerCase().includes(q)||m.main.toLowerCase().includes(q));});
+    if(!subs.length)return;any=true;
+    var total=mainTotals[m.main]||subs.reduce(function(x,s){return x+(counts[s]||0);},0);
+    var open=q?true:!!(st.expanded&&st.expanded[m.main]);
+    var mi=window._bMainMap.push(m.main)-1;
+    h+='<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;">';
+    h+='<div onclick="barterToggleMain('+mi+')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;cursor:pointer;background:var(--surface);">';
+    h+='<div style="font-weight:800">'+(open?'▾ ':'▸ ')+esc(m.main)+'</div><span class="pill" style="background:rgba(45,155,111,.15);color:var(--green);font-weight:800">'+total+'</span></div>';
+    if(open){
+      h+='<div style="padding:2px 12px 8px;">';
+      subs.sort(function(a,b){return(counts[b]||0)-(counts[a]||0)||a.localeCompare(b);}).forEach(function(s){
+        var si=window._bSubMap.push(s)-1;
+        h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);">';
+        h+='<div>'+esc(s)+' <span class="tm">— '+(counts[s]||0)+' available</span></div>';
+        h+=(trade?'<button class="btn btn-sm btn-navy" onclick="barterRequestIdx('+si+')">Request</button>':'')+'</div>';
+      });
+      h+='</div>';
+    }
+    h+='</div>';
+  });
+  if(!any)h+='<div class="empty">No checks available'+(q?' matching “'+esc(q)+'”':' right now')+'.</div>';
+  return h+'</div>';
+}
+
+function barterMineHTML(){
+  var st=barterState();var mine=st.mine;var cats=st.cats;
+  if(!mine)return'<div class="card"><div class="empty">Loading…</div></div>';
+  var subs=[];(cats&&cats.tree||[]).forEach(function(m){(m.subs||[]).forEach(function(s){subs.push(s);});});
+  var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Add a check you\'re holding</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  h+='<input id="bChkSub" list="bSubList" placeholder="Classification (type to search)" style="flex:1;min-width:220px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">';
+  h+='<datalist id="bSubList">'+subs.map(function(s){return'<option value="'+esc(s)+'">';}).join('')+'</datalist>';
+  h+='<input id="bChkName" placeholder="Prospect name" style="min-width:180px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">';
+  h+='<button class="btn btn-navy" onclick="barterAddCheck()">Add check</button></div>';
+  h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name is revealed only after a match.</div></div>';
+  var avail=(mine.checks||[]).filter(function(c){return c.status==='available';});
+  var matched=(mine.checks||[]).filter(function(c){return c.status==='matched';});
+  h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My held checks ('+avail.length+')</div>';
+  if(!avail.length)h+='<div class="empty">You aren\'t holding any checks yet.</div>';
+  avail.forEach(function(c){
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);">';
+    h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+'</span></div>';
+    h+='<button class="btn btn-sm" onclick="barterWithdrawCheck(\''+c.id+'\')">Withdraw</button></div>';
+  });
+  h+='</div>';
+  if(matched.length){
+    h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Traded ('+matched.length+')</div>';
+    matched.forEach(function(c){
+      h+='<div style="padding:8px 0;border-top:1px solid var(--border);">';
+      h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> — gave to a chapter';
+      if(c.tradedFor)h+='; received <span style="font-weight:700">'+esc(c.tradedFor.category)+'</span> ('+esc(c.tradedFor.prospect||'')+') from '+esc(c.tradedFor.partnerName||'')+', '+esc(c.tradedFor.partnerChapter||'');
+      h+='</div></div>';
+    });
+    h+='</div>';
+  }
+  return h;
+}
+
+function barterRequestsHTML(){
+  var st=barterState();var mine=st.mine;
+  if(!mine)return'<div class="card"><div class="empty">Loading…</div></div>';
+  var reqs=mine.requests||[];
+  var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My requests ('+reqs.length+')</div>';
+  h+='<div class="tm mt0" style="margin-bottom:8px;">Request a classification your chapter needs. It routes to up to 3 chapters holding it; the first to confirm wins.</div>';
+  if(!reqs.length)h+='<div class="empty">No requests yet. Go to Available and hit “Request” on a classification you need.</div>';
+  reqs.forEach(function(r){
+    var col=r.status==='confirmed'?'var(--green)':r.status==='open'?'var(--amber)':'var(--muted)';
+    h+='<div style="padding:9px 0;border-top:1px solid var(--border);">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+    h+='<div><span style="font-weight:700">'+esc(r.requestedSub)+'</span> <span class="tm">'+esc(r.requestedMain||'')+'</span> · <span style="font-weight:700;color:'+col+'">'+(r.status==='open'?'Pending':r.status==='confirmed'?'Matched':r.status)+'</span></div>';
+    if(r.status==='open')h+='<button class="btn btn-sm" onclick="barterCancelRequest(\''+r.id+'\')">Cancel</button>';
+    h+='</div>';
+    if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.</div>';
+    if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b> ('+esc(r.requestedSub)+'). Coordinate the induction with them.</div>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+function barterInboxHTML(){
+  var st=barterState();var inbox=st.inbox;
+  if(!inbox)return'<div class="card"><div class="empty">Loading…</div></div>';
+  var items=inbox.inbox||[];
+  var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Incoming barter requests ('+items.length+')</div>';
+  h+='<div class="tm" style="margin-bottom:8px;">Someone needs a classification you\'re holding. To trade, pick one of the checks they\'re offering that <b>your</b> chapter needs, then confirm. First to confirm wins.</div>';
+  if(!items.length)h+='<div class="empty">No incoming requests right now.</div>';
+  items.forEach(function(it){
+    h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+    h+='<div style="font-weight:700">A chapter needs: '+esc(it.requestedSub)+' <span class="tm">(you\'re holding it)</span></div>';
+    h+='<div class="tm" style="margin:6px 0 4px;">They\'re offering — take one your chapter needs:</div>';
+    if(!it.offered||!it.offered.length)h+='<div class="tm">They have nothing available to offer right now.</div>';
+    (it.offered||[]).forEach(function(o){
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--border);">';
+      h+='<div>'+esc(o.sub)+' <span class="tm">'+esc(o.main||'')+'</span></div>';
+      h+='<button class="btn btn-sm btn-green" onclick="barterConfirm(\''+it.requestId+'\',\''+o.checkId+'\')">Take &amp; confirm</button></div>';
+    });
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+
+// actions
+async function barterAddCheck(){
+  var sub=(document.getElementById('bChkSub')||{}).value||'';
+  var name=(document.getElementById('bChkName')||{}).value||'';
+  if(!sub.trim()||!name.trim()){toast('Pick a classification and enter the prospect name');return;}
+  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim()}});barterAfter('Check added');}
+  catch(e){toast(e.message||'Could not add check');}
+}
+async function barterWithdrawCheck(id){
+  if(!confirm('Withdraw this check?'))return;
+  try{await apiFetch('/barter/checks/'+encodeURIComponent(id),{method:'DELETE'});barterAfter('Check withdrawn');}
+  catch(e){toast(e.message||'Could not withdraw');}
+}
+async function barterRequest(sub){
+  try{var r=await apiFetch('/barter/requests',{method:'POST',body:{sub:sub}});S.barter.view='requests';barterAfter('Request sent to '+((r.request&&r.request.recipientCount)||0)+' chapter(s)');}
+  catch(e){toast(e.message||'Could not send request');}
+}
+async function barterCancelRequest(id){
+  try{await apiFetch('/barter/requests/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{}});barterAfter('Request cancelled');}
+  catch(e){toast(e.message||'Could not cancel');}
+}
+async function barterConfirm(reqId,checkId){
+  if(!confirm('Confirm this barter? This trades your check for theirs and reveals you to each other.'))return;
+  try{var r=await apiFetch('/barter/requests/'+encodeURIComponent(reqId)+'/confirm',{method:'POST',body:{offeredCheckId:checkId}});
+    alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')\nFrom: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+'\n\nCoordinate the induction with them.');
+    barterAfter('Barter confirmed');}
+  catch(e){toast(e.message||'Could not confirm — it may have just been taken');}
 }
 
 function renderRetroTab(){
