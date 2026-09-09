@@ -9,9 +9,11 @@ import { signSession } from "../middleware/auth.js";
 import {
   applyTlrForMonth,
   buildSnapshot,
+  cachedListCollection,
   docToData,
   getMetaDoc,
   getRawMetaDoc,
+  invalidateSnapshotCache,
   listCollection,
   loginDirectoryMember,
   setMetaDoc,
@@ -262,6 +264,7 @@ export async function routeApi({ method, segments, body, authorization }) {
     assertAdmin(user);
     if (!body?.name) throw badRequest("Chapter name is required");
     await getDb().collection("chapters").doc(body.id || body.name).set(body, { merge: Boolean(body.id) });
+    invalidateSnapshotCache("chapters");
     await writeActivity(user, "chapter_saved", { chapterName: body.name });
     return ok({ chapter: body }, 201);
   }
@@ -283,6 +286,7 @@ export async function routeApi({ method, segments, body, authorization }) {
     }
     const docId = id || `m${Date.now()}`;
     await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
+    invalidateSnapshotCache("members");
     await writeActivity(user, "member_saved", { memberName: member.name, passwordChanged: Boolean(pin) });
     return ok({ member: { id: docId, ...stripPrivateMember(member) } }, 201);
   }
@@ -290,6 +294,7 @@ export async function routeApi({ method, segments, body, authorization }) {
   if (first === "members" && second && method === "DELETE") {
     assertAdmin(user);
     await getDb().collection("members").doc(second).delete();
+    invalidateSnapshotCache("members");
     await writeActivity(user, "member_deleted", { memberId: second });
     return noContent();
   }
@@ -304,6 +309,7 @@ export async function routeApi({ method, segments, body, authorization }) {
     const id = `${second}_${third}`;
     const entry = { ...body, chapter: second, date: third, updatedAt: new Date().toISOString(), updatedBy: user.sub };
     await getDb().collection("weeklyData").doc(id).set(entry, { merge: true });
+    invalidateSnapshotCache("weeklyData");
     await writeActivity(user, "weekly_entry_saved", { chapter: second, date: third });
     return ok({ entry: { id, ...entry } });
   }
@@ -311,6 +317,7 @@ export async function routeApi({ method, segments, body, authorization }) {
   if (first === "weekly-data" && second && third && method === "DELETE") {
     assertCanWriteChapter(user, second);
     await getDb().collection("weeklyData").doc(`${second}_${third}`).delete();
+    invalidateSnapshotCache("weeklyData");
     await writeActivity(user, "weekly_entry_deleted", { chapter: second, date: third });
     return noContent();
   }
@@ -336,7 +343,14 @@ export async function routeApi({ method, segments, body, authorization }) {
   }
 
   if (COLLECTION_READ_ALLOWLIST.has(first) && !second && method === "GET") {
-    const rows = await listCollection(first);
+    // The on-demand collections are shared across users, so they go through the same
+    // cache as the snapshot. The activity log is unbounded, so it is read newest-first
+    // with a hard cap rather than pulling the whole collection and slicing afterwards.
+    const rows = first === "activityLog"
+      ? await cachedListCollection(first, { field: "timestamp", direction: "desc" }, 500)
+      : first === "miyagiMembers"
+        ? await cachedListCollection(first)
+        : await listCollection(first);
     return ok({ rows: first === "attendance" ? rows : filterRowsToScope(user, rows) });
   }
 
@@ -349,6 +363,7 @@ export async function routeApi({ method, segments, body, authorization }) {
     const before = await ref.get();
     if (before.exists && before.data().chapter) assertCanWriteChapter(user, before.data().chapter);
     await ref.set(body || {}, { merge: true });
+    invalidateSnapshotCache(first);
     const doc = await ref.get();
     await writeActivity(user, `${first}_saved`, { id: second });
     return ok({ row: docToData(doc) });
@@ -360,6 +375,7 @@ export async function routeApi({ method, segments, body, authorization }) {
     const before = await ref.get();
     if (before.exists && before.data().chapter) assertCanWriteChapter(user, before.data().chapter);
     await ref.delete();
+    invalidateSnapshotCache(first);
     await writeActivity(user, `${first}_deleted`, { id: second });
     return noContent();
   }

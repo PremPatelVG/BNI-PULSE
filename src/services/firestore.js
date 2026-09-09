@@ -33,16 +33,21 @@ const META_DOCS = new Set([
 // meta/config holds the Sr. DC master PIN, which must never be serialised to a client.
 const META_PRIVATE_FIELDS = { config: ["srPin"] };
 
+// Collections every signed-in client needs on load. Deliberately excludes the two
+// largest, `miyagiMembers` (~1.3k docs) and `activityLog` (~900 and unbounded):
+// they are only needed by the Miyagi/Call Mode and Activity Log tabs, so they are
+// fetched on demand instead. Together they were ~80% of every snapshot's reads.
 export const SNAPSHOT_COLLECTIONS = [
   "chapters",
   "members",
   "weeklyData",
   "visitorPipeline",
-  "miyagiMembers",
   "attendance",
-  "renewalsDone",
-  "activityLog"
+  "renewalsDone"
 ];
+
+// Fetched on demand by the tab that needs them (see COLLECTION_READ_ALLOWLIST).
+export const ON_DEMAND_COLLECTIONS = ["miyagiMembers", "activityLog"];
 
 export const SNAPSHOT_META_DOCS = [
   "branding",
@@ -77,10 +82,13 @@ export function docToData(doc) {
   return { id: doc.id, ...doc.data() };
 }
 
-export async function listCollection(name, orderBy) {
+export async function listCollection(name, orderBy, limit) {
   const db = getDb();
   let query = db.collection(name);
   if (orderBy) query = query.orderBy(orderBy.field, orderBy.direction || "asc");
+  // A limit is applied by Firestore, so a capped read costs only the rows it returns
+  // rather than the whole collection.
+  if (limit) query = query.limit(limit);
   const snap = await query.get();
   return snap.docs.map(docToData);
 }
@@ -111,6 +119,9 @@ export async function setMetaDoc(docId, data, merge = true) {
   }
 
   await getDb().collection("meta").doc(docId).set(data, { merge });
+  // Every meta write funnels through here, so this is the one place that has to drop
+  // the cached copy of that document.
+  invalidateSnapshotCache(docId);
   return getMetaDoc(docId);
 }
 
@@ -141,53 +152,83 @@ function scopeMetaDoc(user, docId, doc) {
   return { ...doc, [spec.listField]: scoped };
 }
 
-// The whole dashboard reads the entire dataset on every poll, which on the Firebase
-// free tier (50k reads/day) is easily exhausted by a few open tabs. The raw reads are
-// identical for every user (scoping happens afterwards in memory), so they are cached
-// briefly and shared across all concurrent requests. Any write invalidates the cache,
-// so an edit is visible on the next poll rather than after the TTL.
-const RAW_SNAPSHOT_TTL_MS = Number(process.env.SNAPSHOT_CACHE_MS || 30000);
-let rawSnapshotCache = null; // { data, expiresAt }
-let rawSnapshotInFlight = null;
+// The whole dashboard reads the same dataset on every poll, which on the Firebase free
+// tier (50k reads/day) is easily exhausted. The raw reads are identical for every user
+// (scoping happens afterwards in memory), so they are cached and shared across all
+// concurrent requests.
+//
+// The cache is held PER COLLECTION rather than as one blob: a write to weeklyData drops
+// only weeklyData, so the next poll re-reads ~230 docs instead of the entire snapshot.
+// Previously every write invalidated everything, which - because every write also logs
+// activity - meant the full dataset was re-read continuously during normal use.
+const RAW_SNAPSHOT_TTL_MS = Number(process.env.SNAPSHOT_CACHE_MS || 300000);
+const colCache = new Map();   // name  -> { rows, expiresAt }
+const metaCache = new Map();  // docId -> { doc, expiresAt }
+const inFlight = new Map();   // key   -> Promise
 
-export function invalidateSnapshotCache() {
-  rawSnapshotCache = null;
+// Pass the collection/meta names that actually changed. No argument clears everything
+// (used only where the change is genuinely global).
+export function invalidateSnapshotCache(names) {
+  if (!names) { colCache.clear(); metaCache.clear(); return; }
+  for (const name of [].concat(names)) { colCache.delete(name); metaCache.delete(name); }
 }
 
-// Unscoped, credential-free snapshot of every collection and meta document. Safe to
-// share: members are stripped of pinHash and meta of its private fields before caching.
-async function fetchRawSnapshot() {
-  if (rawSnapshotCache && rawSnapshotCache.expiresAt > Date.now()) return rawSnapshotCache.data;
-  if (rawSnapshotInFlight) return rawSnapshotInFlight;
+function fresh(entry) { return entry && entry.expiresAt > Date.now(); }
 
-  rawSnapshotInFlight = (async () => {
-    try {
-      const [collections, metaEntries] = await Promise.all([
-        Promise.all(SNAPSHOT_COLLECTIONS.map(async name => {
-          const orderBy = name === "chapters" ? { field: "order" }
-            : name === "weeklyData" ? { field: "date", direction: "desc" }
-              : null;
-          let rows = await listCollection(name, orderBy);
-          if (name === "members") {
-            rows = rows.map(member => ({ id: member.id, ...stripPrivateMember(member) }));
-          }
-          if (name === "activityLog") {
-            rows = rows
-              .sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")))
-              .slice(0, 500);
-          }
-          return [name, rows];
-        })),
-        Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, await getMetaDoc(id)]))
-      ]);
-      const data = { collections: Object.fromEntries(collections), meta: Object.fromEntries(metaEntries) };
-      rawSnapshotCache = { data, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS };
-      return data;
-    } finally {
-      rawSnapshotInFlight = null;
-    }
-  })();
-  return rawSnapshotInFlight;
+// Coalesces concurrent callers for the same key onto one Firestore read.
+function once(key, fn) {
+  if (inFlight.has(key)) return inFlight.get(key);
+  const p = (async () => { try { return await fn(); } finally { inFlight.delete(key); } })();
+  inFlight.set(key, p);
+  return p;
+}
+
+async function cachedCollection(name) {
+  const hit = colCache.get(name);
+  if (fresh(hit)) return hit.rows;
+  return once("c:" + name, async () => {
+    const orderBy = name === "chapters" ? { field: "order" }
+      : name === "weeklyData" ? { field: "date", direction: "desc" }
+        : null;
+    let rows = await listCollection(name, orderBy);
+    if (name === "members") rows = rows.map(m => ({ id: m.id, ...stripPrivateMember(m) }));
+    colCache.set(name, { rows, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
+    return rows;
+  });
+}
+
+// Shared cache for the on-demand collections (miyagiMembers, activityLog). Without it
+// every DC opening the Miyagi tab pays its own ~1.3k reads; with it they share one
+// fetch for the TTL. Safe to key by name: these are not in the snapshot, so there is no
+// collision with cachedCollection's differently-shaped reads.
+export async function cachedListCollection(name, orderBy, limit) {
+  const hit = colCache.get(name);
+  if (fresh(hit)) return hit.rows;
+  return once("c:" + name, async () => {
+    const rows = await listCollection(name, orderBy, limit);
+    colCache.set(name, { rows, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
+    return rows;
+  });
+}
+
+async function cachedMeta(id) {
+  const hit = metaCache.get(id);
+  if (fresh(hit)) return hit.doc;
+  return once("m:" + id, async () => {
+    const doc = await getMetaDoc(id);
+    metaCache.set(id, { doc, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
+    return doc;
+  });
+}
+
+// Unscoped, credential-free snapshot. Safe to share: members are stripped of pinHash
+// and meta of its private fields before caching.
+async function fetchRawSnapshot() {
+  const [collections, metaEntries] = await Promise.all([
+    Promise.all(SNAPSHOT_COLLECTIONS.map(async name => [name, await cachedCollection(name)])),
+    Promise.all(SNAPSHOT_META_DOCS.map(async id => [id, await cachedMeta(id)]))
+  ]);
+  return { collections: Object.fromEntries(collections), meta: Object.fromEntries(metaEntries) };
 }
 
 // Applies the caller's scope to the shared raw snapshot. Filtering is a cheap in-memory
@@ -259,14 +300,16 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
   }
   if (ops) await batch.commit();
 
-  invalidateSnapshotCache();
+  // The TLR upload rewrites meta/tlr and touches that month's weekly entries.
+  invalidateSnapshotCache(["tlr", "weeklyData"]);
   return { chaptersUpdated: rows.length, weeklyEntriesUpdated: updated, month: monthIso };
 }
 
 export async function writeActivity(user, action, details = {}) {
-  // Every write handler routes through here, so this is the single point that drops
-  // the shared snapshot cache - the write becomes visible on the next poll.
-  invalidateSnapshotCache();
+  // Logging an action does not change any snapshot collection, so it must NOT drop the
+  // shared cache - doing so re-read the entire dataset on every click. Callers that
+  // actually change data invalidate their own collection (see routeApi).
+  invalidateSnapshotCache("activityLog");
   await getDb().collection("activityLog").add({
     team: "bni_chapter_pulse",
     action,

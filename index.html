@@ -475,6 +475,41 @@ async function deleteDoc(collection,docId){
   throw new Error('Deletes from '+collection+' are not permitted');
 }
 
+// ── ON-DEMAND COLLECTIONS ───────────────────────────────────────────────────
+// miyagiMembers (~1.3k docs) and activityLog (~900, unbounded) used to ride the
+// shared snapshot on every poll for every user - together ~80% of its Firestore
+// reads - even though only three tabs need them. They are now fetched once, when a
+// tab that needs them opens, and refreshed after a write to them.
+const ON_DEMAND_COLLECTIONS=new Set(['miyagiMembers','activityLog']);
+let MIYAGI_LOADED=false,ACTIVITY_LOADED=false;
+
+function resetOnDemandCollections(){MIYAGI_LOADED=false;ACTIVITY_LOADED=false;S.miyagiMembers=[];S.activityLog=[];}
+
+async function reloadOnDemand(collection){
+  try{
+    const r=await apiFetch('/'+collection);
+    const rows=(r&&r.rows)||[];
+    if(collection==='miyagiMembers'){
+      S.miyagiMembers=rows;MIYAGI_LOADED=true;
+      if(S.tab==='miyagi')renderMiyagiTab();
+      if(S.tab==='call')renderCallContent();
+    }else if(collection==='activityLog'){
+      S.activityLog=rows;ACTIVITY_LOADED=true;
+      if(S.tab==='activitylog')renderActivityLogTab();
+    }
+  }catch(e){console.warn('Could not load '+collection,e);}
+}
+
+async function ensureMiyagiLoaded(force){if(MIYAGI_LOADED&&!force)return;await reloadOnDemand('miyagiMembers');}
+async function ensureActivityLoaded(force){if(ACTIVITY_LOADED&&!force)return;await reloadOnDemand('activityLog');}
+
+// A write goes to the API, so the local copy has to be refreshed: the shared snapshot
+// for normal collections, plus the on-demand collection itself when it is one.
+async function afterWrite(collection){
+  if(ON_DEMAND_COLLECTIONS.has(collection)){await reloadOnDemand(collection);return;}
+  await refreshSnapshot();
+}
+
 function makeDocRef(collection,docId){
   return {
     id:docId,
@@ -485,17 +520,17 @@ function makeDocRef(collection,docId){
     },
     async set(data,options){
       await writeDoc(collection,docId,data,!(options&&options.merge===false));
-      await refreshSnapshot();
+      await afterWrite(collection);
     },
     async update(data){
       // Firestore's update() requires an existing document; the API upserts, which is
       // what every call site here actually wants.
       await writeDoc(collection,docId,data,true);
-      await refreshSnapshot();
+      await afterWrite(collection);
     },
     async delete(){
       await deleteDoc(collection,docId);
-      await refreshSnapshot();
+      await afterWrite(collection);
     },
     onSnapshot(cb){
       return registerListener(()=>{
@@ -2101,6 +2136,7 @@ function showLoginErr(detail){
 function logout(){
   S.unsubs.forEach(u=>u());S.unsubs=[];
   stopSync();
+  resetOnDemandCollections();
   setAuthToken(null);
   S.user=null;
   hide('app');show('loginScreen');
@@ -2368,16 +2404,16 @@ function subAll(){
   const u7b=db.collection('renewalsDropped').onSnapshot(s=>{S.renewalsDropped={};s.docs.forEach(d=>{S.renewalsDropped[d.id]=d.data();});if(S.tab==='renewals')renderRenewals();});
   const u8=db.collection('meta').doc('monthlyTargets').onSnapshot(d=>{if(d.exists)S.monthlyTargets=d.data();else S.monthlyTargets={};});
   const u9=db.collection('visitorPipeline').onSnapshot(s=>{S.visitorPipeline=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='pipeline')renderPipelineVelocity();});
-  const u10=db.collection('miyagiMembers').onSnapshot(s=>{S.miyagiMembers=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='miyagi')renderMiyagiTab();if(S.tab==='call')renderCallContent();});
+  // miyagiMembers and activityLog are intentionally NOT subscribed here - they are
+  // fetched on demand by the tabs that need them (see reloadOnDemand).
   const u11=db.collection('meta').doc('lengthOfMembership').onSnapshot(d=>{if(d.exists)S.lomData=d.data().rows||[];});
-  const u12=db.collection('activityLog').orderBy('timestamp','desc').limit(500).onSnapshot(s=>{S.activityLog=s.docs.map(d=>({id:d.id,...d.data()}));if(S.tab==='activitylog')renderActivityLogTab();});
   const u13=db.collection('meta').doc('config').onSnapshot(d=>{S.srCallDay=(d.exists&&d.data().srCallDay)||'Friday';if(S.tab==='reports')renderReportContent();if(S.tab==='settings')renderSettings();});
   // 12-Month Growth summary (imported from the June-2025 + Commission sheets): powers
   // the Cumulative Net Add card on the Overview.
   const u14=db.collection('meta').doc('growthSummary').onSnapshot(d=>{S.growthData=d.exists?d.data():null;if(S.tab==='overview')renderOverview();});
   // Assign before subGoals() pushes onto the list - the previous order threw away
   // the goals unsubscribe, leaking that listener on every logout.
-  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u10,u11,u12,u13,u14];
+  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u11,u13,u14];
   subGoals();
   startSync();
   // Load branding after subscriptions are set up
@@ -2431,7 +2467,7 @@ function switchTab(t){
   const div=document.createElement('div');div.id='tab-'+t;mc.appendChild(div);
   if(t==='overview')renderOverview();
   else if(t==='entry')renderEntry();
-  else if(t==='call')renderCallMode();
+  else if(t==='call'){renderCallMode();ensureMiyagiLoaded();}
   else if(t==='renewals')renderRenewals();
   else if(t==='retention')renderAreaDirectorRetentionTab();
   else if(t==='tlr')renderTLR();
@@ -2439,13 +2475,19 @@ function switchTab(t){
   else if(t==='planning')renderPlanningTab();
   else if(t==='radar')renderRiskRadar();
   else if(t==='pipeline')renderPipelineVelocity();
-  else if(t==='miyagi')renderMiyagiTab();
+  else if(t==='miyagi'){
+    if(MIYAGI_LOADED)renderMiyagiTab();
+    else{div.innerHTML='<div class="card"><div class="empty">Loading Miyagi…</div></div>';ensureMiyagiLoaded();}
+  }
   else if(t==='sdreport')renderSDReport();
   else if(t==='retro')renderRetroTab();
   else if(t==='barter')renderBarter();
   else if(t==='goals')renderGoalsTab();
   else if(t==='upload')renderUpload();
-  else if(t==='activitylog')renderActivityLogTab();
+  else if(t==='activitylog'){
+    if(ACTIVITY_LOADED)renderActivityLogTab();
+    else{div.innerHTML='<div class="card"><div class="empty">Loading activity log…</div></div>';ensureActivityLoaded();}
+  }
   else if(t==='settings')renderSettings();
   if(t!=='barter'&&window._barterTimer){clearInterval(window._barterTimer);window._barterTimer=null;}
 }
@@ -3971,6 +4013,8 @@ function fEntries(from,to,chapFilter){
 }
 
 function runMiyagiReport(){
+  // Miyagi data is fetched on demand, so make sure it's here before reporting on it.
+  if(!MIYAGI_LOADED){ensureMiyagiLoaded().then(runMiyagiReport);return;}
   var chap=document.getElementById('rChap')?.value||'';
   var visChaps=visibleChapterNames();
   var members=S.miyagiMembers.filter(function(m){
