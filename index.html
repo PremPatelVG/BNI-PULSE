@@ -2323,7 +2323,7 @@ function buildNav(){
       {id:'miyagi',label:'Miyagi'},
       {id:'sdreport',label:'SD Report'},
       {id:'retro',label:'Retrospective'},
-      {id:'barter',label:'Check Barter',hidden:isViewer},
+      {id:'barter',label:'Sicilian Barter',hidden:isViewer},
       {id:'goals',label:'Goals'},
       // Area Directors reach Upload from the empty Renewals and TLR tabs, so the
       // nav entry has to exist for them too.
@@ -2339,7 +2339,7 @@ function buildNav(){
       {id:'renewals',label:'Renewals'},
       {id:'pipeline',label:'Pipeline'},
       {id:'miyagi',label:'Miyagi'},
-      {id:'barter',label:'Check Barter'},
+      {id:'barter',label:'Sicilian Barter'},
       {id:'reports',label:'My Reports'},
       {id:'retro',label:'Retrospective'},
       {id:'goals',label:'Goals'}
@@ -2561,8 +2561,36 @@ function renderAreaDirectorOverviewFilters(allChapters,visibleCount,rerenderFn){
 // OVERVIEW ──
 function renderOverview(){
   const el=document.getElementById('tab-overview');if(!el)return;
-  if(isDC()){renderDCOverview(el);return;}
+  if(isDC()){renderDCOverview(el);barterOverviewNotif();return;}
   renderSDOverview(el);
+}
+
+// Sicilian Barter: when a DC/SA opens the Overview, surface any of their barter
+// requests that have been accepted (until they dismiss it). Uses localStorage to
+// remember what's been seen, so it doesn't nag forever.
+async function barterOverviewNotif(){
+  if(!barterCanTrade())return;
+  var host=document.getElementById('barterNotif');if(!host)return;
+  var seen={};try{seen=JSON.parse(localStorage.getItem('barterSeen')||'{}')||{};}catch(e){}
+  try{
+    var mine=await apiFetch('/barter/mine');
+    var accepted=(mine.requests||[]).filter(function(r){return r.status==='confirmed'&&r.match&&!seen[r.id];});
+    if(!accepted.length){host.innerHTML='';return;}
+    var h='<div class="card" style="border:1px solid rgba(45,155,111,.4);background:rgba(45,155,111,.08);margin-bottom:14px;">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sec-title" style="color:var(--green);">🔔 Sicilian Barter — request'+(accepted.length>1?'s':'')+' accepted ('+accepted.length+')</div><button class="btn btn-sm" onclick="barterDismissNotif()">Dismiss</button></div>';
+    accepted.forEach(function(r){
+      h+='<div style="border-top:1px solid rgba(45,155,111,.2);padding:8px 0;font-size:13px;">Your request for <b>'+esc(r.requestedSub)+'</b> was accepted by <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+'. </div>';
+    });
+    h+='<div style="margin-top:6px;"><button class="btn btn-sm btn-navy" onclick="switchTab(\'barter\')">Open Sicilian Barter</button></div></div>';
+    host.innerHTML=h;
+    window._barterNotifIds=accepted.map(function(r){return r.id;});
+  }catch(e){host.innerHTML='';}
+}
+function barterDismissNotif(){
+  var seen={};try{seen=JSON.parse(localStorage.getItem('barterSeen')||'{}')||{};}catch(e){}
+  (window._barterNotifIds||[]).forEach(function(id){seen[id]=1;});
+  try{localStorage.setItem('barterSeen',JSON.stringify(seen));}catch(e){}
+  var host=document.getElementById('barterNotif');if(host)host.innerHTML='';
 }
 
 function renderAreaDirectorTargets(totalMembers,scoreChapters){
@@ -2956,6 +2984,7 @@ function renderDCOverview(el){
   }).length;
 
   el.innerHTML=`
+    <div id="barterNotif"></div>
     ${switcher}
     <div class="dc-hero">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -5897,13 +5926,16 @@ async function loadBarter(){
       jobs.push(apiFetch('/barter/mine').then(function(m){st.mine=m;}).catch(function(){}));
       jobs.push(apiFetch('/barter/inbox').then(function(i){st.inbox=i;}).catch(function(){}));
     }
+    if(barterCanTrade()||isAreaDirector()){
+      jobs.push(apiFetch('/barter/trades').then(function(x){st.trades=x;}).catch(function(){}));
+    }
     await Promise.all(jobs);
   }catch(e){console.warn('barter load failed',e);}
 }
 
 function renderBarter(){
   var el=document.getElementById('tab-barter');if(!el)return;
-  el.innerHTML='<div class="card"><div class="empty">Loading Check Barter…</div></div>';
+  el.innerHTML='<div class="card"><div class="empty">Loading Sicilian Barter…</div></div>';
   loadBarter().then(paintBarter);
   if(!window._barterTimer){
     window._barterTimer=setInterval(function(){
@@ -5918,18 +5950,26 @@ function renderBarter(){
 
 function paintBarter(){
   var el=document.getElementById('tab-barter');if(!el||S.tab!=='barter')return;
-  var st=barterState();var trade=barterCanTrade();
+  var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector();
   var inboxCount=(st.inbox&&st.inbox.inbox&&st.inbox.inbox.length)||0;
-  var views=trade?[['board','Available'],['mine','My Checks'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')]]:[['board','Available']];
+  var views=trade?[['board','Available'],['mine','My Checks'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')],['trades','My Trades']]
+    :seesAll?[['board','Available'],['trades','All Trades']]:[['board','Available']];
   if(!views.some(function(v){return v[0]===st.view;}))st.view='board';
   var nav=views.map(function(v){return '<button class="btn btn-sm '+(st.view===v[0]?'btn-navy':'btn-secondary')+'" onclick="S.barter.view=\''+v[0]+'\';paintBarter()">'+v[1]+'</button>';}).join(' ');
-  var body=st.view==='mine'?barterMineHTML():st.view==='requests'?barterRequestsHTML():st.view==='inbox'?barterInboxHTML():barterBoardHTML();
-  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Check Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
+  var body=st.view==='mine'?barterMineHTML():st.view==='requests'?barterRequestsHTML():st.view==='inbox'?barterInboxHTML():st.view==='trades'?barterTradesHTML():barterBoardHTML();
+  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Sicilian Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
 }
 
 function barterAfter(msg){toast(msg);loadBarter().then(paintBarter);}
 function barterToggleMain(i){var m=window._bMainMap&&window._bMainMap[i];if(m==null)return;var st=barterState();st.expanded[m]=!st.expanded[m];paintBarter();}
 function barterRequestIdx(i){var s=window._bSubMap&&window._bSubMap[i];if(s)barterRequest(s);}
+function barterFillSubs(){
+  var st=barterState();var mainEl=document.getElementById('bChkMain');var sel=document.getElementById('bChkSub2');
+  if(!mainEl||!sel)return;
+  var m=(st.cats&&st.cats.tree||[]).find(function(x){return x.main===mainEl.value;});
+  var subs=m?(m.subs||[]).slice().sort(function(a,b){return a.localeCompare(b);}):[];
+  sel.innerHTML='<option value="">Sub-category…</option>'+subs.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
+}
 
 function barterBoardHTML(){
   var st=barterState();var b=st.board;var cats=st.cats;
@@ -5970,21 +6010,23 @@ function barterBoardHTML(){
 function barterMineHTML(){
   var st=barterState();var mine=st.mine;var cats=st.cats;
   if(!mine)return'<div class="card"><div class="empty">Loading…</div></div>';
-  var subs=[];(cats&&cats.tree||[]).forEach(function(m){(m.subs||[]).forEach(function(s){subs.push(s);});});
+  var mains=(cats&&cats.tree||[]).slice().sort(function(a,b){return a.main.localeCompare(b.main);});
+  var inSt='padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;';
   var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Add a check you\'re holding</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
-  h+='<input id="bChkSub" list="bSubList" placeholder="Classification (type to search)" style="flex:1;min-width:220px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">';
-  h+='<datalist id="bSubList">'+subs.map(function(s){return'<option value="'+esc(s)+'">';}).join('')+'</datalist>';
-  h+='<input id="bChkName" placeholder="Prospect name" style="min-width:180px;padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;">';
+  h+='<select id="bChkMain" onchange="barterFillSubs()" style="min-width:200px;'+inSt+'"><option value="">Main category…</option>'+mains.map(function(m){return '<option value="'+esc(m.main)+'">'+esc(m.main)+'</option>';}).join('')+'</select>';
+  h+='<select id="bChkSub2" style="min-width:200px;'+inSt+'"><option value="">Sub-category…</option></select>';
+  h+='<input id="bChkName" placeholder="Prospect name" style="min-width:150px;'+inSt+'">';
+  h+='<input id="bChkPhone" placeholder="Contact number" style="min-width:140px;'+inSt+'">';
   h+='<button class="btn btn-navy" onclick="barterAddCheck()">Add check</button></div>';
-  h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name is revealed only after a match.</div></div>';
+  h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name &amp; contact are revealed only after a match.</div></div>';
   var avail=(mine.checks||[]).filter(function(c){return c.status==='available';});
   var matched=(mine.checks||[]).filter(function(c){return c.status==='matched';});
   h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My held checks ('+avail.length+')</div>';
   if(!avail.length)h+='<div class="empty">You aren\'t holding any checks yet.</div>';
   avail.forEach(function(c){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);">';
-    h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+'</span></div>';
+    h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+(c.phone?' · '+esc(c.phone):'')+'</span></div>';
     h+='<button class="btn btn-sm" onclick="barterWithdrawCheck(\''+c.id+'\')">Withdraw</button></div>';
   });
   h+='</div>';
@@ -5993,7 +6035,7 @@ function barterMineHTML(){
     matched.forEach(function(c){
       h+='<div style="padding:8px 0;border-top:1px solid var(--border);">';
       h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> — gave to a chapter';
-      if(c.tradedFor)h+='; received <span style="font-weight:700">'+esc(c.tradedFor.category)+'</span> ('+esc(c.tradedFor.prospect||'')+') from '+esc(c.tradedFor.partnerName||'')+', '+esc(c.tradedFor.partnerChapter||'');
+      if(c.tradedFor)h+='; received <span style="font-weight:700">'+esc(c.tradedFor.category)+'</span> ('+esc(c.tradedFor.prospect||'')+(c.tradedFor.phone?' · '+esc(c.tradedFor.phone):'')+') from '+esc(c.tradedFor.partnerName||'')+', '+esc(c.tradedFor.partnerChapter||'');
       h+='</div></div>';
     });
     h+='</div>';
@@ -6016,7 +6058,7 @@ function barterRequestsHTML(){
     if(r.status==='open')h+='<button class="btn btn-sm" onclick="barterCancelRequest(\''+r.id+'\')">Cancel</button>';
     h+='</div>';
     if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.</div>';
-    if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b> ('+esc(r.requestedSub)+'). Coordinate the induction with them.</div>';
+    if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+' — '+esc(r.requestedSub)+'. Coordinate the induction with them.</div>';
     h+='</div>';
   });
   return h+'</div>';
@@ -6044,12 +6086,93 @@ function barterInboxHTML(){
   return h+'</div>';
 }
 
+function barterTradeSrOf(chapter){try{var n=chapterSeniorDirectorName(chapter);return n||'—';}catch(e){return '—';}}
+function barterFmtTime(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return String(iso).slice(0,16).replace('T',' ');return fmtD(String(iso).slice(0,10))+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+function barterTradesHTML(){
+  var st=barterState();var t=st.trades;
+  if(!t)return'<div class="card"><div class="empty">Loading…</div></div>';
+  var all=t.scope==='all';var rows=t.trades||[];
+
+  if(!all){
+    // A DC's own trades — card look.
+    var h='<div class="card"><div class="sec-title" style="margin-bottom:6px;">My trades ('+rows.length+')</div>';
+    h+='<div class="tm" style="margin-bottom:8px;">Your completed barters. Contact details are shown so you can arrange the induction.</div>';
+    if(!rows.length)h+='<div class="empty">No confirmed trades yet.</div>';
+    rows.forEach(function(r){
+      var when=r.matchedAt?fmtD(String(r.matchedAt).slice(0,10)):'';
+      var gave,got,gotP,gotPh,partner,pChapter;
+      if(r.iAmRequester){gave=r.aOfferedCategory;got=r.bOfferedCategory;gotP=r.bOfferedProspect;gotPh=r.bOfferedPhone;partner=r.bName;pChapter=r.bChapter;}
+      else{gave=r.bOfferedCategory;got=r.aOfferedCategory;gotP=r.aOfferedProspect;gotPh=r.aOfferedPhone;partner=r.aName;pChapter=r.aChapter;}
+      h+='<div style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;">';
+      h+='<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div>You gave <b>'+esc(gave)+'</b> · received <b>'+esc(got)+'</b></div><div class="tm">'+when+'</div></div>';
+      h+='<div class="tm">Received prospect: '+esc(gotP||'')+(gotPh?' · '+esc(gotPh):'')+' — with <b>'+esc(partner)+'</b>, '+esc(pChapter)+'</div>';
+      h+='</div>';
+    });
+    return h+'</div>';
+  }
+
+  // Leadership — Senior-DC filter, DC/Chapter/Sr-DC stats, then the trade table.
+  var sr=st.tradeSr||'';var group=st.statGroup||'dc';
+  var filtered=sr?rows.filter(function(r){return barterTradeSrOf(r.aChapter)===sr||barterTradeSrOf(r.bChapter)===sr;}):rows;
+  var srdcs=[].concat(Array.from(new Set((S.members||[]).filter(function(m){return m.role==='srdc';}).map(function(m){return m.name;})))).sort();
+
+  var h='<div class="card"><div class="sec-hdr"><div><div class="sec-title">Barter analytics</div><div class="tm">'+filtered.length+' confirmed trade'+(filtered.length===1?'':'s')+(sr?' · Sr. DC: '+esc(sr):'')+'</div></div>';
+  h+='<select onchange="S.barter.tradeSr=this.value;paintBarter()" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;max-width:220px;"><option value="">All Senior Directors</option>'+srdcs.map(function(n){return '<option value="'+esc(n)+'"'+(sr===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select></div>';
+
+  // group + category stats
+  var gCounts={},cats={};
+  filtered.forEach(function(r){
+    var keys={};
+    if(group==='dc'){keys[r.aName+' · '+r.aChapter]=1;keys[r.bName+' · '+r.bChapter]=1;}
+    else if(group==='chapter'){keys[r.aChapter]=1;keys[r.bChapter]=1;}
+    else {keys[barterTradeSrOf(r.aChapter)]=1;keys[barterTradeSrOf(r.bChapter)]=1;}
+    Object.keys(keys).forEach(function(k){gCounts[k]=(gCounts[k]||0)+1;});
+    [r.aOfferedCategory,r.bOfferedCategory].forEach(function(c){if(c)cats[c]=(cats[c]||0)+1;});
+  });
+  var gBtn=function(k,label){return '<button class="btn btn-sm '+(group===k?'btn-navy':'btn-secondary')+'" onclick="S.barter.statGroup=\''+k+'\';paintBarter()">'+label+'</button>';};
+  h+='<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;"><div style="font-weight:800;font-size:13px;">Barters by</div><div style="display:flex;gap:6px;">'+gBtn('dc','DC')+gBtn('chapter','Chapter')+gBtn('srdc','Senior DC')+'</div></div>';
+  var gSorted=Object.keys(gCounts).sort(function(a,b){return gCounts[b]-gCounts[a]||a.localeCompare(b);});
+  if(!gSorted.length)h+='<div class="empty">No confirmed trades yet.</div>';
+  else{
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>'+(group==='dc'?'DC':group==='chapter'?'Chapter':'Senior DC')+'</th><th>Barters</th></tr></thead><tbody>';
+    gSorted.forEach(function(k){h+='<tr><td>'+esc(k)+'</td><td style="font-weight:800">'+gCounts[k]+'</td></tr>';});
+    h+='</tbody></table></div>';
+  }
+  var cSorted=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]||a.localeCompare(b);});
+  if(cSorted.length){
+    h+='<div style="font-weight:800;font-size:13px;margin:12px 0 6px;">Barters by category</div><div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    cSorted.forEach(function(c){h+='<span class="pill" style="background:var(--surface);border:1px solid var(--border);">'+esc(c)+' <b>'+cats[c]+'</b></span>';});
+    h+='</div>';
+  }
+  h+='</div></div>';
+
+  // trade log table
+  h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">All confirmed barter trades</div>';
+  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Requester</th><th>Offered</th><th>Approver</th><th>Return</th><th>Timestamp</th></tr></thead><tbody>';
+  if(!filtered.length)h+='<tr><td colspan="5" class="tm">No trades'+(sr?' for this Senior DC':'')+' yet.</td></tr>';
+  filtered.forEach(function(r){
+    h+='<tr>';
+    h+='<td><b>'+esc(r.aName)+'</b><br><span class="tm">'+esc(r.aChapter)+'</span></td>';
+    h+='<td>'+esc(r.aOfferedCategory)+'</td>';
+    h+='<td><b>'+esc(r.bName)+'</b><br><span class="tm">'+esc(r.bChapter)+'</span></td>';
+    h+='<td>'+esc(r.bOfferedCategory)+'</td>';
+    h+='<td class="tm">'+barterFmtTime(r.matchedAt)+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table></div></div>';
+  return h;
+}
+
 // actions
 async function barterAddCheck(){
-  var sub=(document.getElementById('bChkSub')||{}).value||'';
+  var sub=(document.getElementById('bChkSub2')||{}).value||'';
   var name=(document.getElementById('bChkName')||{}).value||'';
-  if(!sub.trim()||!name.trim()){toast('Pick a classification and enter the prospect name');return;}
-  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim()}});barterAfter('Check added');}
+  var phone=(document.getElementById('bChkPhone')||{}).value||'';
+  if(!sub.trim()){toast('Select a main category and sub-category');return;}
+  if(!name.trim()||!phone.trim()){toast('Enter the prospect name and contact number');return;}
+  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),phone:phone.trim()}});barterAfter('Check added');}
   catch(e){toast(e.message||'Could not add check');}
 }
 async function barterWithdrawCheck(id){
@@ -6068,7 +6191,7 @@ async function barterCancelRequest(id){
 async function barterConfirm(reqId,checkId){
   if(!confirm('Confirm this barter? This trades your check for theirs and reveals you to each other.'))return;
   try{var r=await apiFetch('/barter/requests/'+encodeURIComponent(reqId)+'/confirm',{method:'POST',body:{offeredCheckId:checkId}});
-    alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')\nFrom: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+'\n\nCoordinate the induction with them.');
+    alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')'+(r.receivedPhone?'\nPhone: '+r.receivedPhone:'')+'\nFrom: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+'\n\nCoordinate the induction with them.');
     barterAfter('Barter confirmed');}
   catch(e){toast(e.message||'Could not confirm — it may have just been taken');}
 }
