@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to .barter-test-accounts.json and fill in real PINs. That file is gitignored.",
+  "heena":   { "id": "dc-heena-poriya",  "pin": "______", "who": "Heena Poriya · Crios" },
+  "alpesh":  { "id": "dc-alpesh-shah",   "pin": "______", "who": "Alpesh Shah · Ares" },
+  "nilay":   { "id": "dc-nilay-shah",    "pin": "______", "who": "Nilay Shah · Atlas" },
+  "punit":   { "id": "dc-punit-periwal", "pin": "______", "who": "Punit Periwal · Alethia" },
+  "vyomesh": { "id": "dc-vyomesh-shah",  "pin": "______", "who": "Vyomesh Shah · Tyche" },
+  "hardik":  { "id": "dc-hardik-khamar", "pin": "______", "who": "Hardik Khamar · Lincoln" }
+}

@@ -20,6 +20,14 @@ ambassador-pins*.csv
 # SA login credential list - never commit
 sa-logins*.csv
 
+# Live DC logins used by the barter scripts - never commit (example file is safe)
+scripts/.barter-test-accounts.json
+
+# Generated chapter growth analysis - business data, keep local
+# (regenerate: node scripts/analyze-netadd.js / node scripts/reverify-growth.js)
+scripts/netadd-preview.csv
+scripts/reverify-growth.csv
+
 # Generated Word documents (regenerate: node docs/build_user_guides.js) + Word temp files
 docs/*.docx
 ~$*.docx

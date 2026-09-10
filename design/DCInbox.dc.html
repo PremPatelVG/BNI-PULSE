@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0;font-family:Calibri,Arial,sans-serif;background:#F0F2F7;color:#1A1F2E;}
+    a{color:#E63946;} a:hover{color:#c62a35;}
+    .hdr{background:#1A1F2E;color:#fff;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;}
+    .h1{font-size:18px;font-weight:900;letter-spacing:-.3px;} .h1 em{color:#E63946;font-style:normal;}
+    .h2{font-size:9px;opacity:.42;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+    .nav{background:#1A1F2E;border-top:1px solid rgba(255,255,255,.07);display:flex;padding:0 12px;}
+    .nt{color:rgba(255,255,255,.42);padding:11px 14px;font-size:12px;font-weight:600;border-bottom:2px solid transparent;}
+    .nt.active{color:#fff;border-bottom-color:#E63946;}
+    .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 32px;}
+    .eyebrow{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:1.1px;text-transform:uppercase;}
+    .sec-title{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-top:3px;}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(16,24,40,.04);}
+    .seg{display:inline-flex;background:#F0F2F7;border-radius:9px;padding:3px;gap:2px;}
+    .seg button{border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#6B7280;padding:6px 13px;border-radius:7px;cursor:pointer;}
+    .seg button.on{background:#1A1F2E;color:#fff;}
+    .badge{display:inline-block;background:#E63946;color:#fff;border-radius:20px;font-size:10px;font-weight:800;padding:1px 7px;margin-left:5px;}
+    .req{border:1px solid #E5E7EB;border-radius:12px;padding:15px 16px;margin-bottom:12px;}
+    .need{font-size:15px;font-weight:800;}
+    .tag{display:inline-block;padding:4px 11px;border-radius:9px;font-size:12px;font-weight:700;background:#F0F2F7;color:#1A1F2E;}
+    .urg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;border-radius:20px;padding:4px 11px;}
+    .urg-a{background:#fef3c7;color:#92400e;} .urg-g{background:#dcfce7;color:#166534;}
+    .offer{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid #E5E7EB;}
+    .btn-green{background:#2D9B6F;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn-navy{background:#1A1F2E;color:#fff;border:none;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .btn-ghost{background:#fff;color:#1A1F2E;border:1.5px solid #E5E7EB;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .muted{font-size:11px;color:#6B7280;}
+    .overlay{position:absolute;inset:0;background:rgba(16,20,32,.55);display:flex;align-items:center;justify-content:center;}
+    .modal{background:#fff;border-radius:18px;width:470px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;}
+    .m-top{padding:24px 26px 20px;text-align:center;border-bottom:1px solid #E5E7EB;}
+    .m-body{padding:20px 26px;}
+    .kv{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #E5E7EB;}
+    .kv:last-child{border-bottom:none;}
+    .k{font-size:11px;font-weight:700;color:#6B7280;letter-spacing:.5px;text-transform:uppercase;}
+    .v{font-size:14px;font-weight:700;text-align:right;}
+  </style>
+</helmet>
+
+<div style="position:relative;">
+
+  <div class="hdr">
+    <div><div class="h1"><em>Sicilian</em> Growth Tracker</div><div class="h2">Regional Leadership Dashboard</div></div>
+    <div style="display:flex;align-items:center;gap:9px;">
+      <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#2D9B6F;display:inline-block;"></span>Live</div>
+      <div style="background:rgba(255,255,255,.12);border-radius:20px;padding:6px 13px;font-size:11px;font-weight:600;">Alpesh Shah · Ares</div>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="nt">My Chapter</div><div class="nt">Data Entry</div><div class="nt">Call Mode</div>
+    <div class="nt">Renewals</div><div class="nt">Pipeline</div><div class="nt">Miyagi</div>
+    <div class="nt active">Sicilian Barter</div><div class="nt">My Reports</div><div class="nt">Goals</div>
+  </div>
+
+  <div class="wrap">
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;">
+      <div>
+        <div class="eyebrow">Anonymous until you confirm</div>
+        <div class="sec-title">Sicilian Barter</div>
+      </div>
+      <div class="seg">
+        <button>Available</button><button>My Checks</button><button>My Requests</button>
+        <button class="on">Inbox<span class="badge">2</span></button><button>My Trades</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:15px;font-weight:800;">Incoming barter requests</div>
+        <span class="muted">2 waiting</span>
+      </div>
+      <div class="muted" style="margin-bottom:16px;">
+        Someone needs a classification you're holding. Pick one of the checks they're offering that <b style="color:#1A1F2E;">your</b> chapter needs, then confirm — the first chapter to confirm gets the trade.
+      </div>
+
+      <div class="req">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">
+          <div>
+            <div class="need">A chapter needs <span style="color:#E63946;">Architect</span></div>
+            <div class="muted" style="margin-top:3px;">You're holding this classification</div>
+          </div>
+          <span class="urg urg-a">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Waiting 2h · first to confirm wins
+          </span>
+        </div>
+        <div class="muted" style="margin:14px 0 2px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;">They're offering — take one your chapter needs</div>
+        <div class="offer">
+          <span class="tag">App Developer</span>
+          <button class="btn-green">Take &amp; confirm</button>
+        </div>
+        <div class="offer">
+          <span class="tag">Digital Content</span>
+          <button class="btn-green">Take &amp; confirm</button>
+        </div>
+      </div>
+
+      <div class="req" style="margin-bottom:0;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;">
+          <div>
+            <div class="need">A chapter needs <span style="color:#E63946;">Interior Designer</span></div>
+            <div class="muted" style="margin-top:3px;">You're holding this classification</div>
+          </div>
+          <span class="urg urg-g">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Waiting 12m · just came in
+          </span>
+        </div>
+        <div class="muted" style="margin:14px 0 2px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;">They're offering — take one your chapter needs</div>
+        <div class="offer">
+          <span class="tag">Chartered Accountant</span>
+          <button class="btn-green">Take &amp; confirm</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="overlay">
+    <div class="modal">
+      <div class="m-top">
+        <div style="width:48px;height:48px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <div style="font-size:20px;font-weight:900;letter-spacing:-.3px;">Barter confirmed</div>
+        <div class="muted" style="margin-top:5px;font-size:12px;">You gave <b style="color:#1A1F2E;">Architect</b> · you received <b style="color:#1A1F2E;">App Developer</b></div>
+      </div>
+      <div class="m-body">
+        <div class="kv"><span class="k">Prospect</span><span class="v">Alice Mehta</span></div>
+        <div class="kv"><span class="k">Contact</span><span class="v">+91 99900 01111</span></div>
+        <div class="kv"><span class="k">Category</span><span class="v">App Developer</span></div>
+        <div class="kv"><span class="k">Traded with</span><span class="v">Heena Poriya<br><span class="muted" style="font-weight:600;">Crios</span></span></div>
+        <div style="background:#F0F2F7;border-radius:10px;padding:12px 14px;font-size:12px;color:#6B7280;margin-top:16px;">
+          Both chapters can now see each other. Contact the prospect to arrange the induction.
+        </div>
+        <div style="display:flex;gap:9px;margin-top:18px;">
+          <button class="btn-ghost" style="flex:1;">View my trades</button>
+          <button class="btn-navy" style="flex:1;">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1280, "h": 1060, "title": "1 · Dashboard Overview (polished)" },
+    { "file": "BarterAnalytics.dc.html", "x": 1360, "y": 0, "w": 1280, "h": 1520, "title": "2 · Barter Analytics — AD / ED / BNI Office" },
+    { "file": "SeniorDC.dc.html", "x": 0, "y": 1660, "w": 1280, "h": 1120, "title": "3 · Senior DC — my chapters' trades (new)" },
+    { "file": "DCBoard.dc.html", "x": 1360, "y": 1660, "w": 1280, "h": 960, "title": "4 · DC — Available board + category filter" },
+    { "file": "DCInbox.dc.html", "x": 2720, "y": 1660, "w": 1280, "h": 820, "title": "5 · DC — Inbox urgency + match modal" },
+    { "file": "CategoryColours.dc.html", "x": 0, "y": 2920, "w": 1280, "h": 1220, "title": "6 · Main category colours (27)" }
+  ],
+  "annotations": [
+    { "id": "brief", "x": 0, "y": -150, "w": 520, "text": "Sicilian Barter — design review\nSame tokens as the live app (navy #1A1F2E, BNI red #E63946, green #2D9B6F, surface #F0F2F7, 14px radii, Calibri). Polish = tighter type scale, 1px borders instead of heavy shadows, clearer section hierarchy.\nNothing is built yet — these are mockups for your sign-off." },
+    { "id": "no-expiry", "x": 2720, "y": 1510, "w": 380, "text": "As asked: no expiry countdown anywhere. The inbox shows request AGE instead (\"waiting 2h\"), which is what drives first-come-first-served urgency." },
+    { "id": "srdc-note", "x": 0, "y": 1510, "w": 420, "text": "NEW: Senior DC scope. Sees only barters involving their assigned chapters, with a per-chapter breakdown. Counterparties outside their team are labelled \"other team\" — they are not given the wider region view." },
+    { "id": "colour-note", "x": 1360, "y": 2920, "w": 420, "text": "27 main-category colours, one each. Hues step by the golden angle so alphabetically adjacent categories never look alike.\n\nHonest caveat: 27 colours is past what anyone can tell apart at a glance. They work as identity markers beside a label; in charts, colour the top 6-8 and group the rest." }
+  ],
+  "launch": { "view": "canvas" }
+}

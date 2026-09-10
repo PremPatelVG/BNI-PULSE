@@ -1,0 +1,166 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0;font-family:Calibri,Arial,sans-serif;background:#F0F2F7;color:#1A1F2E;}
+    a{color:#E63946;} a:hover{color:#c62a35;}
+    .hdr{background:#1A1F2E;color:#fff;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;}
+    .h1{font-size:18px;font-weight:900;letter-spacing:-.3px;} .h1 em{color:#E63946;font-style:normal;}
+    .h2{font-size:9px;opacity:.42;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+    .nav{background:#1A1F2E;border-top:1px solid rgba(255,255,255,.07);display:flex;padding:0 12px;}
+    .nt{color:rgba(255,255,255,.42);padding:11px 14px;font-size:12px;font-weight:600;border-bottom:2px solid transparent;}
+    .nt.active{color:#fff;border-bottom-color:#E63946;}
+    .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 32px;}
+    .eyebrow{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:1.1px;text-transform:uppercase;}
+    .sec-title{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-top:3px;}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(16,24,40,.04);}
+    .seg{display:inline-flex;background:#F0F2F7;border-radius:9px;padding:3px;gap:2px;}
+    .seg button{border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#6B7280;padding:6px 13px;border-radius:7px;cursor:pointer;}
+    .seg button.on{background:#1A1F2E;color:#fff;}
+    .badge{display:inline-block;background:#E63946;color:#fff;border-radius:20px;font-size:10px;font-weight:800;padding:1px 7px;margin-left:5px;}
+    .chip{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid #E5E7EB;background:#fff;color:#1A1F2E;cursor:pointer;white-space:nowrap;}
+    .chip.on{background:#1A1F2E;color:#fff;border-color:#1A1F2E;}
+    .cdot{width:9px;height:9px;border-radius:3px;flex:none;}
+    .gdot{width:13px;height:13px;border-radius:4px;flex:none;}
+    .grp{border:1px solid #E5E7EB;border-radius:11px;overflow:hidden;margin-bottom:10px;}
+    .grp-h{display:flex;justify-content:space-between;align-items:center;padding:12px 15px;background:#FAFBFC;cursor:pointer;}
+    .grp-n{font-size:14px;font-weight:800;display:flex;align-items:center;gap:9px;}
+    .cnt{background:#dcfce7;color:#166534;border-radius:20px;font-size:12px;font-weight:800;padding:3px 10px;}
+    .row{display:flex;justify-content:space-between;align-items:center;padding:11px 15px;border-top:1px solid #E5E7EB;}
+    .sub{font-size:13px;font-weight:600;}
+    .avail{font-size:11px;color:#6B7280;margin-left:8px;}
+    .btn-navy{background:#1A1F2E;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;}
+    .muted{font-size:11px;color:#6B7280;}
+  </style>
+</helmet>
+
+<div class="hdr">
+  <div><div class="h1"><em>Sicilian</em> Growth Tracker</div><div class="h2">Regional Leadership Dashboard</div></div>
+  <div style="display:flex;align-items:center;gap:9px;">
+    <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#2D9B6F;display:inline-block;"></span>Live</div>
+    <div style="background:rgba(255,255,255,.12);border-radius:20px;padding:6px 13px;font-size:11px;font-weight:600;">Heena Poriya · Crios</div>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nt">My Chapter</div><div class="nt">Data Entry</div><div class="nt">Call Mode</div>
+  <div class="nt">Renewals</div><div class="nt">Pipeline</div><div class="nt">Miyagi</div>
+  <div class="nt active">Sicilian Barter</div><div class="nt">My Reports</div><div class="nt">Goals</div>
+</div>
+
+<div class="wrap">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;">
+    <div>
+      <div class="eyebrow">Anonymous until a match is confirmed</div>
+      <div class="sec-title">Sicilian Barter</div>
+    </div>
+    <div class="seg">
+      <button class="on">Available</button><button>My Checks</button><button>My Requests</button>
+      <button>Inbox<span class="badge">2</span></button><button>My Trades</button>
+    </div>
+  </div>
+
+  <div class="card">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
+      <div>
+        <span style="font-size:30px;font-weight:900;letter-spacing:-.8px;">62</span>
+        <span class="muted" style="font-size:13px;margin-left:7px;">checks available across the region</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;border:1.5px solid #E5E7EB;background:#fff;border-radius:9px;padding:9px 12px;min-width:270px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <span class="muted" style="font-size:13px;">Search a classification…</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid #E5E7EB;">
+      <span class="muted" style="font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-right:2px;">Main category</span>
+      <span class="chip on">All 27</span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 315);"></span>Real Estate Services <b>11</b></span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 242.5);"></span>Construction <b>9</b></span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 0);"></span>Advertising &amp; Marketing <b>8</b></span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 105);"></span>Computer &amp; Programming <b>7</b></span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 72.5);"></span>Finance &amp; Insurance <b>6</b></span>
+      <span class="chip"><span class="cdot" style="background:oklch(0.68 0.15 347.5);"></span>Health &amp; Wellness <b>5</b></span>
+      <span class="chip">+ 8 more</span>
+    </div>
+
+    <div style="margin-top:16px;">
+
+      <div class="grp" style="border-left:4px solid oklch(0.68 0.15 315);">
+        <div class="grp-h">
+          <div class="grp-n">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1A1F2E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span class="gdot" style="background:oklch(0.68 0.15 315);"></span>
+            Real Estate Services
+          </div>
+          <span class="cnt">11 available</span>
+        </div>
+        <div class="row">
+          <div><span class="sub">Real Estate Agent</span><span class="avail">7 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+        <div class="row">
+          <div><span class="sub">Property Management</span><span class="avail">3 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+        <div class="row">
+          <div><span class="sub">Real Estate Appraiser</span><span class="avail">1 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+      </div>
+
+      <div class="grp" style="border-left:4px solid oklch(0.68 0.15 105);">
+        <div class="grp-h">
+          <div class="grp-n">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1A1F2E" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            <span class="gdot" style="background:oklch(0.68 0.15 105);"></span>
+            Computer &amp; Programming
+          </div>
+          <span class="cnt">7 available</span>
+        </div>
+        <div class="row">
+          <div><span class="sub">App Developer</span><span class="avail">4 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+        <div class="row">
+          <div><span class="sub">Web Developer</span><span class="avail">2 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+        <div class="row">
+          <div><span class="sub">Cloud Services</span><span class="avail">1 available</span></div>
+          <button class="btn-navy">Request</button>
+        </div>
+      </div>
+
+      <div class="grp" style="margin-bottom:0;border-left:4px solid oklch(0.68 0.15 0);">
+        <div class="grp-h">
+          <div class="grp-n">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            <span class="gdot" style="background:oklch(0.68 0.15 0);"></span>
+            Advertising &amp; Marketing
+          </div>
+          <span class="cnt">8 available</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:16px;padding:12px 14px;background:#F0F2F7;border-radius:10px;font-size:12px;color:#6B7280;">
+      You can request a classification once you're holding at least one check of your own to trade back.
+      <span style="color:#1A1F2E;font-weight:700;">You currently hold 2.</span>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

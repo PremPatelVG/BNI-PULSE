@@ -1,0 +1,147 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0;font-family:Calibri,Arial,sans-serif;background:#F0F2F7;color:#1A1F2E;}
+    a{color:#E63946;} a:hover{color:#c62a35;}
+    .wrap{max-width:1180px;margin:0 auto;padding:26px 24px 32px;}
+    .eyebrow{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:1.1px;text-transform:uppercase;}
+    .sec-title{font-size:22px;font-weight:800;letter-spacing:-.3px;margin-top:3px;}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(16,24,40,.04);}
+    .muted{font-size:11px;color:#6B7280;}
+    .sw{display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid #E5E7EB;border-radius:10px;}
+    .dot{width:14px;height:14px;border-radius:5px;flex:none;}
+    .nm{font-size:12.5px;font-weight:700;line-height:1.2;}
+    .sub{font-size:10px;color:#6B7280;margin-top:1px;}
+    .grp-h{display:flex;justify-content:space-between;align-items:center;padding:12px 15px;background:#FAFBFC;}
+    .grp-n{font-size:14px;font-weight:800;display:flex;align-items:center;gap:9px;}
+    .cnt{background:#F0F2F7;color:#1A1F2E;border-radius:20px;font-size:12px;font-weight:800;padding:3px 10px;}
+    .chip{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid #E5E7EB;background:#fff;color:#1A1F2E;}
+    .tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:9px;font-size:11.5px;font-weight:700;background:#F0F2F7;color:#1A1F2E;}
+    .bar{height:10px;border-radius:5px;}
+  </style>
+</helmet>
+
+<div class="wrap">
+
+  <div style="margin-bottom:6px;">
+    <div class="eyebrow">Design system · Sicilian Barter</div>
+    <div class="sec-title">Main category colours</div>
+  </div>
+  <div class="muted" style="max-width:760px;margin-bottom:20px;font-size:12px;line-height:1.55;">
+    One colour per main category (27). Hues step by the golden angle (137.5°) at a fixed lightness and chroma, so categories that sit next to each other in an alphabetical list never look alike. The colour is an <b style="color:#1A1F2E;">identity marker</b> — a dot, an accent edge, a bar — never a background behind text.
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;">
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 0);"></span><div><div class="nm">Advertising &amp; Marketing</div><div class="sub">38 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 137.5);"></span><div><div class="nm">Agriculture</div><div class="sub">2 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 275);"></span><div><div class="nm">Animals</div><div class="sub">9 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 52.5);"></span><div><div class="nm">Architecture &amp; Engineering</div><div class="sub">17 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 190);"></span><div><div class="nm">Art &amp; Entertainment</div><div class="sub">5 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 327.5);"></span><div><div class="nm">Car &amp; Motorcycle</div><div class="sub">18 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 105);"></span><div><div class="nm">Computer &amp; Programming</div><div class="sub">16 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 242.5);"></span><div><div class="nm">Construction</div><div class="sub">73 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 20);"></span><div><div class="nm">Consulting</div><div class="sub">12 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 157.5);"></span><div><div class="nm">Employment Activities</div><div class="sub">7 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 295);"></span><div><div class="nm">Event &amp; Business Service</div><div class="sub">29 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 72.5);"></span><div><div class="nm">Finance &amp; Insurance</div><div class="sub">24 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 210);"></span><div><div class="nm">Food &amp; Beverage</div><div class="sub">26 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 347.5);"></span><div><div class="nm">Health &amp; Wellness</div><div class="sub">41 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 125);"></span><div><div class="nm">Legal &amp; Accounting</div><div class="sub">15 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 262.5);"></span><div><div class="nm">Manufacturing</div><div class="sub">31 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 40);"></span><div><div class="nm">Organizations &amp; Others</div><div class="sub">11 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 177.5);"></span><div><div class="nm">Personal Services</div><div class="sub">34 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 315);"></span><div><div class="nm">Real Estate Services</div><div class="sub">19 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 92.5);"></span><div><div class="nm">Repair</div><div class="sub">22 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 230);"></span><div><div class="nm">Retail</div><div class="sub">28 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 7.5);"></span><div><div class="nm">Security &amp; Investigation</div><div class="sub">6 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 145);"></span><div><div class="nm">Sports &amp; Leisure</div><div class="sub">20 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 282.5);"></span><div><div class="nm">Telecommunications</div><div class="sub">8 classifications</div></div></div>
+
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 60);"></span><div><div class="nm">Training &amp; Coaching</div><div class="sub">13 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 197.5);"></span><div><div class="nm">Transport &amp; Shipping</div><div class="sub">18 classifications</div></div></div>
+      <div class="sw"><span class="dot" style="background:oklch(0.68 0.15 335);"></span><div><div class="nm">Travel</div><div class="sub">10 classifications</div></div></div>
+
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px;">Where the colour appears</div>
+      <div class="muted" style="margin-bottom:14px;">Always as an edge, dot or bar — text stays near-black for contrast.</div>
+
+      <div class="muted" style="font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:7px;">Board group header</div>
+      <div style="border:1px solid #E5E7EB;border-left:4px solid oklch(0.68 0.15 315);border-radius:10px;overflow:hidden;margin-bottom:16px;">
+        <div class="grp-h">
+          <div class="grp-n"><span class="dot" style="background:oklch(0.68 0.15 315);"></span>Real Estate Services</div>
+          <span class="cnt">11 available</span>
+        </div>
+      </div>
+
+      <div class="muted" style="font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:7px;">Filter chips</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;">
+        <span class="chip"><span class="dot" style="width:9px;height:9px;border-radius:3px;background:oklch(0.68 0.15 315);"></span>Real Estate Services</span>
+        <span class="chip"><span class="dot" style="width:9px;height:9px;border-radius:3px;background:oklch(0.68 0.15 242.5);"></span>Construction</span>
+        <span class="chip"><span class="dot" style="width:9px;height:9px;border-radius:3px;background:oklch(0.68 0.15 0);"></span>Advertising &amp; Marketing</span>
+      </div>
+
+      <div class="muted" style="font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:7px;">Category tag in tables</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;">
+        <span class="tag"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:oklch(0.68 0.15 105);"></span>App Developer</span>
+        <span class="tag"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:oklch(0.68 0.15 52.5);"></span>Architect</span>
+        <span class="tag"><span class="dot" style="width:8px;height:8px;border-radius:50%;background:oklch(0.68 0.15 315);"></span>Real Estate Agent</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;margin-bottom:4px;">In charts</div>
+      <div class="muted" style="margin-bottom:14px;">Bars inherit their main category's colour, so the same category reads the same everywhere.</div>
+
+      <div style="display:grid;grid-template-columns:170px 1fr 40px;align-items:center;gap:10px;margin-bottom:9px;">
+        <span style="font-size:12px;font-weight:600;">Real Estate Services</span>
+        <div class="bar" style="width:100%;background:oklch(0.68 0.15 315);"></div><span class="muted" style="text-align:right;">11</span>
+      </div>
+      <div style="display:grid;grid-template-columns:170px 1fr 40px;align-items:center;gap:10px;margin-bottom:9px;">
+        <span style="font-size:12px;font-weight:600;">Construction</span>
+        <div class="bar" style="width:82%;background:oklch(0.68 0.15 242.5);"></div><span class="muted" style="text-align:right;">9</span>
+      </div>
+      <div style="display:grid;grid-template-columns:170px 1fr 40px;align-items:center;gap:10px;margin-bottom:9px;">
+        <span style="font-size:12px;font-weight:600;">Advertising &amp; Marketing</span>
+        <div class="bar" style="width:73%;background:oklch(0.68 0.15 0);"></div><span class="muted" style="text-align:right;">8</span>
+      </div>
+      <div style="display:grid;grid-template-columns:170px 1fr 40px;align-items:center;gap:10px;margin-bottom:9px;">
+        <span style="font-size:12px;font-weight:600;">Computer &amp; Programming</span>
+        <div class="bar" style="width:64%;background:oklch(0.68 0.15 105);"></div><span class="muted" style="text-align:right;">7</span>
+      </div>
+      <div style="display:grid;grid-template-columns:170px 1fr 40px;align-items:center;gap:10px;">
+        <span style="font-size:12px;font-weight:600;">Finance &amp; Insurance</span>
+        <div class="bar" style="width:55%;background:oklch(0.68 0.15 72.5);"></div><span class="muted" style="text-align:right;">6</span>
+      </div>
+
+      <div style="margin-top:18px;padding:12px 14px;background:#F0F2F7;border-radius:10px;font-size:11.5px;color:#6B7280;line-height:1.5;">
+        <b style="color:#1A1F2E;">One caveat, honestly:</b> 27 colours is past the point where anyone can tell them all apart at a glance. They work well as identity markers next to a label — but in a chart, show the top 6–8 by colour and group the rest as “Other”, or the legend becomes unreadable.
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

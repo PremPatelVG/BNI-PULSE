@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0;font-family:Calibri,Arial,sans-serif;background:#F0F2F7;color:#1A1F2E;}
+    a{color:#E63946;} a:hover{color:#c62a35;}
+    .hdr{background:#1A1F2E;color:#fff;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;}
+    .h1{font-size:18px;font-weight:900;letter-spacing:-.3px;} .h1 em{color:#E63946;font-style:normal;}
+    .h2{font-size:9px;opacity:.42;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+    .nav{background:#1A1F2E;border-top:1px solid rgba(255,255,255,.07);display:flex;padding:0 12px;}
+    .nt{color:rgba(255,255,255,.42);padding:11px 14px;font-size:12px;font-weight:600;white-space:nowrap;border-bottom:2px solid transparent;}
+    .nt.active{color:#fff;border-bottom-color:#E63946;}
+    .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 32px;}
+    .eyebrow{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:1.1px;text-transform:uppercase;}
+    .sec-title{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-top:3px;}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;box-shadow:0 1px 3px rgba(16,24,40,.04);}
+    .stat{background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:13px 14px;}
+    .s-l{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.6px;text-transform:uppercase;}
+    .s-v{font-size:25px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:6px;letter-spacing:-.5px;}
+    .s-d{font-size:11px;font-weight:600;margin-top:3px;color:#6B7280;}
+    .chip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid #E5E7EB;background:#fff;color:#6B7280;}
+    .chip.active{background:#1A1F2E;color:#fff;border-color:#1A1F2E;}
+    .ch{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:16px;border-top:3px solid #E5E7EB;}
+    .ch.g{border-top-color:#2D9B6F;} .ch.a{border-top-color:#F4A261;} .ch.r{border-top-color:#E63946;}
+    .ch-n{font-size:16px;font-weight:800;letter-spacing:-.2px;}
+    .ch-d{font-size:11px;color:#6B7280;margin-top:2px;}
+    .pill{padding:3px 9px;border-radius:20px;font-size:12px;font-weight:800;}
+    .pg{background:#dcfce7;color:#166534;} .pa{background:#fef3c7;color:#92400e;} .pr{background:#fee2e2;color:#991b1b;}
+    .cs{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;text-align:center;line-height:1.1;}
+    .cl{font-size:10px;color:#6B7280;text-align:center;margin-top:2px;}
+    .track{background:#F0F2F7;border-radius:4px;height:6px;overflow:hidden;}
+    .muted{font-size:11px;color:#6B7280;}
+  </style>
+</helmet>
+
+<div class="hdr">
+  <div>
+    <div class="h1"><em>Sicilian</em> Growth Tracker</div>
+    <div class="h2">Regional Leadership Dashboard</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:9px;">
+    <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;">
+      <span style="width:7px;height:7px;border-radius:50%;background:#2D9B6F;display:inline-block;"></span>Live
+    </div>
+    <div style="background:rgba(255,255,255,.12);border-radius:20px;padding:6px 13px;font-size:11px;font-weight:600;">BNI Office</div>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nt active">Overview</div><div class="nt">Call Mode</div><div class="nt">Renewals</div>
+  <div class="nt">Retention</div><div class="nt">TLR Report</div><div class="nt">Reports</div>
+  <div class="nt">Risk Radar</div><div class="nt">Miyagi</div><div class="nt">SD Report</div>
+  <div class="nt">Retrospective</div><div class="nt">Sicilian Barter</div><div class="nt">Settings</div>
+</div>
+
+<div class="wrap">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;">
+    <div>
+      <div class="eyebrow">Region</div>
+      <div class="sec-title">Chapter Overview</div>
+    </div>
+    <div style="display:flex;gap:7px;">
+      <div class="chip active">1 Sept 26</div><div class="chip">25 Aug 26</div><div class="chip">18 Aug 26</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:22px;">
+    <div class="stat"><div class="s-l">Submitted</div><div class="s-v">48<span style="font-size:16px;font-weight:700;color:#6B7280;">/58</span></div><div class="s-d">83% of chapters</div></div>
+    <div class="stat"><div class="s-l">Members</div><div class="s-v">2,990</div><div class="s-d" style="color:#2D9B6F;">+34 this month</div></div>
+    <div class="stat"><div class="s-l">Inductions</div><div class="s-v" style="color:#2D9B6F;">+64</div><div class="s-d">across 41 chapters</div></div>
+    <div class="stat"><div class="s-l">Drops</div><div class="s-v" style="color:#E63946;">−31</div><div class="s-d">18 chapters affected</div></div>
+    <div class="stat"><div class="s-l">Net Add</div><div class="s-v" style="color:#2D9B6F;">+33</div><div class="s-d">month to date</div></div>
+    <div class="stat"><div class="s-l">Visitors</div><div class="s-v">112</div><div class="s-d">27% conversion</div></div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <div>
+      <div class="eyebrow">58 chapters</div>
+      <div style="font-size:17px;font-weight:800;margin-top:2px;">Performance by chapter</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;align-items:center;gap:7px;border:1.5px solid #E5E7EB;background:#fff;border-radius:9px;padding:8px 11px;min-width:230px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <span class="muted">Search chapter or director</span>
+      </div>
+      <div style="border:1.5px solid #E5E7EB;background:#fff;border-radius:9px;padding:8px 12px;font-size:13px;font-weight:600;color:#6B7280;">All Senior Directors</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
+
+    <div class="ch g">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="ch-n">Anthropos</div><div class="ch-d">Thursday · Harsh Tanna</div></div>
+        <span class="pill pg">TLR 92</span>
+      </div>
+      <div class="muted" style="margin:10px 0 12px;">Senior Director: Harsh Tanna</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;">
+        <div><div class="cs">147</div><div class="cl">Members</div></div>
+        <div><div class="cs" style="color:#2D9B6F;">+5</div><div class="cl">Ind</div></div>
+        <div><div class="cs" style="color:#E63946;">−2</div><div class="cl">Drop</div></div>
+        <div><div class="cs" style="color:#3B82F6;">9</div><div class="cl">Visitors</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#6B7280;margin-bottom:4px;"><span>TLR</span><span>92/100</span></div>
+      <div class="track"><div style="height:100%;width:92%;background:#2D9B6F;border-radius:4px;"></div></div>
+    </div>
+
+    <div class="ch a">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="ch-n">Poseidon</div><div class="ch-d">Wednesday · Vaibhav Kothari</div></div>
+        <span class="pill pa">TLR 74</span>
+      </div>
+      <div class="muted" style="margin:10px 0 12px;">Senior Director: Nilay Shah</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;">
+        <div><div class="cs">114</div><div class="cl">Members</div></div>
+        <div><div class="cs" style="color:#2D9B6F;">+3</div><div class="cl">Ind</div></div>
+        <div><div class="cs" style="color:#E63946;">−4</div><div class="cl">Drop</div></div>
+        <div><div class="cs" style="color:#3B82F6;">6</div><div class="cl">Visitors</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#6B7280;margin-bottom:4px;"><span>TLR</span><span>74/100</span></div>
+      <div class="track"><div style="height:100%;width:74%;background:#F4A261;border-radius:4px;"></div></div>
+    </div>
+
+    <div class="ch r">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="ch-n">Crios</div><div class="ch-d">Tuesday · Heena Poriya</div></div>
+        <span class="pill pr">TLR 35</span>
+      </div>
+      <div class="muted" style="margin:10px 0 12px;">Senior Director: Vishvesh Glasses Pvt Ltd.</div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px;">
+        <div><div class="cs">17</div><div class="cl">Members</div></div>
+        <div><div class="cs" style="color:#2D9B6F;">+0</div><div class="cl">Ind</div></div>
+        <div><div class="cs" style="color:#E63946;">−0</div><div class="cl">Drop</div></div>
+        <div><div class="cs" style="color:#3B82F6;">0</div><div class="cl">Visitors</div></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#6B7280;margin-bottom:4px;"><span>TLR</span><span>35/100</span></div>
+      <div class="track"><div style="height:100%;width:35%;background:#E63946;border-radius:4px;"></div></div>
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-top:22px;padding:16px 18px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:800;">Needs attention</div>
+      <span class="muted">4 chapters below TLR 50</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr>
+        <th style="text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;">Chapter</th>
+        <th style="text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;">Director</th>
+        <th style="text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;">Members</th>
+        <th style="text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;">Net</th>
+        <th style="text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;">TLR</th>
+      </tr></thead>
+      <tbody>
+        <tr><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;font-weight:700;">Crios</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;">Heena Poriya</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;">17</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;color:#E63946;font-weight:700;">−11</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;"><span class="pill pr">35</span></td></tr>
+        <tr><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;font-weight:700;">Atilius</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;">Rutul Shah</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;">18</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;color:#E63946;font-weight:700;">−9</td><td style="padding:9px 10px;border-bottom:1px solid #E5E7EB;"><span class="pill pr">41</span></td></tr>
+        <tr><td style="padding:9px 10px;font-weight:700;">BNI Hera</td><td style="padding:9px 10px;">Mihir Parikh</td><td style="padding:9px 10px;">19</td><td style="padding:9px 10px;color:#E63946;font-weight:700;">−17</td><td style="padding:9px 10px;"><span class="pill pa">58</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body{margin:0;font-family:Calibri,Arial,sans-serif;background:#F0F2F7;color:#1A1F2E;}
+    a{color:#E63946;} a:hover{color:#c62a35;}
+    .hdr{background:#1A1F2E;color:#fff;padding:11px 22px;display:flex;align-items:center;justify-content:space-between;}
+    .h1{font-size:18px;font-weight:900;letter-spacing:-.3px;} .h1 em{color:#E63946;font-style:normal;}
+    .h2{font-size:9px;opacity:.42;letter-spacing:1.2px;text-transform:uppercase;margin-top:1px;}
+    .nav{background:#1A1F2E;border-top:1px solid rgba(255,255,255,.07);display:flex;padding:0 12px;}
+    .nt{color:rgba(255,255,255,.42);padding:11px 14px;font-size:12px;font-weight:600;border-bottom:2px solid transparent;}
+    .nt.active{color:#fff;border-bottom-color:#E63946;}
+    .wrap{max-width:1180px;margin:0 auto;padding:22px 24px 32px;}
+    .eyebrow{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:1.1px;text-transform:uppercase;}
+    .sec-title{font-size:21px;font-weight:800;letter-spacing:-.3px;margin-top:3px;}
+    .card{background:#fff;border:1px solid #E5E7EB;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(16,24,40,.04);}
+    .kpi-l{font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.6px;text-transform:uppercase;}
+    .kpi-v{font-size:28px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:6px;letter-spacing:-.6px;}
+    .kpi-d{font-size:11px;color:#6B7280;margin-top:4px;}
+    .seg{display:inline-flex;background:#F0F2F7;border-radius:9px;padding:3px;gap:2px;}
+    .seg button{border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#6B7280;padding:6px 14px;border-radius:7px;cursor:pointer;}
+    .seg button.on{background:#1A1F2E;color:#fff;}
+    .ctl{border:1.5px solid #E5E7EB;background:#fff;border-radius:9px;padding:8px 12px;font-size:13px;font-weight:600;color:#1A1F2E;display:inline-flex;align-items:center;gap:8px;}
+    .btn-navy{background:#1A1F2E;color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;font-family:inherit;display:inline-flex;align-items:center;gap:7px;cursor:pointer;}
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th{text-align:left;padding:9px 10px;font-size:10px;font-weight:700;color:#6B7280;letter-spacing:.5px;border-bottom:2px solid #E5E7EB;white-space:nowrap;}
+    td{padding:10px;border-bottom:1px solid #E5E7EB;}
+    tr:last-child td{border-bottom:none;}
+    .muted{font-size:11px;color:#6B7280;}
+    .catrow{display:grid;grid-template-columns:150px 1fr 62px;align-items:center;gap:10px;margin-bottom:9px;}
+    .bar{height:9px;border-radius:5px;}
+    .tag{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:9px;font-size:11px;font-weight:700;background:#F0F2F7;color:#1A1F2E;}
+    .cdot{width:8px;height:8px;border-radius:50%;flex:none;}
+  </style>
+</helmet>
+
+<div class="hdr">
+  <div><div class="h1"><em>Sicilian</em> Growth Tracker</div><div class="h2">Regional Leadership Dashboard</div></div>
+  <div style="display:flex;align-items:center;gap:9px;">
+    <div style="display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#2D9B6F;display:inline-block;"></span>Live</div>
+    <div style="background:rgba(255,255,255,.12);border-radius:20px;padding:6px 13px;font-size:11px;font-weight:600;">BNI Office</div>
+  </div>
+</div>
+
+<div class="nav">
+  <div class="nt">Overview</div><div class="nt">Call Mode</div><div class="nt">Renewals</div>
+  <div class="nt">Retention</div><div class="nt">TLR Report</div><div class="nt">Reports</div>
+  <div class="nt">Miyagi</div><div class="nt">SD Report</div><div class="nt">Retrospective</div>
+  <div class="nt active">Sicilian Barter</div><div class="nt">Settings</div>
+</div>
+
+<div class="wrap">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:16px;">
+    <div>
+      <div class="eyebrow">Area Director · Region-wide</div>
+      <div class="sec-title">Sicilian Barter — Analytics</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <div class="ctl">All Senior Directors
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2.5" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+      <button class="btn-navy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg>
+        Export CSV
+      </button>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:18px;">
+    <div class="seg"><button>Available board</button><button class="on">Analytics &amp; trades</button></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px;">
+    <div class="card" style="padding:15px 16px;"><div class="kpi-l">Confirmed barters</div><div class="kpi-v">37</div><div class="kpi-d" style="color:#2D9B6F;">+9 vs last month</div></div>
+    <div class="card" style="padding:15px 16px;"><div class="kpi-l">Request → match rate</div><div class="kpi-v">68<span style="font-size:18px;">%</span></div><div class="kpi-d">54 requests · 37 matched</div></div>
+    <div class="card" style="padding:15px 16px;"><div class="kpi-l">Avg time to match</div><div class="kpi-v">1.9<span style="font-size:16px;font-weight:700;color:#6B7280;"> days</span></div><div class="kpi-d">median 14 hrs</div></div>
+    <div class="card" style="padding:15px 16px;"><div class="kpi-l">Checks on the board</div><div class="kpi-v">62</div><div class="kpi-d">across 31 chapters</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:14px;margin-bottom:16px;">
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+        <div style="font-size:15px;font-weight:800;">Supply vs demand by category</div>
+      </div>
+      <div class="muted" style="margin-bottom:14px;">Checks held (supply) against open requests (demand). Amber marks an unmet gap.</div>
+      <div style="display:flex;gap:16px;margin-bottom:14px;">
+        <span class="muted"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#2D9B6F;margin-right:5px;"></span>Supply</span>
+        <span class="muted"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#3B82F6;margin-right:5px;"></span>Demand</span>
+        <span class="muted"><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#F4A261;margin-right:5px;"></span>Unmet gap</span>
+      </div>
+
+      <div class="catrow"><span class="muted" style="font-weight:600;color:#1A1F2E;">Real Estate Agent</span>
+        <div><div class="bar" style="width:78%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:30%;background:#3B82F6;"></div></div>
+        <span class="muted" style="text-align:right;">7 / 3</span></div>
+
+      <div class="catrow"><span class="muted" style="font-weight:600;color:#1A1F2E;">Digital Content</span>
+        <div><div class="bar" style="width:22%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:88%;background:#F4A261;"></div></div>
+        <span class="muted" style="text-align:right;">2 / 8</span></div>
+
+      <div class="catrow"><span class="muted" style="font-weight:600;color:#1A1F2E;">Architect</span>
+        <div><div class="bar" style="width:55%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:55%;background:#3B82F6;"></div></div>
+        <span class="muted" style="text-align:right;">5 / 5</span></div>
+
+      <div class="catrow"><span class="muted" style="font-weight:600;color:#1A1F2E;">App Developer</span>
+        <div><div class="bar" style="width:44%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:66%;background:#F4A261;"></div></div>
+        <span class="muted" style="text-align:right;">4 / 6</span></div>
+
+      <div class="catrow"><span class="muted" style="font-weight:600;color:#1A1F2E;">Interior Designer</span>
+        <div><div class="bar" style="width:66%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:22%;background:#3B82F6;"></div></div>
+        <span class="muted" style="text-align:right;">6 / 2</span></div>
+
+      <div class="catrow" style="margin-bottom:0;"><span class="muted" style="font-weight:600;color:#1A1F2E;">Chartered Accountant</span>
+        <div><div class="bar" style="width:11%;background:#2D9B6F;margin-bottom:4px;"></div><div class="bar" style="width:55%;background:#F4A261;"></div></div>
+        <span class="muted" style="text-align:right;">1 / 5</span></div>
+
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E5E7EB;font-size:12px;color:#6B7280;">
+        <b style="color:#1A1F2E;">Digital Content</b> and <b style="color:#1A1F2E;">Chartered Accountant</b> are the region's biggest shortages — 12 chapters want them, 3 hold them.
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:15px;font-weight:800;margin-bottom:4px;">Barters per month</div>
+      <div class="muted" style="margin-bottom:18px;">Confirmed trades, last 8 months</div>
+      <div style="display:flex;align-items:flex-end;gap:12px;height:186px;padding-bottom:2px;">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:34px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">Feb</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:52px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">Mar</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:44px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">Apr</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:78px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">May</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:96px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">Jun</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:120px;background:#C7D2DA;border-radius:6px 6px 0 0;"></div><span class="muted">Jul</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:142px;background:#2D9B6F;border-radius:6px 6px 0 0;"></div><span class="muted" style="font-weight:700;color:#1A1F2E;">Aug</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;"><div style="width:100%;height:158px;background:#2D9B6F;border-radius:6px 6px 0 0;"></div><span class="muted" style="font-weight:700;color:#1A1F2E;">Sep</span></div>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid #E5E7EB;display:flex;justify-content:space-between;">
+        <div><div class="muted">Busiest month</div><div style="font-size:15px;font-weight:800;margin-top:2px;">September · 12</div></div>
+        <div style="text-align:right;"><div class="muted">Trend</div><div style="font-size:15px;font-weight:800;margin-top:2px;color:#2D9B6F;">↑ Rising</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div><div style="font-size:15px;font-weight:800;">Barters by</div><div class="muted" style="margin-top:2px;">Each trade counts for both sides</div></div>
+      <div class="seg"><button class="on">DC</button><button>Chapter</button><button>Senior DC</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+      <table>
+        <thead><tr><th>Chapter Director</th><th style="text-align:right;">Barters</th><th style="width:34%;"></th></tr></thead>
+        <tbody>
+          <tr><td style="font-weight:700;">Alpesh Shah <span class="muted">· Ares</span></td><td style="text-align:right;font-weight:800;">9</td><td><div class="bar" style="width:100%;background:#1A1F2E;"></div></td></tr>
+          <tr><td style="font-weight:700;">Heena Poriya <span class="muted">· Crios</span></td><td style="text-align:right;font-weight:800;">7</td><td><div class="bar" style="width:78%;background:#1A1F2E;"></div></td></tr>
+          <tr><td style="font-weight:700;">Nilay Shah <span class="muted">· Atlas</span></td><td style="text-align:right;font-weight:800;">6</td><td><div class="bar" style="width:66%;background:#1A1F2E;"></div></td></tr>
+          <tr><td style="font-weight:700;">APMS &amp; Co. <span class="muted">· BNI Calibos</span></td><td style="text-align:right;font-weight:800;">4</td><td><div class="bar" style="width:44%;background:#1A1F2E;"></div></td></tr>
+          <tr><td style="font-weight:700;">Utpal Raval <span class="muted">· BNI Florentino</span></td><td style="text-align:right;font-weight:800;">3</td><td><div class="bar" style="width:33%;background:#1A1F2E;"></div></td></tr>
+        </tbody>
+      </table>
+      <div>
+        <div style="font-size:12px;font-weight:800;margin-bottom:10px;">Most traded categories</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 315);"></span>Real Estate Agent <b>11</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 52.5);"></span>Architect <b>8</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 105);"></span>App Developer <b>7</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 242.5);"></span>Interior Designer <b>6</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 0);"></span>Digital Content <b>5</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 137.5);"></span>Agronomist <b>4</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 275);"></span>Boarding <b>3</b></span>
+          <span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 0);"></span>Radio Advertising <b>2</b></span>
+        </div>
+        <div class="muted" style="margin-top:11px;line-height:1.5;">Each classification carries its <b style="color:#1A1F2E;">main category</b> colour, so the same category reads the same across the board, tables and charts.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:800;">All confirmed barter trades</div>
+      <span class="muted">37 trades</span>
+    </div>
+    <table>
+      <thead><tr><th>Requester</th><th>Offered</th><th>Approver</th><th>Return</th><th>Timestamp</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div style="font-weight:700;">Heena Poriya</div><span class="muted">Crios</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 105);"></span>App Developer</span></td>
+          <td><div style="font-weight:700;">Alpesh Shah</div><span class="muted">Ares</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 52.5);"></span>Architect</span></td>
+          <td class="muted">9 Sept 26 · 19:20</td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:700;">APMS &amp; Co.</div><span class="muted">BNI Calibos</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 137.5);"></span>Agronomist</span></td>
+          <td><div style="font-weight:700;">Alpesh Shah</div><span class="muted">Ares</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 275);"></span>Boarding</span></td>
+          <td class="muted">9 Sept 26 · 18:29</td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:700;">Nilay Shah</div><span class="muted">Atlas</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 242.5);"></span>Interior Designer</span></td>
+          <td><div style="font-weight:700;">Utpal Raval</div><span class="muted">BNI Florentino</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 315);"></span>Real Estate Agent</span></td>
+          <td class="muted">8 Sept 26 · 11:04</td>
+        </tr>
+        <tr>
+          <td><div style="font-weight:700;">Punit Periwal</div><span class="muted">Alethia</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 0);"></span>Radio Advertising</span></td>
+          <td><div style="font-weight:700;">Heena Poriya</div><span class="muted">Crios</span></td>
+          <td><span class="tag"><span class="cdot" style="background:oklch(0.68 0.15 0);"></span>Digital Content</span></td>
+          <td class="muted">6 Sept 26 · 16:47</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
