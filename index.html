@@ -2616,16 +2616,30 @@ async function barterOverviewNotif(){
   var seen={};try{seen=JSON.parse(localStorage.getItem('barterSeen')||'{}')||{};}catch(e){}
   try{
     var mine=await apiFetch('/barter/mine');
-    var accepted=(mine.requests||[]).filter(function(r){return r.status==='confirmed'&&r.match&&!seen[r.id];});
-    if(!accepted.length){host.innerHTML='';return;}
-    var h='<div class="card" style="border:1px solid rgba(45,155,111,.4);background:rgba(45,155,111,.08);margin-bottom:14px;">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="sec-title" style="color:var(--green);">🔔 Sicilian Barter — request'+(accepted.length>1?'s':'')+' accepted ('+accepted.length+')</div><button class="btn btn-sm" onclick="barterDismissNotif()">Dismiss</button></div>';
-    accepted.forEach(function(r){
-      h+='<div style="border-top:1px solid rgba(45,155,111,.2);padding:8px 0;font-size:13px;">Your request for <b>'+esc(r.requestedSub)+'</b> was accepted by <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+'. </div>';
-    });
-    h+='<div style="margin-top:6px;"><button class="btn btn-sm btn-navy" onclick="switchTab(\'barter\')">Open Sicilian Barter</button></div></div>';
+    var reqs=mine.requests||[];
+    var accepted=reqs.filter(function(r){return r.status==='confirmed'&&r.match&&!seen[r.id];});
+    var noTakers=reqs.filter(function(r){return r.status==='declined'&&!seen[r.id];});
+    if(!accepted.length&&!noTakers.length){host.innerHTML='';return;}
+    var h='';
+    if(accepted.length){
+      h+='<div class="card" style="border:1px solid rgba(45,155,111,.4);background:rgba(45,155,111,.08);margin-bottom:10px;">';
+      h+='<div class="sec-title" style="color:var(--green);">🔔 Sicilian Barter — request'+(accepted.length>1?'s':'')+' accepted ('+accepted.length+')</div>';
+      accepted.forEach(function(r){
+        h+='<div style="border-top:1px solid rgba(45,155,111,.2);padding:8px 0;font-size:13px;">Your request for <b>'+esc(r.requestedSub)+'</b> was accepted by <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+'.</div>';
+      });
+      h+='</div>';
+    }
+    if(noTakers.length){
+      h+='<div class="card" style="border:1px solid rgba(230,57,70,.35);background:rgba(230,57,70,.07);margin-bottom:10px;">';
+      h+='<div class="sec-title" style="color:var(--red);">Sicilian Barter — no takers ('+noTakers.length+')</div>';
+      noTakers.forEach(function(r){
+        h+='<div style="border-top:1px solid rgba(230,57,70,.2);padding:8px 0;font-size:13px;">Every chapter holding <b>'+esc(r.requestedSub)+'</b> passed on your request. Try another classification, or add another check so you have more to offer.</div>';
+      });
+      h+='</div>';
+    }
+    h+='<div style="display:flex;gap:8px;margin-bottom:14px;"><button class="btn btn-sm btn-navy" onclick="switchTab(\'barter\')">Open Sicilian Barter</button><button class="btn btn-sm" onclick="barterDismissNotif()">Dismiss</button></div>';
     host.innerHTML=h;
-    window._barterNotifIds=accepted.map(function(r){return r.id;});
+    window._barterNotifIds=accepted.concat(noTakers).map(function(r){return r.id;});
   }catch(e){host.innerHTML='';}
 }
 function barterDismissNotif(){
@@ -6095,13 +6109,15 @@ function barterRequestsHTML(){
   h+='<div class="tm mt0" style="margin-bottom:8px;">Request a classification your chapter needs. It routes to up to 3 chapters holding it; the first to confirm wins.</div>';
   if(!reqs.length)h+='<div class="empty">No requests yet. Go to Available and hit “Request” on a classification you need.</div>';
   reqs.forEach(function(r){
-    var col=r.status==='confirmed'?'var(--green)':r.status==='open'?'var(--amber)':'var(--muted)';
+    var col=r.status==='confirmed'?'var(--green)':r.status==='open'?'var(--amber)':r.status==='declined'?'var(--red)':'var(--muted)';
+    var label=r.status==='open'?'Pending':r.status==='confirmed'?'Matched':r.status==='declined'?'No takers':r.status;
     h+='<div style="padding:9px 0;border-top:1px solid var(--border);">';
     h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">';
-    h+='<div><span style="font-weight:700">'+esc(r.requestedSub)+'</span> <span class="tm">'+esc(r.requestedMain||'')+'</span> · <span style="font-weight:700;color:'+col+'">'+(r.status==='open'?'Pending':r.status==='confirmed'?'Matched':r.status)+'</span></div>';
+    h+='<div><span style="font-weight:700">'+esc(r.requestedSub)+'</span> <span class="tm">'+esc(r.requestedMain||'')+'</span> · <span style="font-weight:700;color:'+col+'">'+label+'</span></div>';
     if(r.status==='open')h+='<button class="btn btn-sm" onclick="barterCancelRequest(\''+r.id+'\')">Cancel</button>';
     h+='</div>';
-    if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.</div>';
+    if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.'+((r.declinedCount||0)?' '+r.declinedCount+' passed so far.':'')+'</div>';
+    if(r.status==='declined')h+='<div style="margin-top:4px;background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.3);border-radius:7px;padding:7px 9px;font-size:12px;">All '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+' holding this category passed. Try a different classification, or add another check so you have more to offer.</div>';
     if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+' — '+esc(r.requestedSub)+'. Coordinate the induction with them.</div>';
     h+='</div>';
   });
@@ -6117,7 +6133,9 @@ function barterInboxHTML(){
   if(!items.length)h+='<div class="empty">No incoming requests right now.</div>';
   items.forEach(function(it){
     h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">';
     h+='<div style="font-weight:700">A chapter needs: '+esc(it.requestedSub)+' <span class="tm">(you\'re holding it)</span></div>';
+    h+='<button class="btn btn-sm" onclick="barterDecline(\''+it.requestId+'\')">Decline</button></div>';
     h+='<div class="tm" style="margin:6px 0 4px;">They\'re offering — take one your chapter needs:</div>';
     if(!it.offered||!it.offered.length)h+='<div class="tm">They have nothing available to offer right now.</div>';
     (it.offered||[]).forEach(function(o){
@@ -6227,6 +6245,13 @@ async function barterWithdrawCheck(id){
 async function barterRequest(sub){
   try{var r=await apiFetch('/barter/requests',{method:'POST',body:{sub:sub}});S.barter.view='requests';barterAfter('Request sent to '+((r.request&&r.request.recipientCount)||0)+' chapter(s)');}
   catch(e){toast(e.message||'Could not send request');}
+}
+async function barterDecline(reqId){
+  if(!confirm('Pass on this barter? It leaves your inbox — the other chapters holding this category can still take it.'))return;
+  try{
+    var r=await apiFetch('/barter/requests/'+encodeURIComponent(reqId)+'/decline',{method:'POST',body:{}});
+    barterAfter(r&&r.closed?'Declined — all chapters have now passed':'Declined');
+  }catch(e){toast(e.message||'Could not decline');}
 }
 async function barterCancelRequest(id){
   try{await apiFetch('/barter/requests/'+encodeURIComponent(id)+'/cancel',{method:'POST',body:{}});barterAfter('Request cancelled');}

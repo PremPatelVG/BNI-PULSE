@@ -73,7 +73,7 @@ async function mine(user) {
   for (const d of reqSnap.docs) {
     const r = { id: d.id, ...d.data() };
     if (r.status === "withdrawn") continue;
-    const row = { id: r.id, requestedSub: r.requestedSub, requestedMain: r.requestedMain, status: r.status, recipientCount: (r.recipients || []).length, createdAt: r.createdAt };
+    const row = { id: r.id, requestedSub: r.requestedSub, requestedMain: r.requestedMain, status: r.status, recipientCount: (r.recipients || []).length, declinedCount: (r.declinedBy || []).length, createdAt: r.createdAt };
     if (r.status === "confirmed") {
       // Requester receives the winner's check (wonCheckId); partner revealed.
       const won = r.wonCheckId ? await db.collection("checks").doc(r.wonCheckId).get() : null;
@@ -100,7 +100,10 @@ async function inbox(user) {
   assertCanTrade(user);
   const db = getDb();
   const snap = await db.collection("barterRequests").where("recipientDcIds", "array-contains", user.sub).get();
-  const open = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => r.status === "open");
+  // Requests this holder has already passed on drop out of their inbox, but stay live
+  // for the other recipients.
+  const open = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(r => r.status === "open" && !(r.declinedBy || []).includes(user.sub));
   const items = [];
   for (const r of open) {
     const mineRecipient = (r.recipients || []).find(x => x.holderDcId === user.sub);
@@ -227,6 +230,9 @@ async function confirmRequest(user, requestId, body) {
     if (r.status !== "open") throw badRequest("This request has already been matched or withdrawn");
     const mineRecipient = (r.recipients || []).find(x => x.holderDcId === user.sub);
     if (!mineRecipient) throw forbidden("This request wasn't routed to you");
+    // Having passed on a request rules out confirming it later - otherwise a stale
+    // inbox page could still take a trade this chapter had already declined.
+    if ((r.declinedBy || []).includes(user.sub)) throw badRequest("You have already passed on this request");
 
     const myCheckRef = db.collection("checks").doc(mineRecipient.checkId);   // goes to the requester
     const offeredRef = db.collection("checks").doc(offeredCheckId);          // comes to me
@@ -243,6 +249,32 @@ async function confirmRequest(user, requestId, body) {
 
   // Winner receives the requester's offered check; requester is revealed to the winner.
   return ok({ matched: true, partner: { chapter: result.requesterChapter, name: await memberName(result.requesterDcId) }, receivedProspect: result.receivedProspect, receivedPhone: result.receivedPhone, receivedCategory: result.receivedCategory });
+}
+
+// A recipient passing on a request. This is per-recipient: it only leaves THAT
+// holder's inbox, so the request stays live for the others and first-come-first-served
+// still applies. When every recipient has passed, the request closes itself so the
+// requester learns nobody took it instead of waiting indefinitely.
+async function declineRequest(user, requestId) {
+  assertCanTrade(user);
+  const db = getDb();
+  const result = await db.runTransaction(async t => {
+    const ref = db.collection("barterRequests").doc(requestId);
+    const doc = await t.get(ref);
+    if (!doc.exists) throw notFound("Request not found");
+    const r = doc.data();
+    if (r.status !== "open") throw badRequest("This request is no longer open");
+    const recipientIds = r.recipientDcIds || [];
+    if (!recipientIds.includes(user.sub)) throw forbidden("This request wasn't routed to you");
+
+    const declinedBy = [...new Set([...(r.declinedBy || []), user.sub])];
+    const allDeclined = recipientIds.every(id => declinedBy.includes(id));
+    const patch = { declinedBy };
+    if (allDeclined) { patch.status = "declined"; patch.closedAt = nowIso(); }
+    t.set(ref, patch, { merge: true });
+    return { allDeclined, remaining: recipientIds.filter(id => !declinedBy.includes(id)).length };
+  });
+  return ok({ declined: true, closed: result.allDeclined, remaining: result.remaining });
 }
 
 async function cancelRequest(user, requestId) {
@@ -275,6 +307,7 @@ export async function routeBarter({ method, segments, body, user }) {
 
   if (second === "requests" && !third && method === "POST") return createRequest(user, body);
   if (second === "requests" && third && fourth === "confirm" && method === "POST") return confirmRequest(user, third, body);
+  if (second === "requests" && third && fourth === "decline" && method === "POST") return declineRequest(user, third);
   if (second === "requests" && third && fourth === "cancel" && method === "POST") return cancelRequest(user, third);
 
   throw notFound("Unknown barter route");
