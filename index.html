@@ -311,7 +311,13 @@ function setAuthToken(token){
   try{if(token)localStorage.setItem('bniPulseToken',token);else localStorage.removeItem('bniPulseToken');}catch(e){}
 }
 
-function onSessionExpired(){
+// `sentWith` is the token the failing request actually carried. A 401 answering a
+// token we have already replaced - or a request that went out unauthenticated just
+// before a fresh sign-in - is stale and must NOT tear down the new session. Without
+// this, a poll still in flight at sign-in time lands a moment later and logs the user
+// straight back out, which looks exactly like "my PIN stopped working".
+function onSessionExpired(sentWith){
+  if(arguments.length&&(sentWith||null)!==AUTH_TOKEN)return;
   setAuthToken(null);
   if(S.user){S.user=null;stopSync();hide('app');show('loginScreen');toast('Your session expired. Please sign in again.',5000);}
 }
@@ -319,13 +325,14 @@ function onSessionExpired(){
 async function apiFetch(path,options){
   const opts=Object.assign({},options||{});
   opts.headers=Object.assign({},opts.headers||{});
-  if(AUTH_TOKEN)opts.headers['Authorization']='Bearer '+AUTH_TOKEN;
+  const sentWith=AUTH_TOKEN||null;
+  if(sentWith)opts.headers['Authorization']='Bearer '+sentWith;
   if(opts.body!==undefined&&typeof opts.body!=='string'){
     opts.headers['Content-Type']='application/json';
     opts.body=JSON.stringify(opts.body);
   }
   const res=await fetch(API_BASE+path,opts);
-  if(res.status===401){onSessionExpired();throw new Error('Session expired - please sign in again');}
+  if(res.status===401){onSessionExpired(sentWith);throw new Error('Session expired - please sign in again');}
   if(res.status===204)return null;
   const text=await res.text();
   let data=null;
@@ -2633,7 +2640,7 @@ async function barterOverviewNotif(){
       h+='<div class="card" style="border:1px solid rgba(230,57,70,.35);background:rgba(230,57,70,.07);margin-bottom:10px;">';
       h+='<div class="sec-title" style="color:var(--red);">Sicilian Barter — no takers ('+noTakers.length+')</div>';
       noTakers.forEach(function(r){
-        h+='<div style="border-top:1px solid rgba(230,57,70,.2);padding:8px 0;font-size:13px;">Every chapter holding <b>'+esc(r.requestedSub)+'</b> passed on your request. Try another classification, or add another check so you have more to offer.</div>';
+        h+='<div style="border-top:1px solid rgba(230,57,70,.2);padding:8px 0;font-size:13px;">Every chapter holding <b>'+esc(r.requestedSub)+'</b> passed on your request. Try another classification, or add another cheque so you have more to offer.</div>';
       });
       h+='</div>';
     }
@@ -5968,12 +5975,12 @@ function getChapterMonthRetro(ch,month){
   return{name:ch.name,director:chapterDirectorName(ch),hasData:true,startMembers:startMembers,closeMembers:closeMembers,inductions:inductions,drops:drops,netAdd:netAdd,totRefs:totRefs,totVis:totVis,totPos:totPos,conv:conv,totTYFCB:totTYFCB,totEOI:totEOIYes+totEOIMaybe+totEOINo,totEOIYes:totEOIYes,totEOIMaybe:totEOIMaybe,totEOINo:totEOINo,tlr:tlr,weeks:weekCount,moTarget:rMoTgt,moGap:rMoGap,renewalsDue:rDue,renewalsDone:rDone};
 }
 
-// ── CHECK BARTER ────────────────────────────────────────────────────────────
+// ── SICILIAN BARTER ────────────────────────────────────────────────────────────
 // Anonymous cross-chapter category exchange. All data comes from dedicated
 // /api/barter/* endpoints (never the shared snapshot), so identities stay hidden
 // until a match is confirmed.
 function barterCanTrade(){return['dc','cd','sa1','sa2'].includes(S.user&&S.user.role);}
-function barterState(){if(!S.barter)S.barter={view:'board',search:'',expanded:{},cats:null,board:null,mine:null,inbox:null};return S.barter;}
+function barterState(){if(!S.barter)S.barter={view:'board',search:'',expanded:{},cats:null,board:null,mine:null,inbox:null,fSr:'',fDc:''};return S.barter;}
 
 async function loadBarter(){
   var st=barterState();
@@ -5997,7 +6004,9 @@ function renderBarter(){
   loadBarter().then(paintBarter);
   if(!window._barterTimer){
     window._barterTimer=setInterval(function(){
-      if(S.tab!=='barter'){clearInterval(window._barterTimer);window._barterTimer=null;return;}
+      // Stop once the tab changes OR the user signs out - a poll firing while signed
+      // out just 401s in a loop and races the next sign-in.
+      if(S.tab!=='barter'||!S.user||!AUTH_TOKEN){clearInterval(window._barterTimer);window._barterTimer=null;return;}
       // Don't repaint (and clobber) a form the user is actively typing in.
       var ae=document.activeElement;
       if(ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName)&&ae.closest&&ae.closest('#tab-barter'))return;
@@ -6010,12 +6019,12 @@ function paintBarter(){
   var el=document.getElementById('tab-barter');if(!el||S.tab!=='barter')return;
   var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector();
   var inboxCount=(st.inbox&&st.inbox.inbox&&st.inbox.inbox.length)||0;
-  var views=trade?[['board','Available'],['mine','My Checks'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')],['trades','My Trades']]
+  var views=trade?[['board','Available'],['mine','My Cheques'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')],['trades','My Trades']]
     :seesAll?[['board','Available'],['trades','All Trades']]:[['board','Available']];
   if(!views.some(function(v){return v[0]===st.view;}))st.view='board';
   var nav=views.map(function(v){return '<button class="btn btn-sm '+(st.view===v[0]?'btn-navy':'btn-secondary')+'" onclick="S.barter.view=\''+v[0]+'\';paintBarter()">'+v[1]+'</button>';}).join(' ');
   var body=st.view==='mine'?barterMineHTML():st.view==='requests'?barterRequestsHTML():st.view==='inbox'?barterInboxHTML():st.view==='trades'?barterTradesHTML():barterBoardHTML();
-  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Sicilian Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
+  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Sicilian Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':seesAll?' — leadership oversight view':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
 }
 
 function barterAfter(msg){toast(msg);loadBarter().then(paintBarter);}
@@ -6029,15 +6038,76 @@ function barterFillSubs(){
   sel.innerHTML='<option value="">Sub-category…</option>'+subs.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
 }
 
+// Flattens the leadership-only holders map into one row per cheque, tagged with the
+// chapter's Senior DC so the board can be filtered by DC or Sr-DC.
+function barterHolderRows(b){
+  var out=[];var H=b&&b.holders;if(!H)return out;
+  Object.keys(H).forEach(function(sub){
+    (H[sub]||[]).forEach(function(x){
+      out.push({sub:sub,name:x.name||'',chapter:x.chapter||'',sr:barterTradeSrOf(x.chapter)});
+    });
+  });
+  return out;
+}
+function barterSetBoardFilter(which,val){
+  var st=barterState();
+  if(which==='sr'){st.fSr=val;st.fDc='';}else{st.fDc=val;}
+  paintBarter();
+}
+
 function barterBoardHTML(){
   var st=barterState();var b=st.board;var cats=st.cats;
   if(!b||!cats)return'<div class="card"><div class="empty">No data yet.</div></div>';
   var counts=b.counts||{},mainTotals=b.mainTotals||{};
   var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();
   window._bMainMap=[];window._bSubMap=[];
+
+  // Leadership only: filter the board down to one Senior DC or one DC. Counts are
+  // recomputed from the holder rows so every total on screen matches the filter.
+  var rows=barterHolderRows(b);var filterHTML='';var holders=b.holders;
+  var total=b.totalAvailable||0;
+  if(rows.length){
+    var srs=[];var seenSr={};
+    rows.forEach(function(r){if(r.sr&&r.sr!=='—'&&!seenSr[r.sr]){seenSr[r.sr]=1;srs.push(r.sr);}});
+    srs.sort();
+    if(st.fSr&&!seenSr[st.fSr])st.fSr='';
+    var pool=st.fSr?rows.filter(function(r){return r.sr===st.fSr;}):rows;
+    var dcs=[];var seenDc={};
+    pool.forEach(function(r){if(r.name&&!seenDc[r.name]){seenDc[r.name]=1;dcs.push(r.name);}});
+    dcs.sort();
+    if(st.fDc&&!seenDc[st.fDc])st.fDc='';
+    var shown=st.fDc?pool.filter(function(r){return r.name===st.fDc;}):pool;
+
+    var selSt='padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;min-width:180px;';
+    filterHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">';
+    filterHTML+='<select onchange="barterSetBoardFilter(\'sr\',this.value)" style="'+selSt+'"><option value="">All Senior Directors</option>'
+      +srs.map(function(n){return '<option value="'+esc(n)+'"'+(st.fSr===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
+    filterHTML+='<select onchange="barterSetBoardFilter(\'dc\',this.value)" style="'+selSt+'"><option value="">All DCs'+(st.fSr?' under '+esc(st.fSr):'')+'</option>'
+      +dcs.map(function(n){return '<option value="'+esc(n)+'"'+(st.fDc===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
+    if(st.fSr||st.fDc)filterHTML+='<button class="btn btn-sm btn-secondary" onclick="S.barter.fSr=\'\';S.barter.fDc=\'\';paintBarter()">Clear</button>';
+    filterHTML+='</div>';
+
+    if(st.fSr||st.fDc){
+      counts={};holders={};
+      shown.forEach(function(r){
+        counts[r.sub]=(counts[r.sub]||0)+1;
+        (holders[r.sub]=holders[r.sub]||[]).push({name:r.name,chapter:r.chapter});
+      });
+      mainTotals={};
+      Object.keys(counts).forEach(function(sub){
+        var main=null;
+        (cats.tree||[]).forEach(function(m){if(!main&&(m.subs||[]).indexOf(sub)>=0)main=m.main;});
+        main=main||'Other';mainTotals[main]=(mainTotals[main]||0)+counts[sub];
+      });
+      total=shown.length;
+      b={counts:counts,mainTotals:mainTotals,totalAvailable:total,holders:holders};
+    }
+  }
+
   var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
-  h+='<div><span style="font-size:26px;font-weight:900;color:var(--navy)">'+(b.totalAvailable||0)+'</span> <span class="tm">checks available across the region</span></div>';
+  h+='<div><span style="font-size:26px;font-weight:900;color:var(--navy)">'+total+'</span> <span class="tm">cheque'+(total===1?'':'s')+' available'+(st.fDc?' from '+esc(st.fDc):st.fSr?' under '+esc(st.fSr):' across the region')+'</span></div>';
   h+='<input type="text" value="'+esc(st.search||'')+'" placeholder="Search classification…" oninput="S.barter.search=this.value;clearTimeout(window._btq);window._btq=setTimeout(paintBarter,200)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;min-width:210px;"></div>';
+  h+=filterHTML;
   var mains=(cats.tree||[]).slice().sort(function(a,b){return a.main.localeCompare(b.main);});
   var any=false;
   mains.forEach(function(m){
@@ -6053,15 +6123,26 @@ function barterBoardHTML(){
       h+='<div style="padding:2px 12px 8px;">';
       subs.sort(function(a,b){return(counts[b]||0)-(counts[a]||0)||a.localeCompare(b);}).forEach(function(s){
         var si=window._bSubMap.push(s)-1;
-        h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);">';
+        h+='<div style="border-top:1px solid var(--border);padding:7px 0;">';
+        h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">';
         h+='<div>'+esc(s)+' <span class="tm">— '+(counts[s]||0)+' available</span></div>';
         h+=(trade?'<button class="btn btn-sm btn-navy" onclick="barterRequestIdx('+si+')">Request</button>':'')+'</div>';
+        // Leadership (AD / ED / BNI Office) sees which DC is holding each cheque.
+        var hold=(b.holders&&b.holders[s])||null;
+        if(hold&&hold.length){
+          h+='<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;">';
+          hold.forEach(function(x){
+            h+='<span class="pill" style="background:var(--surface);border:1px solid var(--border);font-size:11px;font-weight:700;">'+esc(x.name)+(x.chapter?' <span style="font-weight:500;opacity:.7">· '+esc(x.chapter)+'</span>':'')+'</span>';
+          });
+          h+='</div>';
+        }
+        h+='</div>';
       });
       h+='</div>';
     }
     h+='</div>';
   });
-  if(!any)h+='<div class="empty">No checks available'+(q?' matching “'+esc(q)+'”':' right now')+'.</div>';
+  if(!any)h+='<div class="empty">No cheques available'+(q?' matching “'+esc(q)+'”':' right now')+'.</div>';
   return h+'</div>';
 }
 
@@ -6070,18 +6151,18 @@ function barterMineHTML(){
   if(!mine)return'<div class="card"><div class="empty">Loading…</div></div>';
   var mains=(cats&&cats.tree||[]).slice().sort(function(a,b){return a.main.localeCompare(b.main);});
   var inSt='padding:8px 10px;border:1.5px solid var(--border);border-radius:8px;';
-  var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Add a check you\'re holding</div>';
+  var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Add a cheque you\'re holding</div>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
   h+='<select id="bChkMain" onchange="barterFillSubs()" style="min-width:200px;'+inSt+'"><option value="">Main category…</option>'+mains.map(function(m){return '<option value="'+esc(m.main)+'">'+esc(m.main)+'</option>';}).join('')+'</select>';
   h+='<select id="bChkSub2" style="min-width:200px;'+inSt+'"><option value="">Sub-category…</option></select>';
   h+='<input id="bChkName" placeholder="Prospect name" style="min-width:150px;'+inSt+'">';
   h+='<input id="bChkPhone" placeholder="Contact number" style="min-width:140px;'+inSt+'">';
-  h+='<button class="btn btn-navy" onclick="barterAddCheck()">Add check</button></div>';
+  h+='<button class="btn btn-navy" onclick="barterAddCheck()">Add cheque</button></div>';
   h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name &amp; contact are revealed only after a match.</div></div>';
   var avail=(mine.checks||[]).filter(function(c){return c.status==='available';});
   var matched=(mine.checks||[]).filter(function(c){return c.status==='matched';});
-  h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My held checks ('+avail.length+')</div>';
-  if(!avail.length)h+='<div class="empty">You aren\'t holding any checks yet.</div>';
+  h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My held cheques ('+avail.length+')</div>';
+  if(!avail.length)h+='<div class="empty">You aren\'t holding any cheques yet.</div>';
   avail.forEach(function(c){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);">';
     h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+(c.phone?' · '+esc(c.phone):'')+'</span></div>';
@@ -6117,7 +6198,7 @@ function barterRequestsHTML(){
     if(r.status==='open')h+='<button class="btn btn-sm" onclick="barterCancelRequest(\''+r.id+'\')">Cancel</button>';
     h+='</div>';
     if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.'+((r.declinedCount||0)?' '+r.declinedCount+' passed so far.':'')+'</div>';
-    if(r.status==='declined')h+='<div style="margin-top:4px;background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.3);border-radius:7px;padding:7px 9px;font-size:12px;">All '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+' holding this category passed. Try a different classification, or add another check so you have more to offer.</div>';
+    if(r.status==='declined')h+='<div style="margin-top:4px;background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.3);border-radius:7px;padding:7px 9px;font-size:12px;">All '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+' holding this category passed. Try a different classification, or add another cheque so you have more to offer.</div>';
     if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+' — '+esc(r.requestedSub)+'. Coordinate the induction with them.</div>';
     h+='</div>';
   });
@@ -6129,7 +6210,7 @@ function barterInboxHTML(){
   if(!inbox)return'<div class="card"><div class="empty">Loading…</div></div>';
   var items=inbox.inbox||[];
   var h='<div class="card"><div class="sec-title" style="margin-bottom:8px;">Incoming barter requests ('+items.length+')</div>';
-  h+='<div class="tm" style="margin-bottom:8px;">Someone needs a classification you\'re holding. To trade, pick one of the checks they\'re offering that <b>your</b> chapter needs, then confirm. First to confirm wins.</div>';
+  h+='<div class="tm" style="margin-bottom:8px;">Someone needs a classification you\'re holding. To trade, pick one of the cheques they\'re offering that <b>your</b> chapter needs, then confirm. First to confirm wins.</div>';
   if(!items.length)h+='<div class="empty">No incoming requests right now.</div>';
   items.forEach(function(it){
     h+='<div style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;">';
@@ -6148,7 +6229,16 @@ function barterInboxHTML(){
   return h+'</div>';
 }
 
-function barterTradeSrOf(chapter){try{var n=chapterSeniorDirectorName(chapter);return n||'—';}catch(e){return '—';}}
+// chapterSeniorDirectorName() wants the chapter OBJECT; barter data carries the chapter
+// NAME, so look it up first. (Passing the string returned '' for every chapter, which
+// silently emptied the Sr-DC filter and grouped every trade under "—".)
+function barterTradeSrOf(chapter){
+  try{
+    if(!chapter)return '—';
+    var ch=(S.chapters||[]).find(function(x){return x.name===chapter;});
+    return(ch?chapterSeniorDirectorName(ch):'')||'—';
+  }catch(e){return '—';}
+}
 function barterFmtTime(iso){if(!iso)return '';var d=new Date(iso);if(isNaN(d))return String(iso).slice(0,16).replace('T',' ');return fmtD(String(iso).slice(0,10))+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 
 function barterTradesHTML(){
@@ -6234,12 +6324,12 @@ async function barterAddCheck(){
   var phone=(document.getElementById('bChkPhone')||{}).value||'';
   if(!sub.trim()){toast('Select a main category and sub-category');return;}
   if(!name.trim()||!phone.trim()){toast('Enter the prospect name and contact number');return;}
-  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),phone:phone.trim()}});barterAfter('Check added');}
-  catch(e){toast(e.message||'Could not add check');}
+  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),phone:phone.trim()}});barterAfter('Cheque added');}
+  catch(e){toast(e.message||'Could not add cheque');}
 }
 async function barterWithdrawCheck(id){
-  if(!confirm('Withdraw this check?'))return;
-  try{await apiFetch('/barter/checks/'+encodeURIComponent(id),{method:'DELETE'});barterAfter('Check withdrawn');}
+  if(!confirm('Withdraw this cheque?'))return;
+  try{await apiFetch('/barter/checks/'+encodeURIComponent(id),{method:'DELETE'});barterAfter('Cheque withdrawn');}
   catch(e){toast(e.message||'Could not withdraw');}
 }
 async function barterRequest(sub){
@@ -6258,7 +6348,7 @@ async function barterCancelRequest(id){
   catch(e){toast(e.message||'Could not cancel');}
 }
 async function barterConfirm(reqId,checkId){
-  if(!confirm('Confirm this barter? This trades your check for theirs and reveals you to each other.'))return;
+  if(!confirm('Confirm this barter? This trades your cheque for theirs and reveals you to each other.'))return;
   try{var r=await apiFetch('/barter/requests/'+encodeURIComponent(reqId)+'/confirm',{method:'POST',body:{offeredCheckId:checkId}});
     alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')'+(r.receivedPhone?'\nPhone: '+r.receivedPhone:'')+'\nFrom: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+'\n\nCoordinate the induction with them.');
     barterAfter('Barter confirmed');}

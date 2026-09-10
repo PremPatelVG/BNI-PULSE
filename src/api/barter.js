@@ -1,9 +1,12 @@
-// Check Barter: a region-wide, anonymous marketplace where DCs/SAs trade "checks"
+// Sicilian Barter: a region-wide, anonymous marketplace where DCs/SAs trade "cheques"
 // (a prospect whose category is full in their chapter) for a category their chapter
 // needs. Strict two-way barter, first-come-first-served, identities hidden until a
 // match confirms. This lives OUTSIDE the shared snapshot on purpose: the snapshot ships
 // the whole dataset to every client, which would break anonymity. Every read here
 // returns only what the caller is allowed to see.
+//
+// Note: the Firestore collection, routes and field names stay "check*" - renaming
+// live data has no upside. "Cheque" is the spelling users see.
 
 import { getDb } from "../firebaseAdmin.js";
 import { badRequest, forbidden, isAreaDirector, notFound } from "../services/scope.js";
@@ -21,7 +24,7 @@ const notExpired = c => !c.expiresAt || c.expiresAt > nowIso();
 
 function assertCanTrade(user) {
   if (!TRADE_ROLES.has(user?.role) || !chapterOf(user)) {
-    throw forbidden("Only a Chapter Director or Support Ambassador can trade checks");
+    throw forbidden("Only a Chapter Director or Support Ambassador can trade cheques");
   }
 }
 
@@ -42,17 +45,46 @@ async function memberName(id) {
   catch { return id; }
 }
 
+// One batched read for many ids - the board resolves every holder at once.
+async function memberNames(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const out = new Map();
+  if (!unique.length) return out;
+  try {
+    const db = getDb();
+    const docs = await db.getAll(...unique.map(id => db.collection("members").doc(id)));
+    docs.forEach((d, i) => out.set(unique[i], (d.exists && d.data().name) || unique[i]));
+  } catch { unique.forEach(id => out.set(id, id)); }
+  return out;
+}
+
 // ---- reads -------------------------------------------------------------------
 
-async function board() {
+async function board(user) {
   const snap = await getDb().collection("checks").where("status", "==", "available").get();
+  const live = snap.docs.map(d => d.data()).filter(notExpired);
   const counts = {};
-  snap.docs.map(d => d.data()).filter(notExpired).forEach(c => { counts[c.sub] = (counts[c.sub] || 0) + 1; });
+  live.forEach(c => { counts[c.sub] = (counts[c.sub] || 0) + 1; });
   const cats = await getCategories();
   const mainTotals = {};
   for (const [sub, n] of Object.entries(counts)) { const main = cats.subToMain.get(sub) || "Other"; mainTotals[main] = (mainTotals[main] || 0) + n; }
   const totalAvailable = Object.values(counts).reduce((s, n) => s + n, 0);
-  return ok({ counts, mainTotals, totalAvailable, updatedAt: nowIso() });
+
+  // Area/Executive Directors and the BNI Office also see WHICH DC is holding each
+  // cheque, for oversight. DCs and SAs still get counts only - the board stays
+  // anonymous between chapters. Prospect names and phones are never returned here.
+  let holders;
+  if (isAreaDirector(user)) {
+    const names = await memberNames(live.map(c => c.dcId));
+    holders = {};
+    for (const c of live) {
+      (holders[c.sub] = holders[c.sub] || []).push({
+        name: names.get(c.dcId) || c.dcId, chapter: c.chapter || "", listedAt: c.createdAt || ""
+      });
+    }
+    for (const list of Object.values(holders)) list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return ok({ counts, mainTotals, totalAvailable, holders, updatedAt: nowIso() });
 }
 
 async function myAvailableChecks(dcId) {
@@ -172,9 +204,9 @@ async function withdrawCheck(user, checkId) {
   assertCanTrade(user);
   const ref = getDb().collection("checks").doc(checkId);
   const doc = await ref.get();
-  if (!doc.exists) throw notFound("Check not found");
-  if (doc.data().dcId !== user.sub) throw forbidden("That check isn't yours");
-  if (doc.data().status !== "available") throw badRequest("Only an available check can be withdrawn");
+  if (!doc.exists) throw notFound("Cheque not found");
+  if (doc.data().dcId !== user.sub) throw forbidden("That cheque isn't yours");
+  if (doc.data().status !== "available") throw badRequest("Only an available cheque can be withdrawn");
   await ref.set({ status: "withdrawn", withdrawnAt: nowIso() }, { merge: true });
   return noContent();
 }
@@ -189,7 +221,7 @@ async function createRequest(user, body) {
 
   // Strict barter: you must be holding at least one check to offer in return.
   const offered = await myAvailableChecks(user.sub);
-  if (!offered.length) throw badRequest("You need at least one available check of your own to barter");
+  if (!offered.length) throw badRequest("You need at least one available cheque of your own to barter");
 
   // One open request per category at a time.
   const existing = await db.collection("barterRequests").where("requesterDcId", "==", user.sub).get();
@@ -220,7 +252,7 @@ async function confirmRequest(user, requestId, body) {
   assertCanTrade(user);
   const db = getDb();
   const offeredCheckId = String(body?.offeredCheckId || "");
-  if (!offeredCheckId) throw badRequest("Pick which of the offered checks you want");
+  if (!offeredCheckId) throw badRequest("Pick which of the offered cheques you want");
 
   const result = await db.runTransaction(async t => {
     const reqRef = db.collection("barterRequests").doc(requestId);
@@ -237,8 +269,8 @@ async function confirmRequest(user, requestId, body) {
     const myCheckRef = db.collection("checks").doc(mineRecipient.checkId);   // goes to the requester
     const offeredRef = db.collection("checks").doc(offeredCheckId);          // comes to me
     const [myCheck, offered] = await Promise.all([t.get(myCheckRef), t.get(offeredRef)]);
-    if (!myCheck.exists || myCheck.data().status !== "available" || myCheck.data().dcId !== user.sub) throw badRequest("Your check for this category is no longer available");
-    if (!offered.exists || offered.data().status !== "available" || offered.data().dcId !== r.requesterDcId) throw badRequest("That offered check is no longer available");
+    if (!myCheck.exists || myCheck.data().status !== "available" || myCheck.data().dcId !== user.sub) throw badRequest("Your cheque for this category is no longer available");
+    if (!offered.exists || offered.data().status !== "available" || offered.data().dcId !== r.requesterDcId) throw badRequest("That offered cheque is no longer available");
 
     const at = nowIso();
     t.set(reqRef, { status: "confirmed", confirmedByDcId: user.sub, confirmedByChapter: chapterOf(user), wonCheckId: mineRecipient.checkId, tradedOfferedCheckId: offeredCheckId, matchedAt: at }, { merge: true });
@@ -297,7 +329,7 @@ export async function routeBarter({ method, segments, body, user }) {
     const c = await getCategories();
     return ok({ tree: c.tree, mainCount: c.mainCount, subCount: c.subCount });
   }
-  if (second === "board" && method === "GET") return board();
+  if (second === "board" && method === "GET") return board(user);
   if (second === "mine" && method === "GET") return mine(user);
   if (second === "inbox" && method === "GET") return inbox(user);
   if (second === "trades" && method === "GET") return trades(user);
