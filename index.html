@@ -4304,12 +4304,12 @@ function renderUpload(){
         <input type="file" id="duesFile" accept=".xls,.xlsx" onchange="handleDuesUpload(this)">
       </div><div id="duesStatus" class="tm mt2"></div>
     </div>
-    ${isAreaDirector()?`
-    <div class="card"><div class="card-t">Region Traffic Light Report</div>
+    ${(isAreaDirector()||isSrdc())?`
+    <div class="card"><div class="card-t">${isAreaDirector()?'Region':'Chapter'} Traffic Light Report</div>
       <div class="dropz" onclick="document.getElementById('tlrFile').click()">
         <div style="font-size:26px;margin-bottom:5px;">🚦</div>
-        <div style="font-size:14px;font-weight:600;">Upload Region TLR Excel</div>
-        <div class="tm mt2">Reads the Month/Year in the sheet and updates that month's data for the whole region. Area Director / BNI Office account only.</div>
+        <div style="font-size:14px;font-weight:600;">Upload ${isAreaDirector()?'Region':"Your Chapters'"} TLR Excel</div>
+        <div class="tm mt2">Reads the Month/Year in the sheet and updates that month's data ${isAreaDirector()?'for the whole region':'for your assigned chapters only — other chapters are left unchanged'}.</div>
         <input type="file" id="tlrFile" accept=".xls,.xlsx" onchange="handleTLRUpload(this)">
       </div><div id="tlrStatus" class="tm mt2"></div>
     </div>`:''}
@@ -4717,8 +4717,9 @@ function parseDuesLegacy(text){
 
 async function handleTLRUpload(input){
   const files=Array.from(input.files||[]);if(!files.length)return;
-  // TLR upload is region-wide and restricted to the Area Director / BNI Office account.
-  if(!isAreaDirector()){toast('Only the Area Director / BNI Office account can upload the TLR',5000);input.value='';return;}
+  // The Area Director / BNI Office upload covers the whole region; a Senior Director's
+  // upload is scoped server-side to their own chapters. Other roles cannot upload.
+  if(!isAreaDirector()&&!isSrdc()){toast('Only the Area Director, Senior Director or BNI Office account can upload the TLR',5000);input.value='';return;}
   const st=document.getElementById('tlrStatus');
   const file=files[0];
   st.textContent='Reading '+file.name+'...';
@@ -4745,7 +4746,10 @@ async function handleTLRUpload(input){
     st.textContent='Updating '+parsed.rows.length+' chapters for '+parsed.monthLabel+'...';
     var res=await apiFetch('/tlr-upload',{method:'POST',body:{monthIso:parsed.monthIso,monthLabel:parsed.monthLabel,rows:parsed.rows}});
     await refreshSnapshot();
-    st.textContent='Updated '+parsed.rows.length+' chapters for '+parsed.monthLabel+((res&&res.weeklyEntriesUpdated)?(' ('+res.weeklyEntriesUpdated+' week entries refreshed)'):'');
+    // The server returns how many chapters it actually updated - for a Senior Director
+    // that is only their assigned chapters, even if the file held the whole region.
+    var nUpd=(res&&res.chaptersUpdated!=null)?res.chaptersUpdated:parsed.rows.length;
+    st.textContent='Updated '+nUpd+' chapter'+(nUpd===1?'':'s')+' for '+parsed.monthLabel+((res&&res.weeklyEntriesUpdated)?(' ('+res.weeklyEntriesUpdated+' week entries refreshed)'):'')+(!isAreaDirector()?' — your chapters only':'');
     toast('TLR updated for '+parsed.monthLabel);
   }catch(err){st.textContent='Could not process TLR: '+err.message;toast('TLR upload failed: '+err.message,5000);}
   input.value='';
