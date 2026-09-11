@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../firebaseAdmin.js";
-import { filterRowsToScope } from "./scope.js";
+import { filterRowsToScope, scopedChapterNames } from "./scope.js";
 
 // Fields that may leave the server on a member record. `pin` and `pinHash` are
 // deliberately absent: credentials never travel to the browser.
@@ -260,22 +260,39 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
   const db = getDb();
   // De-duplicate chapter rows so one chapter can never end up with two TLR rows.
   // The report can be parsed with duplicate rows, or an older client could send
-  // some; keep one (richest) row per chapter. This replaces the whole doc, so the
-  // stored TLR is always exactly one row per chapter for the uploaded month.
+  // some; keep one (richest) row per chapter.
   const _tn = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
   const _rich = r => Object.values(r).filter(v => v !== "" && v != null).length;
   const _idx = new Map(); const _rows = [];
   (rows || []).forEach(r => { const k = _tn(r.name); if (!k) return; if (_idx.has(k)) { const j = _idx.get(k); if (_rich(r) > _rich(_rows[j])) _rows[j] = r; return; } _idx.set(k, _rows.length); _rows.push(r); });
   rows = _rows;
+
+  const norm = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").trim();
+
+  // scopedChapterNames() is null for the Area Director / BNI Office (unrestricted -
+  // they replace the whole region's TLR) and the assigned-chapter list for a Senior
+  // Director. A Senior Director's upload is scoped: only rows for their own chapters
+  // are kept, and they are MERGED into the existing region-wide TLR rather than
+  // replacing it, so one Senior Director cannot wipe another's chapters.
+  const scope = scopedChapterNames(user);
+  let storedRows = rows;
+  if (Array.isArray(scope)) {
+    const scopeSet = new Set(scope.map(norm));
+    const inScope = name => { const k = norm(name); if (scopeSet.has(k)) return true; for (const s of scopeSet) if (s && (s.includes(k) || k.includes(s))) return true; return false; };
+    rows = rows.filter(r => r.name && inScope(r.name));
+    const existing = (await db.collection("meta").doc("tlr").get()).data() || {};
+    const keep = (existing.rows || []).filter(r => !rows.some(nr => _tn(nr.name) === _tn(r.name)));
+    storedRows = [...keep, ...rows];
+  }
+
   await db.collection("meta").doc("tlr").set({
-    rows,
+    rows: storedRows,
     reportMonth: monthIso,
     monthLabel: monthLabel || "",
     uploadedAt: new Date().toISOString().slice(0, 10),
     uploadedBy: user?.name || "system"
   });
 
-  const norm = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").trim();
   const byChapter = new Map();
   rows.forEach(r => { if (r.name) byChapter.set(norm(r.name), r); });
   const lookup = chapter => {
