@@ -172,16 +172,23 @@ async function inbox(user) {
   return ok({ inbox: items });
 }
 
-// Confirmed trade history. A DC/SA sees only their own trades; Area/Executive
-// Directors and the BNI Office account (role "ad") see every confirmed trade for
-// oversight - who traded with whom and which category each side offered.
+// Confirmed trade history. A DC/SA sees only their own trades; a Senior Director sees
+// every trade their assigned chapters were part of (either side); Area/Executive
+// Directors and the BNI Office account see every confirmed trade for oversight -
+// who traded with whom and which category each side offered.
 async function trades(user) {
   const db = getDb();
   const seesAll = isAreaDirector(user);
-  if (!seesAll && !TRADE_ROLES.has(user.role)) throw forbidden("No barter trade history for this account");
+  const senior = isSeniorDirector(user);
+  if (!seesAll && !senior && !TRADE_ROLES.has(user.role)) throw forbidden("No barter trade history for this account");
   const snap = await db.collection("barterRequests").where("status", "==", "confirmed").get();
   let reqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  if (!seesAll) reqs = reqs.filter(r => r.requesterDcId === user.sub || r.confirmedByDcId === user.sub);
+  if (senior && !seesAll) {
+    const scope = new Set(scopedChapterNames(user) || []);
+    reqs = reqs.filter(r => scope.has(r.requesterChapter) || scope.has(r.confirmedByChapter));
+  } else if (!seesAll) {
+    reqs = reqs.filter(r => r.requesterDcId === user.sub || r.confirmedByDcId === user.sub);
+  }
   reqs.sort((a, b) => String(b.matchedAt).localeCompare(String(a.matchedAt)));
 
   const out = [];
@@ -203,7 +210,7 @@ async function trades(user) {
       iAmRequester: r.requesterDcId === user.sub, iAmConfirmer: r.confirmedByDcId === user.sub
     });
   }
-  return ok({ trades: out, scope: seesAll ? "all" : "mine" });
+  return ok({ trades: out, scope: seesAll ? "all" : senior ? "senior" : "mine" });
 }
 
 // ---- writes ------------------------------------------------------------------

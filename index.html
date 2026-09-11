@@ -3037,7 +3037,33 @@ function renderSDOverview(el){
         ${(()=>{if(!_tr||!_tr.chapterSize)return'';const tlrSize=Math.round(parseFloat(_tr.chapterSize)||0);const gap=tlrSize-(+e.membersClose||0);if(gap===0)return'<div style="font-size:10px;color:var(--green);margin-top:5px;">Done TLR matches</div>';return'<div style="font-size:10px;color:var(--amber);margin-top:5px;">Warning: TLR '+tlrSize+' vs Actual '+(+e.membersClose)+' (gap: '+(gap>0?'+':'')+gap+')</div>';})()}`
         :''}
       </div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>
+    ${isSeniorDirector()?'<div id="srdcBarterTrades"></div>':''}`;
+  if(isSeniorDirector())loadSrdcBarterTrades();
+}
+
+// Senior Director overview: confirmed barter trades their assigned chapters completed,
+// so they can see which of their DCs traded which category with whom.
+async function loadSrdcBarterTrades(){
+  var host=document.getElementById('srdcBarterTrades');if(!host)return;
+  var myNames=visibleChapterNames();
+  try{
+    var res=await apiFetch('/barter/trades');
+    var rows=res.trades||[];
+    var h='<div class="card" style="margin-top:14px;"><div class="sec-title" style="margin-bottom:4px;">Sicilian Trade — Your Chapters ('+rows.length+')</div>';
+    h+='<div class="tm" style="margin-bottom:8px;">Confirmed barter trades completed by DCs in your assigned chapters.</div>';
+    if(!rows.length){h+='<div class="empty">No trades by your chapters yet.</div></div>';host.innerHTML=h;return;}
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>DC (Requester)</th><th>Chapter</th><th>Gave</th><th>Received</th><th>Traded With</th><th>When</th></tr></thead><tbody>';
+    rows.forEach(function(r){
+      var aMine=myNames.indexOf(r.aChapter)>=0,bMine=myNames.indexOf(r.bChapter)>=0;
+      // Show the row from the perspective of the chapter that belongs to this Sr-DC.
+      var mineName=aMine?r.aName:r.bName, mineChap=aMine?r.aChapter:r.bChapter, gave=aMine?r.aOfferedCategory:r.bOfferedCategory, got=aMine?r.bOfferedCategory:r.aOfferedCategory;
+      var partner=aMine?r.bName:r.aName, partnerChap=aMine?r.bChapter:r.aChapter;
+      h+='<tr><td><b>'+esc(mineName)+'</b></td><td>'+esc(mineChap)+'</td><td>'+esc(gave)+'</td><td><b>'+esc(got)+'</b></td><td>'+esc(partner)+'<br><span class="tm">'+esc(partnerChap)+'</span></td><td class="tm">'+(r.matchedAt?fmtD(String(r.matchedAt).slice(0,10)):'')+'</td></tr>';
+    });
+    h+='</tbody></table></div></div>';
+    host.innerHTML=h;
+  }catch(e){host.innerHTML='';}
 }
 
 function renderDCOverview(el){
@@ -3963,13 +3989,13 @@ function renderTLR(){
   if(isPdfMode){
     el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
       <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>#</th><th>Chapter</th><th>Month</th><th>Score</th><th>Members</th><th>Green</th><th>Amber</th><th>Red</th><th>Grey</th><th>Referrals</th><th>Visitors</th></tr></thead>
-      <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td>${r.reportMonth||'-'}</td><td><span class="pill ${tlrPillCls(s)}">${s||'-'}</span></td><td>${r.chapterSize||'-'}</td><td>${r.greenPct?r.greenPct+'%':'-'}</td><td>${r.amberPct?r.amberPct+'%':'-'}</td><td>${r.redPct?r.redPct+'%':'-'}</td><td>${r.greyPct?r.greyPct+'%':'-'}</td><td>${r.lastMonthReferrals||r.avgReferrals||'-'}</td><td>${r.lastMonthVisitors||r.avgVisitors||'-'}</td></tr>`;}).join('')}</tbody></table></div></div>
+      <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td>${r.reportMonth||'-'}</td><td><span class="pill ${tlrPillCls(s)}">${s||'-'}</span></td><td>${r.chapterSize||'-'}</td><td>${r.greenPct?fmtTlr(r.greenPct)+'%':'-'}</td><td>${r.amberPct?fmtTlr(r.amberPct)+'%':'-'}</td><td>${r.redPct?fmtTlr(r.redPct)+'%':'-'}</td><td>${r.greyPct?fmtTlr(r.greyPct)+'%':'-'}</td><td>${(r.lastMonthReferrals||r.avgReferrals)?fmtTlr(r.lastMonthReferrals||r.avgReferrals):'-'}</td><td>${(r.lastMonthVisitors||r.avgVisitors)?fmtTlr(r.lastMonthVisitors||r.avgVisitors):'-'}</td></tr>`;}).join('')}</tbody></table></div></div>
       <div class="card"><div class="card-t">PDF TLR Notes</div><div class="tm">This report uses the chapter member traffic-light PDF format. Score is the current month average from the Six Month Score table. Members are counted from member detail pages. Color percentages, referrals, and visitors come from the chapter summary pages.</div></div>`;
     return;
   }
   el.innerHTML=`<div class="card"><div class="sec-hdr"><div class="sec-title">Traffic Light Report</div></div>
     <div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>#</th><th>Chapter</th><th>Score</th><th>Size</th><th>Growth</th><th>Retention</th><th>Referrals</th><th>Visitors</th><th>Conversion</th><th>Absent</th></tr></thead>
-    <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td><span class="pill ${tlrPillCls(s)}">${s}</span></td><td>${Math.round(parseFloat(r.chapterSize)||0)}</td><td style="color:${parseFloat(r.memberGrowth)>=0?'var(--green)':'var(--red)'}">${Math.round(parseFloat(r.memberGrowth)||0)}%</td><td>${r.retention}%</td><td>${r.referrals}</td><td>${r.visitors}</td><td>${r.conversion}%</td><td>${r.absenteeism}%</td></tr>`;}).join('')}</tbody></table></div></div>
+    <tbody>${show.map((r,i)=>{const s=+r.score||0;return`<tr><td class="tm">${i+1}</td><td style="font-weight:700">${esc(r.name)}</td><td><span class="pill ${tlrPillCls(s)}">${s}</span></td><td>${Math.round(parseFloat(r.chapterSize)||0)}</td><td style="color:${parseFloat(r.memberGrowth)>=0?'var(--green)':'var(--red)'}">${Math.round(parseFloat(r.memberGrowth)||0)}%</td><td>${fmtTlr(r.retention)}%</td><td>${fmtTlr(r.referrals)}</td><td>${fmtTlr(r.visitors)}</td><td>${fmtTlr(r.conversion)}%</td><td>${fmtTlr(r.absenteeism)}%</td></tr>`;}).join('')}</tbody></table></div></div>
     <div class="card"><div class="card-t">BNI TLR Scoring Guide</div><div style="overflow-x:auto;"><table class="tbl"><thead><tr><th>Parameter</th><th>0 pts</th><th>5 pts</th><th>10 pts</th><th>15 pts</th></tr></thead><tbody>
     <tr><td><b>Chapter Size</b></td><td>&lt;20</td><td>20-24</td><td>25-29</td><td>30+</td></tr>
     <tr><td><b>Member Growth</b></td><td>&lt;1%</td><td>1-1.99%</td><td>2-3.99%</td><td>4%+</td></tr>
@@ -5262,6 +5288,9 @@ function tlrColor(v){if(v===null||v===undefined||v==='')return'#9CA3AF';if(v>=70
 function fmtD(s){if(!s)return'-';return new Date(s+'T00:00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'});}
 function fmtM(s){if(!s)return'-';return new Date(s+'-01').toLocaleDateString('en-IN',{month:'short',year:'2-digit'});}
 function fmtL(n){n=+n||0;if(n>=10000000)return(n/10000000).toFixed(1)+'Cr';if(n>=100000)return(n/100000).toFixed(1)+'L';if(n>=1000)return Math.round(n/1000)+'K';return n+'';}
+// TLR values arrive as raw floats (e.g. 1.1000000000000001). Show whole numbers as-is
+// and everything else to 2 decimals (1.10), so the report reads cleanly.
+function fmtTlr(v){var n=parseFloat(v);if(!isFinite(n))return(v===0||v==='0')?'0':(v||'-');return Number.isInteger(n)?String(n):n.toFixed(2);}
 function rl(r){return r==='ed'?'Executive Director':r==='ad'?'Area Director':r==='srdc'?'Senior Director':(r==='dc'||r==='cd')?'Chapter Director (CD/DC)':(r==='sa1'||r==='sa2')?'SA':r==='viewer'?'Viewer':r||'';}
 var TOAST_TIMER=null;
 function toast(msg,duration){
@@ -5445,7 +5474,10 @@ function renderWeeklyPreview(){
     h+='<div style="background:var(--surface);border-radius:8px;padding:10px;">';
     h+='<div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;">'+dayName.toUpperCase()+'</div>';
     dayChs.forEach(function(c){
-      var status=c.hasData?'<span title="Submitted" style="color:var(--green);font-weight:900;">&#10003;</span>':(c.isPast?'<span title="Meeting day passed" style="color:var(--green);font-weight:900;">&#10003;</span>':'<span title="Meeting day pending">&#8987;</span>');
+      // Tick reflects DATA SUBMISSION, not meeting completion: green check only when the
+      // chapter has actually submitted this week. A passed meeting with no data shows a red
+      // cross (action needed), and an upcoming meeting shows the pending hourglass.
+      var status=c.hasData?'<span title="Data submitted" style="color:var(--green);font-weight:900;">&#10003;</span>':(c.isPast?'<span title="Meeting passed - data not submitted" style="color:var(--red);font-weight:900;">&#10007;</span>':'<span title="Meeting day pending">&#8987;</span>');
       h+='<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px;"><span style="font-weight:600">'+esc(c.name)+'</span><span>'+status+'</span></div>';
     });
     h+='</div>';
