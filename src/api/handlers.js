@@ -28,6 +28,7 @@ import {
   filterRowsToScope,
   forbidden,
   isAreaDirector,
+  isSeniorDirector,
   isViewer,
   notFound
 } from "../services/scope.js";
@@ -237,7 +238,7 @@ export async function routeApi({ method, segments, body, authorization }) {
 
   // Region-wide monthly TLR upload. Area Director / BNI Office account only.
   if (first === "tlr-upload" && method === "POST") {
-    if (!isAreaDirector(user)) throw forbidden("Only the Area Director / BNI Office account can upload the TLR");
+    if (!isAreaDirector(user) && !isSeniorDirector(user)) throw forbidden("Only leadership (Area Director / Senior Director / BNI Office) can upload the TLR");
     const { monthIso, monthLabel, rows } = body || {};
     if (!/^\d{4}-\d{2}$/.test(String(monthIso || ""))) throw badRequest("A valid report month is required");
     if (!Array.isArray(rows) || !rows.length) throw badRequest("No chapter rows in the TLR");
