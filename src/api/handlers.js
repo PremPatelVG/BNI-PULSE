@@ -274,6 +274,16 @@ export async function routeApi({ method, segments, body, authorization }) {
     return ok({ members: members.map(member => ({ id: member.id, ...stripPrivateMember(member) })) });
   }
 
+  // Admin-only: contact numbers for every member. Kept OUT of the shared snapshot and
+  // stripPrivateMember allowlist so a DC's browser never receives the whole phone book;
+  // only leadership (Settings) reads this, and the barter reveal exposes a single number
+  // to a single DC after a match.
+  if (first === "member-contacts" && method === "GET") {
+    assertAdmin(user);
+    const members = await listCollection("members");
+    return ok({ contacts: members.map(m => ({ id: m.id, name: m.name || "", role: m.role || "", chapter: m.chapter || "", chapters: m.chapters || [], phone: m.phone || m.contact || "" })) });
+  }
+
   if (first === "members" && method === "POST") {
     assertAdmin(user);
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};

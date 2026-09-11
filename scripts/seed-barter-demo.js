@@ -33,17 +33,18 @@ if (PURGE) {
 const t = {};
 for (const [k, m] of Object.entries(DCS)) t[k] = await login(m);
 
-const add = (who, sub, name, phone) => api(t[who], "/barter/checks", "POST", { sub, prospectName: "DEMO " + name, phone });
+const add = (who, sub, name, phone, company, pay) =>
+  api(t[who], "/barter/checks", "POST", { sub, prospectName: "DEMO " + name, phone, companyName: company, paymentType: pay });
 
 // --- a board with a few categories across chapters ---
-await add("heena",  "App Developer",      "Ravi Shah",      "9820011111");
-await add("heena",  "Digital Content",    "Neha Trivedi",   "9820022222");
-await add("alpesh", "Architect",          "Kunal Desai",    "9820033333");
-await add("alpesh", "Commercial Real Estate",  "Priya Nair",     "9820044444");
-await add("nilay",  "Architect",          "Sameer Joshi",   "9820055555");
-await add("punit",  "Interior Design - Residential",  "Anita Rao",      "9820066666");
-await add("vyomesh","Agronomist",         "Mahesh Patel",   "9820077777");
-await add("hardik", "Boarding",           "Farah Sheikh",   "9820088888");
+await add("heena",  "App Developer",      "Ravi Shah",      "9820011111", "Nimbus Apps",        "UPI");
+await add("heena",  "Digital Content",    "Neha Trivedi",   "9820022222", "StoryLine Media",    "NEFT");
+await add("alpesh", "Architect",          "Kunal Desai",    "9820033333", "Desai Design Studio", "Cheque");
+await add("alpesh", "Commercial Real Estate",  "Priya Nair", "9820044444", "Nair Realty",        "Bank Transfer");
+await add("nilay",  "Architect",          "Sameer Joshi",   "9820055555", "Joshi Associates",   "NEFT");
+await add("punit",  "Interior Design - Residential",  "Anita Rao", "9820066666", "Rao Interiors",  "Cash");
+await add("vyomesh","Agronomist",         "Mahesh Patel",   "9820077777", "GreenField Agro",    "UPI");
+await add("hardik", "Boarding",           "Farah Sheikh",   "9820088888", "PetNest Boarding",   "Bank Transfer");
 
 // --- one CONFIRMED trade: Punit wants Real Estate Agent, Alpesh takes Interior Designer ---
 const tradeReq = await api(t.punit, "/barter/requests", "POST", { sub: "Commercial Real Estate" });

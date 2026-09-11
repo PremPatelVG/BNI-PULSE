@@ -2366,7 +2366,7 @@ function buildNav(){
       {id:'miyagi',label:'Miyagi'},
       {id:'sdreport',label:'SD Report'},
       {id:'retro',label:'Retrospective'},
-      {id:'barter',label:'Sicilian Barter',hidden:isViewer},
+      {id:'barter',label:'Sicilian Trade',hidden:isViewer},
       {id:'goals',label:'Goals'},
       // Area Directors reach Upload from the empty Renewals and TLR tabs, so the
       // nav entry has to exist for them too.
@@ -2382,7 +2382,7 @@ function buildNav(){
       {id:'renewals',label:'Renewals'},
       {id:'pipeline',label:'Pipeline'},
       {id:'miyagi',label:'Miyagi'},
-      {id:'barter',label:'Sicilian Barter'},
+      {id:'barter',label:'Sicilian Trade'},
       {id:'reports',label:'My Reports'},
       {id:'retro',label:'Retrospective'},
       {id:'goals',label:'Goals'}
@@ -2614,39 +2614,55 @@ function renderOverview(){
   renderSDOverview(el);
 }
 
-// Sicilian Barter: when a DC/SA opens the Overview, surface any of their barter
-// requests that have been accepted (until they dismiss it). Uses localStorage to
-// remember what's been seen, so it doesn't nag forever.
+// Sicilian Trade: when a DC/SA opens the Overview, surface three things until they
+// dismiss them — (1) an INCOMING barter request another chapter has sent them, (2) one
+// of their own requests that was accepted, (3) one of their requests that got no takers.
+// localStorage remembers what's been seen so it doesn't nag forever; a genuinely new
+// request re-appears because it carries a new id.
 async function barterOverviewNotif(){
   if(!barterCanTrade())return;
   var host=document.getElementById('barterNotif');if(!host)return;
   var seen={};try{seen=JSON.parse(localStorage.getItem('barterSeen')||'{}')||{};}catch(e){}
   try{
-    var mine=await apiFetch('/barter/mine');
+    var res=await Promise.all([
+      apiFetch('/barter/mine'),
+      apiFetch('/barter/inbox').catch(function(){return{inbox:[]};})
+    ]);
+    var mine=res[0]||{},inbox=res[1]||{};
     var reqs=mine.requests||[];
+    var incoming=(inbox.inbox||[]).filter(function(it){return !seen['in_'+it.requestId];});
     var accepted=reqs.filter(function(r){return r.status==='confirmed'&&r.match&&!seen[r.id];});
     var noTakers=reqs.filter(function(r){return r.status==='declined'&&!seen[r.id];});
-    if(!accepted.length&&!noTakers.length){host.innerHTML='';return;}
+    if(!incoming.length&&!accepted.length&&!noTakers.length){host.innerHTML='';return;}
     var h='';
+    if(incoming.length){
+      h+='<div class="card" style="border:1px solid rgba(30,58,95,.4);background:rgba(30,58,95,.06);margin-bottom:10px;">';
+      h+='<div class="sec-title" style="color:var(--navy);">🔔 Sicilian Trade — new barter request'+(incoming.length>1?'s':'')+' ('+incoming.length+')</div>';
+      incoming.forEach(function(it){
+        h+='<div style="border-top:1px solid rgba(30,58,95,.15);padding:8px 0;font-size:13px;">A chapter needs your <b>'+esc(it.requestedSub)+'</b> cheque and is offering one of theirs in return. Open the Inbox to trade or pass.</div>';
+      });
+      h+='</div>';
+    }
     if(accepted.length){
       h+='<div class="card" style="border:1px solid rgba(45,155,111,.4);background:rgba(45,155,111,.08);margin-bottom:10px;">';
-      h+='<div class="sec-title" style="color:var(--green);">🔔 Sicilian Barter — request'+(accepted.length>1?'s':'')+' accepted ('+accepted.length+')</div>';
+      h+='<div class="sec-title" style="color:var(--green);">🔔 Sicilian Trade — request'+(accepted.length>1?'s':'')+' accepted ('+accepted.length+')</div>';
       accepted.forEach(function(r){
-        h+='<div style="border-top:1px solid rgba(45,155,111,.2);padding:8px 0;font-size:13px;">Your request for <b>'+esc(r.requestedSub)+'</b> was accepted by <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+'.</div>';
+        h+='<div style="border-top:1px solid rgba(45,155,111,.2);padding:8px 0;font-size:13px;">Your request for <b>'+esc(r.requestedSub)+'</b> was accepted by <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedCompany?', '+esc(r.match.receivedCompany):'')+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+(r.match.receivedPayment?' · '+esc(r.match.receivedPayment):'')+'.</div>';
       });
       h+='</div>';
     }
     if(noTakers.length){
       h+='<div class="card" style="border:1px solid rgba(230,57,70,.35);background:rgba(230,57,70,.07);margin-bottom:10px;">';
-      h+='<div class="sec-title" style="color:var(--red);">Sicilian Barter — no takers ('+noTakers.length+')</div>';
+      h+='<div class="sec-title" style="color:var(--red);">Sicilian Trade — no takers ('+noTakers.length+')</div>';
       noTakers.forEach(function(r){
         h+='<div style="border-top:1px solid rgba(230,57,70,.2);padding:8px 0;font-size:13px;">Every chapter holding <b>'+esc(r.requestedSub)+'</b> passed on your request. Try another classification, or add another cheque so you have more to offer.</div>';
       });
       h+='</div>';
     }
-    h+='<div style="display:flex;gap:8px;margin-bottom:14px;"><button class="btn btn-sm btn-navy" onclick="switchTab(\'barter\')">Open Sicilian Barter</button><button class="btn btn-sm" onclick="barterDismissNotif()">Dismiss</button></div>';
+    h+='<div style="display:flex;gap:8px;margin-bottom:14px;"><button class="btn btn-sm btn-navy" onclick="switchTab(\'barter\')">Open Sicilian Trade</button><button class="btn btn-sm" onclick="barterDismissNotif()">Dismiss</button></div>';
     host.innerHTML=h;
-    window._barterNotifIds=accepted.concat(noTakers).map(function(r){return r.id;});
+    window._barterNotifIds=accepted.concat(noTakers).map(function(r){return r.id;})
+      .concat(incoming.map(function(it){return 'in_'+it.requestId;}));
   }catch(e){host.innerHTML='';}
 }
 function barterDismissNotif(){
@@ -4962,8 +4978,19 @@ async function importHistorical(){
 }
 
 // SETTINGS ──
+// Contact numbers are admin-only and never travel in the shared snapshot, so Settings
+// fetches them once from the gated endpoint and re-renders to fill them in.
+async function ensureMemberPhones(){
+  if(!isAreaDirector())return;
+  try{
+    var r=await apiFetch('/member-contacts');
+    S.memberPhones={};(r.contacts||[]).forEach(function(c){if(c.phone)S.memberPhones[c.id]=c.phone;});
+    if(S.tab==='settings')renderSettings();
+  }catch(e){/* non-admins simply don't get phones */}
+}
 function renderSettings(){
   var el=document.getElementById('tab-settings');if(!el)return;
+  if(isAreaDirector()&&!S.memberPhones){S.memberPhones={};ensureMemberPhones();}
   var scopeChapters=visibleChapters();
   var scopeNames=visibleChapterNames();
   var byChap={};
@@ -4973,14 +5000,15 @@ function renderSettings(){
     var mems=byChap[ch.name]||[];if(!mems.length)return;
     memHtml+='<div style="margin-bottom:13px;"><div style="font-weight:800;font-size:13px;color:var(--navy);padding:5px 0 4px;border-bottom:1px solid var(--border);margin-bottom:2px;">'+esc(ch.name)+'</div>';
     mems.forEach(function(m){
-      memHtml+='<div class="s-row"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+(m.chapters||[m.chapter]).join(', ')+'</span>'+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+esc(m.reportsTo)+'</span>':'')+'</div>';
+      var mph=(S.memberPhones&&S.memberPhones[m.id])||'';
+      memHtml+='<div class="s-row"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+(m.chapters||[m.chapter]).join(', ')+'</span>'+(mph?'<span class="tm" style="margin-left:6px;">📞 '+esc(mph)+'</span>':'')+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+esc(m.reportsTo)+'</span>':'')+'</div>';
       memHtml+='<div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button>';
       memHtml+='<button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';
     });
     memHtml+='</div>';
   });
   var regional=S.members.filter(function(m){return ['ad','ed','srdc','viewer'].includes(m.role)&&(isAreaDirector()||isViewer()||m.id===S.user?.id||m.name===S.user?.reportsTo);});
-  var regionalHtml=regional.length?regional.map(function(m){return '<div class="s-row"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+((m.chapters&&m.chapters.length)?m.chapters.join(', '):'Whole Region')+'</span>'+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+esc(m.reportsTo)+'</span>':'')+'</div><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button><button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';}).join(''):'<div class="tm" style="padding:8px 0;">No regional accounts added yet</div>';
+  var regionalHtml=regional.length?regional.map(function(m){var rph=(S.memberPhones&&S.memberPhones[m.id])||'';return '<div class="s-row"><div><span style="font-weight:600">'+esc(m.name)+'</span> <span class="role-tag '+roleClass(m.role)+'">'+rl(m.role)+'</span><span class="tm" style="margin-left:6px;">'+((m.chapters&&m.chapters.length)?m.chapters.join(', '):'Whole Region')+'</span>'+(rph?'<span class="tm" style="margin-left:6px;">📞 '+esc(rph)+'</span>':'')+(m.reportsTo?'<span class="tm" style="margin-left:6px;">Reports to: '+esc(m.reportsTo)+'</span>':'')+'</div><div style="display:flex;gap:5px;"><button class="btn btn-secondary btn-sm" onclick="editMember(this.dataset.id)" data-id="'+m.id+'">Edit</button><button class="btn btn-sm" style="background:#fee2e2;color:#991b1b" onclick="delMember(this.dataset.id)" data-id="'+m.id+'">&#x2715;</button></div></div>';}).join(''):'<div class="tm" style="padding:8px 0;">No regional accounts added yet</div>';
   var chapterListHtml=scopeChapters.map(function(c){return '<div class="s-row"><div><span style="font-weight:700">'+esc(c.name)+'</span><span class="tm"> - '+c.day+' - Target: '+(c.target||'-')+'</span></div><button class="btn btn-secondary btn-sm" onclick="editChapter(this.dataset.id)" data-id="'+c.id+'">Edit</button></div>';}).join('');
   var h='';
   h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Leadership Members & PINs</div><button class="btn btn-primary btn-sm" onclick="showMemberForm()">+ Add Person</button></div>';
@@ -4993,6 +5021,7 @@ function renderSettings(){
   h+='<div class="fg" id="singleChapField"><label>Chapter</label><select id="mChapter"></select></div>';
   h+='<div class="fg full hidden" id="multiChapField"><label>Chapters (hold Ctrl/Cmd for multiple)</label><select id="mChapters" multiple style="height:120px;"></select></div>';
   h+='<div class="fg full"><label>Reports To</label><input type="text" id="mReportsTo" placeholder="Area Director or Senior Director name"></div>';
+  h+='<div class="fg"><label>Contact Number</label><input type="tel" id="mPhone" placeholder="10-digit mobile"></div>';
   h+='<div class="fg"><label>PIN (4-6 digits)</label><input type="password" id="mPin" maxlength="6" placeholder="...."></div>';
   h+='</div><div class="btn-row"><button class="btn btn-primary" onclick="saveMember()">Save</button><button class="btn btn-secondary" onclick="cancelMemberForm()">Cancel</button></div></div>';
   h+='<div class="card"><div class="sec-hdr"><div class="sec-title">Regional Accounts</div></div><div>'+regionalHtml+'</div></div>';
@@ -5030,7 +5059,7 @@ function toggleChaptersField(){
 }
 
 function clearMemberForm(){
-  ['editMemberId','mName','mPin','mReportsTo'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  ['editMemberId','mName','mPin','mReportsTo','mPhone'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var role=document.getElementById('mRole');if(role)role.value='dc';
   var chapter=document.getElementById('mChapter');if(chapter)chapter.value='';
   var chapters=document.getElementById('mChapters');if(chapters)Array.from(chapters.options).forEach(function(o){o.selected=false;});
@@ -5042,6 +5071,8 @@ function editMember(id){
   show('memberFormCard');document.getElementById('memberFormTitle').textContent='Edit Member';
   document.getElementById('editMemberId').value=id;document.getElementById('mName').value=m.name;document.getElementById('mReportsTo').value=m.reportsTo||'';
   document.getElementById('mRole').value=m.role;document.getElementById('mPin').value='';
+  // Phone lives only in the admin contacts map (never the shared snapshot).
+  var mp=document.getElementById('mPhone');if(mp)mp.value=(S.memberPhones&&S.memberPhones[id])||'';
   toggleChaptersField();
   if(m.role==='dc'||m.role==='srdc'){const sel=document.getElementById('mChapters');if(sel){Array.from(sel.options).forEach(o=>o.selected=(m.chapters||[m.chapter]).includes(o.value));}}
   else{const sel=document.getElementById('mChapter');if(sel)sel.value=m.chapter||'';}
@@ -5088,7 +5119,8 @@ async function saveMember(){
   });
   const reportTargets=[...new Set(Object.values(chapterReportsTo).filter(Boolean))];
   const finalReportsTo=reportsTo||reportTargets.join('; ');
-  const data={name,role,chapter,chapters,reportsTo:finalReportsTo};
+  const phone=(document.getElementById('mPhone')?.value||'').trim();
+  const data={name,role,chapter,chapters,reportsTo:finalReportsTo,phone};
   if(Object.keys(chapterReportsTo).length)data.chapterReportsTo=chapterReportsTo;
   else if(existing&&existing.chapterReportsTo)data.chapterReportsTo=existing.chapterReportsTo;
   // The PIN is sent once, over the wire, for the server to bcrypt. It is never
@@ -5979,6 +6011,7 @@ function getChapterMonthRetro(ch,month){
 // Anonymous cross-chapter category exchange. All data comes from dedicated
 // /api/barter/* endpoints (never the shared snapshot), so identities stay hidden
 // until a match is confirmed.
+var BARTER_PAY_TYPES=['NEFT','UPI','Cheque','Cash','Bank Transfer'];
 function barterCanTrade(){return['dc','cd','sa1','sa2'].includes(S.user&&S.user.role);}
 function barterState(){if(!S.barter)S.barter={view:'board',search:'',expanded:{},cats:null,board:null,mine:null,inbox:null,fSr:'',fDc:''};return S.barter;}
 
@@ -6000,7 +6033,7 @@ async function loadBarter(){
 
 function renderBarter(){
   var el=document.getElementById('tab-barter');if(!el)return;
-  el.innerHTML='<div class="card"><div class="empty">Loading Sicilian Barter…</div></div>';
+  el.innerHTML='<div class="card"><div class="empty">Loading Sicilian Trade…</div></div>';
   loadBarter().then(paintBarter);
   if(!window._barterTimer){
     window._barterTimer=setInterval(function(){
@@ -6017,14 +6050,15 @@ function renderBarter(){
 
 function paintBarter(){
   var el=document.getElementById('tab-barter');if(!el||S.tab!=='barter')return;
-  var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector();
+  var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector();var senior=isSeniorDirector();
   var inboxCount=(st.inbox&&st.inbox.inbox&&st.inbox.inbox.length)||0;
   var views=trade?[['board','Available'],['mine','My Cheques'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')],['trades','My Trades']]
     :seesAll?[['board','Available'],['trades','All Trades']]:[['board','Available']];
   if(!views.some(function(v){return v[0]===st.view;}))st.view='board';
   var nav=views.map(function(v){return '<button class="btn btn-sm '+(st.view===v[0]?'btn-navy':'btn-secondary')+'" onclick="S.barter.view=\''+v[0]+'\';paintBarter()">'+v[1]+'</button>';}).join(' ');
   var body=st.view==='mine'?barterMineHTML():st.view==='requests'?barterRequestsHTML():st.view==='inbox'?barterInboxHTML():st.view==='trades'?barterTradesHTML():barterBoardHTML();
-  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Sicilian Barter</div><div class="tm">Anonymous cross-chapter category exchange'+(trade?'':seesAll?' — leadership oversight view':' — counts only')+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
+  var sub=trade?'Anonymous cross-chapter category exchange':senior?'Cheques held by your chapters':seesAll?'Anonymous cross-chapter category exchange — leadership oversight view':'Anonymous cross-chapter category exchange — counts only';
+  el.innerHTML='<div class="sec-hdr"><div><div class="sec-title">Sicilian Trade</div><div class="tm">'+sub+'</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;">'+nav+'</div></div>'+body;
 }
 
 function barterAfter(msg){toast(msg);loadBarter().then(paintBarter);}
@@ -6059,11 +6093,12 @@ function barterBoardHTML(){
   var st=barterState();var b=st.board;var cats=st.cats;
   if(!b||!cats)return'<div class="card"><div class="empty">No data yet.</div></div>';
   var counts=b.counts||{},mainTotals=b.mainTotals||{};
-  var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();
+  var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();var senior=isSeniorDirector();
   window._bMainMap=[];window._bSubMap=[];
 
   // Leadership only: filter the board down to one Senior DC or one DC. Counts are
   // recomputed from the holder rows so every total on screen matches the filter.
+  // A Senior DC already sees only their own chapters, so they get the DC filter alone.
   var rows=barterHolderRows(b);var filterHTML='';var holders=b.holders;
   var total=b.totalAvailable||0;
   if(rows.length){
@@ -6080,9 +6115,9 @@ function barterBoardHTML(){
 
     var selSt='padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;min-width:180px;';
     filterHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">';
-    filterHTML+='<select onchange="barterSetBoardFilter(\'sr\',this.value)" style="'+selSt+'"><option value="">All Senior Directors</option>'
+    if(!senior)filterHTML+='<select onchange="barterSetBoardFilter(\'sr\',this.value)" style="'+selSt+'"><option value="">All Senior Directors</option>'
       +srs.map(function(n){return '<option value="'+esc(n)+'"'+(st.fSr===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
-    filterHTML+='<select onchange="barterSetBoardFilter(\'dc\',this.value)" style="'+selSt+'"><option value="">All DCs'+(st.fSr?' under '+esc(st.fSr):'')+'</option>'
+    filterHTML+='<select onchange="barterSetBoardFilter(\'dc\',this.value)" style="'+selSt+'"><option value="">'+(senior?'All my DCs':'All DCs'+(st.fSr?' under '+esc(st.fSr):''))+'</option>'
       +dcs.map(function(n){return '<option value="'+esc(n)+'"'+(st.fDc===n?' selected':'')+'>'+esc(n)+'</option>';}).join('')+'</select>';
     if(st.fSr||st.fDc)filterHTML+='<button class="btn btn-sm btn-secondary" onclick="S.barter.fSr=\'\';S.barter.fDc=\'\';paintBarter()">Clear</button>';
     filterHTML+='</div>';
@@ -6105,7 +6140,7 @@ function barterBoardHTML(){
   }
 
   var h='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">';
-  h+='<div><span style="font-size:26px;font-weight:900;color:var(--navy)">'+total+'</span> <span class="tm">cheque'+(total===1?'':'s')+' available'+(st.fDc?' from '+esc(st.fDc):st.fSr?' under '+esc(st.fSr):' across the region')+'</span></div>';
+  h+='<div><span style="font-size:26px;font-weight:900;color:var(--navy)">'+total+'</span> <span class="tm">cheque'+(total===1?'':'s')+' available'+(st.fDc?' from '+esc(st.fDc):st.fSr?' under '+esc(st.fSr):senior?' in your chapters':' across the region')+'</span></div>';
   h+='<input type="text" value="'+esc(st.search||'')+'" placeholder="Search classification…" oninput="S.barter.search=this.value;clearTimeout(window._btq);window._btq=setTimeout(paintBarter,200)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;min-width:210px;"></div>';
   h+=filterHTML;
   var mains=(cats.tree||[]).slice().sort(function(a,b){return a.main.localeCompare(b.main);});
@@ -6156,16 +6191,18 @@ function barterMineHTML(){
   h+='<select id="bChkMain" onchange="barterFillSubs()" style="min-width:200px;'+inSt+'"><option value="">Main category…</option>'+mains.map(function(m){return '<option value="'+esc(m.main)+'">'+esc(m.main)+'</option>';}).join('')+'</select>';
   h+='<select id="bChkSub2" style="min-width:200px;'+inSt+'"><option value="">Sub-category…</option></select>';
   h+='<input id="bChkName" placeholder="Prospect name" style="min-width:150px;'+inSt+'">';
+  h+='<input id="bChkCompany" placeholder="Company name" style="min-width:150px;'+inSt+'">';
   h+='<input id="bChkPhone" placeholder="Contact number" style="min-width:140px;'+inSt+'">';
+  h+='<select id="bChkPay" style="min-width:150px;'+inSt+'"><option value="">Payment type…</option>'+BARTER_PAY_TYPES.map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>';}).join('')+'</select>';
   h+='<button class="btn btn-navy" onclick="barterAddCheck()">Add cheque</button></div>';
-  h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name &amp; contact are revealed only after a match.</div></div>';
+  h+='<div class="tm mt2">Only the classification is shared publicly (as an anonymous count). The prospect name, company, contact &amp; payment type are revealed only after a match.</div></div>';
   var avail=(mine.checks||[]).filter(function(c){return c.status==='available';});
   var matched=(mine.checks||[]).filter(function(c){return c.status==='matched';});
   h+='<div class="card"><div class="sec-title" style="margin-bottom:8px;">My held cheques ('+avail.length+')</div>';
   if(!avail.length)h+='<div class="empty">You aren\'t holding any cheques yet.</div>';
   avail.forEach(function(c){
     h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);">';
-    h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+(c.phone?' · '+esc(c.phone):'')+'</span></div>';
+    h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> <span class="tm">'+esc(c.main)+'</span><br><span class="tm">Prospect: '+esc(c.prospectName)+(c.companyName?', '+esc(c.companyName):'')+(c.phone?' · '+esc(c.phone):'')+(c.paymentType?' · '+esc(c.paymentType):'')+'</span></div>';
     h+='<button class="btn btn-sm" onclick="barterWithdrawCheck(\''+c.id+'\')">Withdraw</button></div>';
   });
   h+='</div>';
@@ -6174,7 +6211,7 @@ function barterMineHTML(){
     matched.forEach(function(c){
       h+='<div style="padding:8px 0;border-top:1px solid var(--border);">';
       h+='<div><span style="font-weight:700">'+esc(c.sub)+'</span> — gave to a chapter';
-      if(c.tradedFor)h+='; received <span style="font-weight:700">'+esc(c.tradedFor.category)+'</span> ('+esc(c.tradedFor.prospect||'')+(c.tradedFor.phone?' · '+esc(c.tradedFor.phone):'')+') from '+esc(c.tradedFor.partnerName||'')+', '+esc(c.tradedFor.partnerChapter||'');
+      if(c.tradedFor)h+='; received <span style="font-weight:700">'+esc(c.tradedFor.category)+'</span> ('+esc(c.tradedFor.prospect||'')+(c.tradedFor.company?', '+esc(c.tradedFor.company):'')+(c.tradedFor.phone?' · '+esc(c.tradedFor.phone):'')+(c.tradedFor.payment?' · '+esc(c.tradedFor.payment):'')+') from '+esc(c.tradedFor.partnerName||'')+', '+esc(c.tradedFor.partnerChapter||'');
       h+='</div></div>';
     });
     h+='</div>';
@@ -6199,7 +6236,7 @@ function barterRequestsHTML(){
     h+='</div>';
     if(r.status==='open')h+='<div class="tm">Sent to '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+'.'+((r.declinedCount||0)?' '+r.declinedCount+' passed so far.':'')+'</div>';
     if(r.status==='declined')h+='<div style="margin-top:4px;background:rgba(230,57,70,.08);border:1px solid rgba(230,57,70,.3);border-radius:7px;padding:7px 9px;font-size:12px;">All '+(r.recipientCount||0)+' chapter'+((r.recipientCount===1)?'':'s')+' holding this category passed. Try a different classification, or add another cheque so you have more to offer.</div>';
-    if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+' — '+esc(r.requestedSub)+'. Coordinate the induction with them.</div>';
+    if(r.status==='confirmed'&&r.match)h+='<div style="margin-top:4px;background:rgba(45,155,111,.1);border:1px solid rgba(45,155,111,.3);border-radius:7px;padding:7px 9px;font-size:12px;">✅ Matched with <b>'+esc(r.match.partnerName||'')+'</b>, '+esc(r.match.partnerChapter||'')+(r.match.partnerPhone?' <span class="tm">📞 '+esc(r.match.partnerPhone)+'</span>':'')+'. You receive <b>'+esc(r.match.receivedProspect||'')+'</b>'+(r.match.receivedCompany?', '+esc(r.match.receivedCompany):'')+(r.match.receivedPhone?' · '+esc(r.match.receivedPhone):'')+(r.match.receivedPayment?' · '+esc(r.match.receivedPayment):'')+' — '+esc(r.requestedSub)+'. Coordinate the induction with them.</div>';
     h+='</div>';
   });
   return h+'</div>';
@@ -6247,21 +6284,23 @@ function barterTradesHTML(){
   var all=t.scope==='all';var rows=t.trades||[];
 
   if(!all){
-    // A DC's own trades — card look.
+    // A DC's own trades — table view. Each row is one completed barter, showing the
+    // partner DC (name, chapter, personal phone) and the prospect they received.
     var h='<div class="card"><div class="sec-title" style="margin-bottom:6px;">My trades ('+rows.length+')</div>';
-    h+='<div class="tm" style="margin-bottom:8px;">Your completed barters. Contact details are shown so you can arrange the induction.</div>';
-    if(!rows.length)h+='<div class="empty">No confirmed trades yet.</div>';
+    h+='<div class="tm" style="margin-bottom:8px;">Your completed barters. The other DC\'s contact and the received prospect\'s details are shown so you can arrange the induction.</div>';
+    if(!rows.length){h+='<div class="empty">No confirmed trades yet.</div></div>';return h;}
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr>'
+      +'<th>You Gave</th><th>You Received</th><th>Traded With (DC)</th><th>Chapter</th><th>DC Phone</th><th>Received Prospect</th><th>When</th></tr></thead><tbody>';
     rows.forEach(function(r){
       var when=r.matchedAt?fmtD(String(r.matchedAt).slice(0,10)):'';
-      var gave,got,gotP,gotPh,partner,pChapter;
-      if(r.iAmRequester){gave=r.aOfferedCategory;got=r.bOfferedCategory;gotP=r.bOfferedProspect;gotPh=r.bOfferedPhone;partner=r.bName;pChapter=r.bChapter;}
-      else{gave=r.bOfferedCategory;got=r.aOfferedCategory;gotP=r.aOfferedProspect;gotPh=r.aOfferedPhone;partner=r.aName;pChapter=r.aChapter;}
-      h+='<div style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:8px;">';
-      h+='<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div>You gave <b>'+esc(gave)+'</b> · received <b>'+esc(got)+'</b></div><div class="tm">'+when+'</div></div>';
-      h+='<div class="tm">Received prospect: '+esc(gotP||'')+(gotPh?' · '+esc(gotPh):'')+' — with <b>'+esc(partner)+'</b>, '+esc(pChapter)+'</div>';
-      h+='</div>';
+      var gave,got,gotP,gotPh,gotC,gotPay,partner,pChapter,pPhone;
+      if(r.iAmRequester){gave=r.aOfferedCategory;got=r.bOfferedCategory;gotP=r.bOfferedProspect;gotPh=r.bOfferedPhone;gotC=r.bOfferedCompany;gotPay=r.bOfferedPayment;partner=r.bName;pChapter=r.bChapter;pPhone=r.bPhone;}
+      else{gave=r.bOfferedCategory;got=r.aOfferedCategory;gotP=r.aOfferedProspect;gotPh=r.aOfferedPhone;gotC=r.aOfferedCompany;gotPay=r.aOfferedPayment;partner=r.aName;pChapter=r.aChapter;pPhone=r.aPhone;}
+      var prospect=esc(gotP||'')+(gotC?'<br><span class="tm">'+esc(gotC)+'</span>':'')+((gotPh||gotPay)?'<br><span class="tm">'+esc(gotPh||'')+(gotPh&&gotPay?' · ':'')+esc(gotPay||'')+'</span>':'');
+      h+='<tr><td>'+esc(gave)+'</td><td><b>'+esc(got)+'</b></td><td>'+esc(partner)+'</td><td>'+esc(pChapter)+'</td><td>'+(pPhone?'<a href="tel:'+esc(pPhone)+'">'+esc(pPhone)+'</a>':'<span class="tm">—</span>')+'</td><td>'+prospect+'</td><td class="tm">'+when+'</td></tr>';
     });
-    return h+'</div>';
+    h+='</tbody></table></div></div>';
+    return h;
   }
 
   // Leadership — Senior-DC filter, DC/Chapter/Sr-DC stats, then the trade table.
@@ -6321,10 +6360,14 @@ function barterTradesHTML(){
 async function barterAddCheck(){
   var sub=(document.getElementById('bChkSub2')||{}).value||'';
   var name=(document.getElementById('bChkName')||{}).value||'';
+  var company=(document.getElementById('bChkCompany')||{}).value||'';
   var phone=(document.getElementById('bChkPhone')||{}).value||'';
+  var pay=(document.getElementById('bChkPay')||{}).value||'';
   if(!sub.trim()){toast('Select a main category and sub-category');return;}
   if(!name.trim()||!phone.trim()){toast('Enter the prospect name and contact number');return;}
-  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),phone:phone.trim()}});barterAfter('Cheque added');}
+  if(!company.trim()){toast('Enter the company name');return;}
+  if(!pay.trim()){toast('Select a payment type');return;}
+  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),companyName:company.trim(),phone:phone.trim(),paymentType:pay.trim()}});barterAfter('Cheque added');}
   catch(e){toast(e.message||'Could not add cheque');}
 }
 async function barterWithdrawCheck(id){
@@ -6350,7 +6393,7 @@ async function barterCancelRequest(id){
 async function barterConfirm(reqId,checkId){
   if(!confirm('Confirm this barter? This trades your cheque for theirs and reveals you to each other.'))return;
   try{var r=await apiFetch('/barter/requests/'+encodeURIComponent(reqId)+'/confirm',{method:'POST',body:{offeredCheckId:checkId}});
-    alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')'+(r.receivedPhone?'\nPhone: '+r.receivedPhone:'')+'\nFrom: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+'\n\nCoordinate the induction with them.');
+    alert('✅ Matched!\nYou receive: '+(r.receivedProspect||'')+' ('+(r.receivedCategory||'')+')'+(r.receivedCompany?'\nCompany: '+r.receivedCompany:'')+(r.receivedPhone?'\nProspect phone: '+r.receivedPhone:'')+(r.receivedPayment?'\nPayment: '+r.receivedPayment:'')+'\n\nTrade with: '+((r.partner&&r.partner.name)||'')+', '+((r.partner&&r.partner.chapter)||'')+((r.partner&&r.partner.phone)?'\nDC phone: '+r.partner.phone:'')+'\n\nCoordinate the induction with them.');
     barterAfter('Barter confirmed');}
   catch(e){toast(e.message||'Could not confirm — it may have just been taken');}
 }

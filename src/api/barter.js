@@ -9,7 +9,7 @@
 // live data has no upside. "Cheque" is the spelling users see.
 
 import { getDb } from "../firebaseAdmin.js";
-import { badRequest, forbidden, isAreaDirector, notFound } from "../services/scope.js";
+import { badRequest, forbidden, isAreaDirector, isSeniorDirector, notFound, scopedChapterNames } from "../services/scope.js";
 
 const MAX_RECIPIENTS = 3;          // a request routes to at most 3 holders (oldest first)
 const CHECK_TTL_DAYS = 30;         // checks auto-expire after 30 days
@@ -45,6 +45,15 @@ async function memberName(id) {
   catch { return id; }
 }
 
+// The trading DC's own name + personal contact number, read straight from the member
+// record (never from the shared snapshot, which carries no phone). Used only after a
+// match confirms, so the two DCs can call each other to arrange the induction.
+async function memberContact(id) {
+  if (!id) return { name: "", phone: "" };
+  try { const d = await getDb().collection("members").doc(id).get(); const x = d.exists ? d.data() : {}; return { name: x.name || id, phone: x.phone || x.contact || "" }; }
+  catch { return { name: id, phone: "" }; }
+}
+
 // One batched read for many ids - the board resolves every holder at once.
 async function memberNames(ids) {
   const unique = [...new Set(ids.filter(Boolean))];
@@ -62,7 +71,22 @@ async function memberNames(ids) {
 
 async function board(user) {
   const snap = await getDb().collection("checks").where("status", "==", "available").get();
-  const live = snap.docs.map(d => d.data()).filter(notExpired);
+  let live = snap.docs.map(d => d.data()).filter(notExpired);
+
+  // Who sees the holding DC's name (not just a count):
+  //  - Area/Executive Director & BNI Office: every cheque in the region.
+  //  - Senior Director: only cheques held by DCs in the chapters they oversee, so the
+  //    board becomes "my chapters' cheques". Counts are scoped to match.
+  //  - DC / SA / everyone else: counts only - the board stays anonymous between
+  //    chapters so cross-chapter requests can't be reverse-engineered.
+  // Prospect names, phones, company and payment are NEVER returned here for anyone.
+  const seesHolders = isAreaDirector(user) || isSeniorDirector(user);
+  let scope = null;
+  if (isSeniorDirector(user) && !isAreaDirector(user)) {
+    scope = new Set(scopedChapterNames(user) || []);
+    live = live.filter(c => scope.has(c.chapter));
+  }
+
   const counts = {};
   live.forEach(c => { counts[c.sub] = (counts[c.sub] || 0) + 1; });
   const cats = await getCategories();
@@ -70,11 +94,8 @@ async function board(user) {
   for (const [sub, n] of Object.entries(counts)) { const main = cats.subToMain.get(sub) || "Other"; mainTotals[main] = (mainTotals[main] || 0) + n; }
   const totalAvailable = Object.values(counts).reduce((s, n) => s + n, 0);
 
-  // Area/Executive Directors and the BNI Office also see WHICH DC is holding each
-  // cheque, for oversight. DCs and SAs still get counts only - the board stays
-  // anonymous between chapters. Prospect names and phones are never returned here.
   let holders;
-  if (isAreaDirector(user)) {
+  if (seesHolders) {
     const names = await memberNames(live.map(c => c.dcId));
     holders = {};
     for (const c of live) {
@@ -84,7 +105,7 @@ async function board(user) {
     }
     for (const list of Object.values(holders)) list.sort((a, b) => a.name.localeCompare(b.name));
   }
-  return ok({ counts, mainTotals, totalAvailable, holders, updatedAt: nowIso() });
+  return ok({ counts, mainTotals, totalAvailable, holders, scoped: scope ? "chapters" : "region", updatedAt: nowIso() });
 }
 
 async function myAvailableChecks(dcId) {
@@ -109,7 +130,9 @@ async function mine(user) {
     if (r.status === "confirmed") {
       // Requester receives the winner's check (wonCheckId); partner revealed.
       const won = r.wonCheckId ? await db.collection("checks").doc(r.wonCheckId).get() : null;
-      row.match = { partnerChapter: r.confirmedByChapter, partnerName: await memberName(r.confirmedByDcId), receivedProspect: won && won.exists ? won.data().prospectName : "", receivedPhone: won && won.exists ? (won.data().phone || "") : "", receivedCategory: r.requestedSub, matchedAt: r.matchedAt };
+      const wd = won && won.exists ? won.data() : {};
+      const pc = await memberContact(r.confirmedByDcId);
+      row.match = { partnerChapter: r.confirmedByChapter, partnerName: pc.name, partnerPhone: pc.phone, receivedProspect: wd.prospectName || "", receivedPhone: wd.phone || "", receivedCompany: wd.companyName || "", receivedPayment: wd.paymentType || "", receivedCategory: r.requestedSub, matchedAt: r.matchedAt };
     }
     requests.push(row);
   }
@@ -118,10 +141,10 @@ async function mine(user) {
   // Enrich matched checks with what the holder received in the trade.
   const enriched = [];
   for (const c of checks) {
-    const out = { id: c.id, sub: c.sub, main: c.main, prospectName: c.prospectName, phone: c.phone || "", status: c.status, createdAt: c.createdAt, expiresAt: c.expiresAt };
+    const out = { id: c.id, sub: c.sub, main: c.main, prospectName: c.prospectName, phone: c.phone || "", companyName: c.companyName || "", paymentType: c.paymentType || "", status: c.status, createdAt: c.createdAt, expiresAt: c.expiresAt };
     if (c.status === "matched" && c.matchedWithCheckId) {
       const other = await db.collection("checks").doc(c.matchedWithCheckId).get();
-      if (other.exists) { const o = other.data(); out.tradedFor = { category: o.sub, prospect: o.prospectName, phone: o.phone || "", partnerChapter: o.chapter, partnerName: await memberName(o.dcId) }; }
+      if (other.exists) { const o = other.data(); out.tradedFor = { category: o.sub, prospect: o.prospectName, phone: o.phone || "", company: o.companyName || "", payment: o.paymentType || "", partnerChapter: o.chapter, partnerName: await memberName(o.dcId) }; }
     }
     enriched.push(out);
   }
@@ -169,12 +192,14 @@ async function trades(user) {
     ]);
     const won = wonD && wonD.exists ? wonD.data() : {};  // confirmer's check -> requester (category = requestedSub)
     const off = offD && offD.exists ? offD.data() : {};  // requester's check -> confirmer
+    const ac = await memberContact(r.requesterDcId);
+    const bc = await memberContact(r.confirmedByDcId);
     out.push({
       id: r.id, matchedAt: r.matchedAt,
-      aName: await memberName(r.requesterDcId), aChapter: r.requesterChapter,
-      aOfferedCategory: off.sub || "", aOfferedProspect: off.prospectName || "", aOfferedPhone: off.phone || "",
-      bName: await memberName(r.confirmedByDcId), bChapter: r.confirmedByChapter,
-      bOfferedCategory: r.requestedSub || won.sub || "", bOfferedProspect: won.prospectName || "", bOfferedPhone: won.phone || "",
+      aName: ac.name, aPhone: ac.phone, aChapter: r.requesterChapter,
+      aOfferedCategory: off.sub || "", aOfferedProspect: off.prospectName || "", aOfferedPhone: off.phone || "", aOfferedCompany: off.companyName || "", aOfferedPayment: off.paymentType || "",
+      bName: bc.name, bPhone: bc.phone, bChapter: r.confirmedByChapter,
+      bOfferedCategory: r.requestedSub || won.sub || "", bOfferedProspect: won.prospectName || "", bOfferedPhone: won.phone || "", bOfferedCompany: won.companyName || "", bOfferedPayment: won.paymentType || "",
       iAmRequester: r.requesterDcId === user.sub, iAmConfirmer: r.confirmedByDcId === user.sub
     });
   }
@@ -188,13 +213,18 @@ async function addCheck(user, body) {
   const sub = String(body?.sub || "").trim();
   const prospectName = String(body?.prospectName || "").trim();
   const phone = String(body?.phone || "").trim();
+  // Company name and payment type ride along with the prospect - revealed to the
+  // other DC only after a match, never in the anonymous board or inbox. Optional so
+  // existing tooling that predates these fields keeps working.
+  const companyName = String(body?.companyName || "").trim();
+  const paymentType = String(body?.paymentType || "").trim();
   const cats = await getCategories();
   if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
   if (!prospectName) throw badRequest("Prospect name is required");
   if (!phone) throw badRequest("Contact number is required");
   const check = {
     sub, main: cats.subToMain.get(sub) || "Other", chapter: chapterOf(user), dcId: user.sub,
-    prospectName, phone, status: "available", createdAt: nowIso(), expiresAt: plusDaysIso(CHECK_TTL_DAYS)
+    prospectName, phone, companyName, paymentType, status: "available", createdAt: nowIso(), expiresAt: plusDaysIso(CHECK_TTL_DAYS)
   };
   const ref = await getDb().collection("checks").add(check);
   return ok({ check: { id: ref.id, ...check } }, 201);
@@ -276,11 +306,14 @@ async function confirmRequest(user, requestId, body) {
     t.set(reqRef, { status: "confirmed", confirmedByDcId: user.sub, confirmedByChapter: chapterOf(user), wonCheckId: mineRecipient.checkId, tradedOfferedCheckId: offeredCheckId, matchedAt: at }, { merge: true });
     t.set(myCheckRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: offeredCheckId, matchedAt: at }, { merge: true });
     t.set(offeredRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: mineRecipient.checkId, matchedAt: at }, { merge: true });
-    return { requesterDcId: r.requesterDcId, requesterChapter: r.requesterChapter, receivedProspect: offered.data().prospectName, receivedPhone: offered.data().phone || "", receivedCategory: offered.data().sub, gaveCategory: r.requestedSub };
+    const od = offered.data();
+    return { requesterDcId: r.requesterDcId, requesterChapter: r.requesterChapter, receivedProspect: od.prospectName, receivedPhone: od.phone || "", receivedCompany: od.companyName || "", receivedPayment: od.paymentType || "", receivedCategory: od.sub, gaveCategory: r.requestedSub };
   });
 
-  // Winner receives the requester's offered check; requester is revealed to the winner.
-  return ok({ matched: true, partner: { chapter: result.requesterChapter, name: await memberName(result.requesterDcId) }, receivedProspect: result.receivedProspect, receivedPhone: result.receivedPhone, receivedCategory: result.receivedCategory });
+  // Winner receives the requester's offered check; requester (DC name, chapter, personal
+  // phone) is revealed to the winner so the two can coordinate directly.
+  const partner = await memberContact(result.requesterDcId);
+  return ok({ matched: true, partner: { chapter: result.requesterChapter, name: partner.name, phone: partner.phone }, receivedProspect: result.receivedProspect, receivedPhone: result.receivedPhone, receivedCompany: result.receivedCompany, receivedPayment: result.receivedPayment, receivedCategory: result.receivedCategory });
 }
 
 // A recipient passing on a request. This is per-recipient: it only leaves THAT
