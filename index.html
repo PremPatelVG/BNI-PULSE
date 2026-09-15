@@ -6450,8 +6450,15 @@ function renderPreCoreGrowth(visChapters){
   var tDrop=region.reduce(function(s,r){return s+(+r.drops||0);},0);
   // Cumulative net added is anchored to the LIVE current member count minus the baseline,
   // not the month-by-month projection (which runs slightly ahead due to renewals/timing).
-  var current=(g.currentMembers!=null)?g.currentMembers:last.running;
-  var cumNet=(g.cumulativeNetAdded!=null)?g.cumulativeNetAdded:(current-g.baseline);
+  // Current members = sum of the latest TLR chapter sizes (region-wide) so it auto-updates
+  // whenever a TLR is uploaded; falls back to the stored value if the TLR isn't loaded.
+  var current=(function(){
+    var nrm=function(s){return String(s||'').toLowerCase().replace(/^bni\s+/,'').trim();};
+    var sz={}; (S.tlrData||[]).forEach(function(r){if(r.name){var v=Math.round(parseFloat(r.chapterSize)||0);if(v)sz[nrm(r.name)]=v;}});
+    var sum=0,have=false; (S.chapters||[]).forEach(function(c){var v=sz[nrm(c.name)];if(v){sum+=v;have=true;}});
+    return have?sum:((g.currentMembers!=null)?g.currentMembers:last.running);
+  })();
+  var cumNet=current-g.baseline;
   var netCol=cumNet>=0?'var(--green)':'var(--red)';
   var mon=function(m){try{return fmtM(m);}catch(e){return m;}};
   var h='<div class="card" style="margin-bottom:14px;">';
