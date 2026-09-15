@@ -25,6 +25,7 @@ const META_DOCS = new Set([
   "config",
   "dues",
   "growthSummary",
+  "preCoreGrowth",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"
@@ -55,6 +56,7 @@ export const SNAPSHOT_META_DOCS = [
   "config",
   "dues",
   "growthSummary",
+  "preCoreGrowth",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"

@@ -2418,9 +2418,12 @@ function subAll(){
   // 12-Month Growth summary (imported from the June-2025 + Commission sheets): powers
   // the Cumulative Net Add card on the Overview.
   const u14=db.collection('meta').doc('growthSummary').onSnapshot(d=>{S.growthData=d.exists?d.data():null;if(S.tab==='overview')renderOverview();});
+  // Pre-Core 12-month growth (baseline 2928 + Commission drops, pre-core inductions):
+  // shown in the Retrospective tab.
+  const u15=db.collection('meta').doc('preCoreGrowth').onSnapshot(d=>{S.preCoreGrowth=d.exists?d.data():null;if(S.tab==='retro')renderRetroTab();});
   // Assign before subGoals() pushes onto the list - the previous order threw away
   // the goals unsubscribe, leaking that listener on every logout.
-  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u11,u13,u14];
+  S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u11,u13,u14,u15];
   subGoals();
   startSync();
   // Load branding after subscriptions are set up
@@ -6434,6 +6437,47 @@ async function barterConfirm(reqId,checkId){
   catch(e){toast(e.message||'Could not confirm — it may have just been taken');}
 }
 
+// Pre-Core 12-Month Growth card (Retrospective). Region-level running membership from a
+// 2928 baseline: inductions from the pre-core commitment forms (Commission New only for
+// chapters with no form), drops from the commission sheet. Leadership only. Reads the
+// aggregate meta/preCoreGrowth doc; returns '' if not loaded or not permitted.
+function renderPreCoreGrowth(visChapters){
+  if(!(isAreaDirector()||isSeniorDirector()||isViewer()))return '';
+  var g=S.preCoreGrowth;
+  if(!g||!g.region||!g.region.length)return '';
+  var region=g.region, last=region[region.length-1];
+  var tInd=region.reduce(function(s,r){return s+(+r.newCorrected||0);},0);
+  var tDrop=region.reduce(function(s,r){return s+(+r.drops||0);},0);
+  var netCol=g.netOverWindow>=0?'var(--green)':'var(--red)';
+  var mon=function(m){try{return fmtM(m);}catch(e){return m;}};
+  var h='<div class="card" style="margin-bottom:14px;">';
+  h+='<div class="sec-hdr"><div><div class="sec-title">12-Month Growth (Pre-Core)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' (start Jul 2025) · inductions from pre-core forms, drops from commission</div></div></div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
+  h+='<div class="month-card"><div class="month-lbl">Baseline (Jul 25)</div><div class="month-val">'+g.baseline+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+last.running+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(g.netOverWindow>0?'+':'')+g.netOverWindow+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Inductions</div><div class="month-val" style="color:var(--green)">+'+tInd+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Drops</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
+  h+='</div>';
+  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Inductions</th><th>Drops</th><th>Net</th><th>Running Total</th></tr></thead><tbody>';
+  region.forEach(function(r){
+    h+='<tr><td>'+esc(mon(r.month))+'</td><td style="color:var(--green)">+'+(+r.newCorrected||0)+'</td><td style="color:var(--red)">-'+(+r.drops||0)+'</td><td style="color:'+((+r.net||0)>=0?'var(--green)':'var(--red)')+'"><b>'+((+r.net||0)>0?'+':'')+(+r.net||0)+'</b></td><td><b>'+r.running+'</b></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  var visNames=(visChapters||visibleChapters()).map(function(c){return c.name;});
+  var pcRows=(g.perChapter||[]).filter(function(r){return visNames.indexOf(r.chapter)>=0;}).slice().sort(function(a,b){return b.cumNet-a.cumNet;});
+  if(pcRows.length){
+    h+='<div class="tm" style="margin:12px 0 6px;font-weight:700;">Pre-Core chapters — inductions from commitment forms ('+pcRows.length+')</div>';
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Inductions (pre-core)</th><th>Drops</th><th>Cumulative Net</th></tr></thead><tbody>';
+    pcRows.forEach(function(r){
+      h+='<tr><td style="font-weight:700">'+esc(r.chapter)+'</td><td style="color:var(--green)">+'+(+r.adds||0)+'</td><td style="color:var(--red)">-'+(+r.drops||0)+'</td><td style="color:'+((+r.cumNet||0)>=0?'var(--green)':'var(--red)')+'"><b>'+((+r.cumNet||0)>0?'+':'')+(+r.cumNet||0)+'</b></td></tr>';
+    });
+    h+='</tbody></table></div>';
+  }
+  h+='</div>';
+  return h;
+}
+
 function renderRetroTab(){
   var el=document.getElementById('tab-retro'); if(!el)return;
   var allVisChapters=visibleChapters();
@@ -6444,13 +6488,15 @@ function renderRetroTab(){
   var filterHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length,'renderRetroTab');
   // 12-Month cumulative growth summary sits at the top of the retrospective.
   var growthHTML=renderGrowth12mo(visChapters);
+  // Pre-Core 12-month growth (baseline 2928 + commission drops) - leadership only.
+  var preCoreHTML=renderPreCoreGrowth(visChapters);
   var allMonths=[]; var seen={};
   S.weeklyData.forEach(function(e){if(!visNames.includes(e.chapter))return;var m=e.date.substring(0,7);if(!seen[m]){seen[m]=1;allMonths.push(m);}});
   allMonths.sort().reverse();
   var selMonthEl=document.getElementById('retroMonth');
   var selMonth=selMonthEl?selMonthEl.value:'';
   if(!selMonth&&allMonths.length)selMonth=allMonths[0];
-  if(!selMonth){el.innerHTML=filterHTML+growthHTML+'<div class="card"><div class="empty">No monthly data available yet</div></div>';return;}
+  if(!selMonth){el.innerHTML=filterHTML+growthHTML+preCoreHTML+'<div class="card"><div class="empty">No monthly data available yet</div></div>';return;}
   var chapterData=visChapters.map(function(ch){
     return getChapterMonthRetro(ch,selMonth);
   });
@@ -6465,7 +6511,7 @@ function renderRetroTab(){
   var totRenewDue=withData.reduce(function(s,c){return s+c.renewalsDue;},0);
   var totRenewDone=withData.reduce(function(s,c){return s+c.renewalsDone;},0);
   var monthOpts=allMonths.map(function(m){return '<option value="'+m+'"'+(m===selMonth?' selected':'')+'>'+fmtM(m)+'</option>';}).join('');
-  var h=filterHTML+growthHTML+'<div class="card">';
+  var h=filterHTML+growthHTML+preCoreHTML+'<div class="card">';
   h+='<div class="sec-hdr"><div class="sec-title">Monthly Retrospective</div><select id="retroMonth" onchange="renderRetroTab()" style="width:auto;padding:7px 12px;font-size:13px;">'+monthOpts+'</select></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;margin-bottom:16px;">';
   h+='<div class="month-card"><div class="month-lbl">Region Net Add</div><div class="month-val" style="color:'+(totNet>=0?'var(--green)':'var(--red)')+'">'+(totNet>0?'+':'')+totNet+'</div></div>';

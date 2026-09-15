@@ -31,3 +31,10 @@ scripts/reverify-growth.csv
 # Generated Word documents (regenerate: node docs/build_user_guides.js) + Word temp files
 docs/*.docx
 ~$*.docx
+
+# Pre-Core Commitment local dataset - prospect names + emails (PII), never commit
+data/pre-core-commitments.*
+# Derived Pre-Core net-add analysis - regional business data, keep local
+data/precore-netadd-preview.csv
+data/region-growth-preview.csv
+data/induction-verification.csv
