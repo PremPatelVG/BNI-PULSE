@@ -6448,18 +6448,23 @@ function renderPreCoreGrowth(visChapters){
   var region=g.region, last=region[region.length-1];
   var tInd=region.reduce(function(s,r){return s+(+r.newCorrected||0);},0);
   var tDrop=region.reduce(function(s,r){return s+(+r.drops||0);},0);
-  var netCol=g.netOverWindow>=0?'var(--green)':'var(--red)';
+  // Cumulative net added is anchored to the LIVE current member count minus the baseline,
+  // not the month-by-month projection (which runs slightly ahead due to renewals/timing).
+  var current=(g.currentMembers!=null)?g.currentMembers:last.running;
+  var cumNet=(g.cumulativeNetAdded!=null)?g.cumulativeNetAdded:(current-g.baseline);
+  var netCol=cumNet>=0?'var(--green)':'var(--red)';
   var mon=function(m){try{return fmtM(m);}catch(e){return m;}};
   var h='<div class="card" style="margin-bottom:14px;">';
-  h+='<div class="sec-hdr"><div><div class="sec-title">12-Month Growth (Pre-Core)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' (start Jul 2025) · inductions from pre-core forms, drops from commission</div></div></div>';
+  h+='<div class="sec-hdr"><div><div class="sec-title">12-Month Growth (Pre-Core)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' (start Jul 2025) · net added = live members − baseline</div></div></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
   h+='<div class="month-card"><div class="month-lbl">Baseline (Jul 25)</div><div class="month-val">'+g.baseline+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+last.running+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(g.netOverWindow>0?'+':'')+g.netOverWindow+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(cumNet>0?'+':'')+cumNet+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Inductions</div><div class="month-val" style="color:var(--green)">+'+tInd+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Drops</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
   h+='</div>';
-  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Inductions</th><th>Drops</th><th>Net</th><th>Running Total</th></tr></thead><tbody>';
+  h+='<div class="tm" style="margin-bottom:6px;">Month-by-month movement below (inductions from pre-core forms, drops from commission). The reported running total may run ahead of the live current count — the headline Cumulative Net Add uses the live members − baseline.</div>';
+  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Inductions</th><th>Drops</th><th>Net</th><th>Reported Running</th></tr></thead><tbody>';
   region.forEach(function(r){
     h+='<tr><td>'+esc(mon(r.month))+'</td><td style="color:var(--green)">+'+(+r.newCorrected||0)+'</td><td style="color:var(--red)">-'+(+r.drops||0)+'</td><td style="color:'+((+r.net||0)>=0?'var(--green)':'var(--red)')+'"><b>'+((+r.net||0)>0?'+':'')+(+r.net||0)+'</b></td><td><b>'+r.running+'</b></td></tr>';
   });
