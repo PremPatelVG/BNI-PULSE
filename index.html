@@ -6465,7 +6465,8 @@ function renderPreCoreGrowth(visChapters){
   h+='<div class="sec-hdr"><div><div class="sec-title">12-Month Growth (Pre-Core)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' (start Jul 2025) · net added = live members − baseline</div></div></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
   h+='<div class="month-card"><div class="month-lbl">Baseline (Jul 25)</div><div class="month-val">'+g.baseline+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div></div>';
+  var asOf=g.currentMembersAsOf?'as of '+fmtD(g.currentMembersAsOf):'';
+  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div>'+(asOf?'<div class="tm" style="font-size:10px;margin-top:2px;">'+esc(asOf)+'</div>':'')+'</div>';
   h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(cumNet>0?'+':'')+cumNet+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Inductions</div><div class="month-val" style="color:var(--green)">+'+tInd+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Drops</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
