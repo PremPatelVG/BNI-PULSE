@@ -21,7 +21,8 @@ export default async (req) => {
       method: req.method,
       segments: pathSegments(req),
       body: hasBody ? await readJson(req) : undefined,
-      authorization: req.headers.get("authorization")
+      authorization: req.headers.get("authorization"),
+      query: Object.fromEntries(new URL(req.url).searchParams)
     });
 
     if (result.status === 204 || result.body === null) return new Response(null, { status: result.status });

@@ -22,10 +22,28 @@ const plusDaysIso = n => new Date(Date.now() + n * 86400000).toISOString();
 const chapterOf = user => user?.chapter || (user?.chapters && user.chapters[0]) || null;
 const notExpired = c => !c.expiresAt || c.expiresAt > nowIso();
 
+// A Senior Director may also trade — but only when acting as the DC of one of their
+// own chapters (their "DC View"). Identity stays their srdc account; the acting chapter
+// is what tags the cheque/request.
 function assertCanTrade(user) {
-  if (!TRADE_ROLES.has(user?.role) || !chapterOf(user)) {
-    throw forbidden("Only a Chapter Director or Support Ambassador can trade cheques");
+  if (!TRADE_ROLES.has(user?.role) && !isSeniorDirector(user)) {
+    throw forbidden("Only a Chapter Director, Support Ambassador or Senior Director can trade cheques");
   }
+  if (!chapterOf(user)) throw forbidden("No chapter is associated with this account");
+}
+
+// The chapter a caller is trading FOR. A DC/SA trades for their own chapter; a Senior
+// Director must name one of their own chapters (passed as body.chapter from DC View),
+// validated against the chapters they oversee.
+function resolveTradeChapter(user, body) {
+  if (isSeniorDirector(user) && !TRADE_ROLES.has(user?.role)) {
+    const ch = String(body?.chapter || "").trim();
+    if (!ch || !(scopedChapterNames(user) || []).includes(ch)) {
+      throw badRequest("Pick one of your own chapters to trade for");
+    }
+    return ch;
+  }
+  return chapterOf(user);
 }
 
 let CAT_CACHE = null; // { at, tree, subToMain, subs:Set }
@@ -69,20 +87,24 @@ async function memberNames(ids) {
 
 // ---- reads -------------------------------------------------------------------
 
-async function board(user) {
+async function board(user, actingChapter) {
   const snap = await getDb().collection("checks").where("status", "==", "available").get();
   let live = snap.docs.map(d => d.data()).filter(notExpired);
 
+  // A Senior Director in "DC View" (actingChapter set to one of their chapters) sees the
+  // same anonymous, region-wide board a DC sees - counts only, so they can request across
+  // chapters. Outside DC View they get the oversight board (below).
+  const actingAsDc = isSeniorDirector(user) && actingChapter && (scopedChapterNames(user) || []).includes(actingChapter);
+
   // Who sees the holding DC's name (not just a count):
   //  - Area/Executive Director & BNI Office: every cheque in the region.
-  //  - Senior Director: only cheques held by DCs in the chapters they oversee, so the
-  //    board becomes "my chapters' cheques". Counts are scoped to match.
-  //  - DC / SA / everyone else: counts only - the board stays anonymous between
-  //    chapters so cross-chapter requests can't be reverse-engineered.
+  //  - Senior Director (oversight): only cheques held by DCs in the chapters they oversee.
+  //  - DC / SA / Senior Director acting as DC: counts only - the board stays anonymous
+  //    between chapters so cross-chapter requests can't be reverse-engineered.
   // Prospect names, phones, company and payment are NEVER returned here for anyone.
-  const seesHolders = isAreaDirector(user) || isSeniorDirector(user);
+  const seesHolders = !actingAsDc && (isAreaDirector(user) || isSeniorDirector(user));
   let scope = null;
-  if (isSeniorDirector(user) && !isAreaDirector(user)) {
+  if (!actingAsDc && isSeniorDirector(user) && !isAreaDirector(user)) {
     scope = new Set(scopedChapterNames(user) || []);
     live = live.filter(c => scope.has(c.chapter));
   }
@@ -229,8 +251,9 @@ async function addCheck(user, body) {
   if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
   if (!prospectName) throw badRequest("Prospect name is required");
   if (!phone) throw badRequest("Contact number is required");
+  const chapter = resolveTradeChapter(user, body);
   const check = {
-    sub, main: cats.subToMain.get(sub) || "Other", chapter: chapterOf(user), dcId: user.sub,
+    sub, main: cats.subToMain.get(sub) || "Other", chapter, dcId: user.sub,
     prospectName, phone, companyName, paymentType, status: "available", createdAt: nowIso(), expiresAt: plusDaysIso(CHECK_TTL_DAYS)
   };
   const ref = await getDb().collection("checks").add(check);
@@ -254,7 +277,7 @@ async function createRequest(user, body) {
   const sub = String(body?.sub || "").trim();
   const cats = await getCategories();
   if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
-  const myChapter = chapterOf(user);
+  const myChapter = resolveTradeChapter(user, body);
 
   // Strict barter: you must be holding at least one check to offer in return.
   const offered = await myAvailableChecks(user.sub);
@@ -362,14 +385,14 @@ async function cancelRequest(user, requestId) {
 
 // ---- router ------------------------------------------------------------------
 
-export async function routeBarter({ method, segments, body, user }) {
+export async function routeBarter({ method, segments, body, user, query }) {
   const [, second, third, fourth] = segments; // segments[0] === "barter"
 
   if (second === "categories" && method === "GET") {
     const c = await getCategories();
     return ok({ tree: c.tree, mainCount: c.mainCount, subCount: c.subCount });
   }
-  if (second === "board" && method === "GET") return board(user);
+  if (second === "board" && method === "GET") return board(user, query && query.actingChapter);
   if (second === "mine" && method === "GET") return mine(user);
   if (second === "inbox" && method === "GET") return inbox(user);
   if (second === "trades" && method === "GET") return trades(user);

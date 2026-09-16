@@ -12,7 +12,8 @@ router.use(async (req, res, next) => {
       method: req.method,
       segments,
       body: req.body,
-      authorization: req.get("authorization")
+      authorization: req.get("authorization"),
+      query: req.query
     });
 
     if (result.status === 204 || result.body === null) return res.status(result.status).end();

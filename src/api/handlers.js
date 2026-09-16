@@ -215,7 +215,7 @@ async function writeScopedMeta(user, docId, body) {
 }
 
 // method: "GET" | "POST" | ... ; segments: path below /api, already decoded.
-export async function routeApi({ method, segments, body, authorization }) {
+export async function routeApi({ method, segments, body, authorization, query }) {
   assertRuntimeSecrets();
   const [first, second, third] = segments;
 
@@ -393,7 +393,7 @@ export async function routeApi({ method, segments, body, authorization }) {
 
   // Check Barter: anonymous cross-chapter category exchange. Its own module keeps this
   // logic (and the anonymity rules) out of the shared snapshot path.
-  if (first === "barter") return routeBarter({ method, segments, body, user });
+  if (first === "barter") return routeBarter({ method, segments, body, user, query: query || {} });
 
   throw notFound("Unknown API route");
 }

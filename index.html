@@ -284,6 +284,7 @@ html,body{max-width:100%;overflow-x:hidden;}
     </div>
     <div class="hdr-r">
       <div class="sync-pill"><div class="sdot" id="syncDot"></div><span id="syncTxt">Live</span></div>
+      <button class="btn btn-sm btn-navy" id="dcViewBtn" style="display:none;margin-right:8px;" onclick="toggleDcView()"></button>
       <div class="uchip" id="userChip" onclick="logout()"></div>
     </div>
   </div>
@@ -2145,7 +2146,7 @@ function logout(){
   stopSync();
   resetOnDemandCollections();
   setAuthToken(null);
-  S.user=null;
+  S.user=null;S.dcView=null;
   hide('app');show('loginScreen');
   document.getElementById('loginPin').value='';
   document.getElementById('pinGroup').classList.add('hidden');
@@ -2347,9 +2348,10 @@ function applyLocalTlrRowsToWeekly(rows,existingRows){
 
 function buildNav(){
   const role=S.user.role;
-  const isSd=['ad','ed','srdc'].includes(role);
-  const isViewer=role==='viewer';
-  const isDC=['cd','dc','sa1','sa2'].includes(role);
+  const dcView=inDcView();
+  const isSd=['ad','ed','srdc'].includes(role)&&!dcView;
+  const isViewer=role==='viewer'&&!dcView;
+  const isDC=['cd','dc','sa1','sa2'].includes(role)||dcView;
   let tabs=[];
   if(isSd||isViewer){
     tabs=[
@@ -2389,6 +2391,7 @@ function buildNav(){
     ];
   }
   document.getElementById('navBar').innerHTML=tabs.filter(t=>!t.hidden).map(t=>`<div class="nt${t.id==='overview'?' active':''}" data-tab="${t.id}" onclick="switchTab('${t.id}')">${t.label}</div>`).join('');
+  updateDcViewBtn();
 }
 
 function subAll(){
@@ -2431,6 +2434,7 @@ function subAll(){
 }
 
 function refresh(){
+  updateDcViewBtn(); // chapters may have just loaded - reveals the Senior-DC "DC View" button
   if(S.tab==='overview')renderOverview();
   if(S.tab==='entry')renderRecentEntries();
   if(S.tab==='call')renderCallMode();
@@ -2521,6 +2525,29 @@ function isSrdc(){return['ad','ed','srdc'].includes(S.user?.role);}
 function isViewer(){return S.user?.role==='viewer';}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
 function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
+
+// ── DC VIEW (Senior DC acting as the DC of their own chapter) ────────────────
+// Some Senior DCs also run a chapter as its DC. Instead of a second account (which
+// caused login/PIN conflicts), the Senior DC stays logged in and toggles a "DC View":
+// the dashboard scopes to their own chapter and shows the DC experience. Their own
+// chapter is the one they are chapterDirector of, within the chapters they oversee.
+function srdcOwnChapter(){
+  if(!isSeniorDirector()||!S.user||!S.chapters)return null;
+  var mine=(S.user.chapters||[]);
+  var own=S.chapters.find(function(c){return mine.indexOf(c.name)>=0&&normPersonName(c.chapterDirector)===normPersonName(S.user.name);});
+  return own?own.name:null;
+}
+function inDcView(){return !!S.dcView;}
+function enterDcView(){var ch=srdcOwnChapter();if(!ch)return;S.dcView=ch;S.dcActiveChapter=ch;buildNav();switchTab('overview');}
+function exitDcView(){S.dcView=null;buildNav();switchTab('overview');}
+function toggleDcView(){ if(inDcView())exitDcView(); else enterDcView(); }
+function updateDcViewBtn(){
+  var b=document.getElementById('dcViewBtn');if(!b)return;
+  if(inDcView()){ b.style.display='inline-block'; b.textContent='← Back to Senior DC'; b.className='btn btn-sm btn-secondary'; return; }
+  var own=srdcOwnChapter();
+  if(own){ b.style.display='inline-block'; b.textContent='DC View: '+own; b.className='btn btn-sm btn-navy'; }
+  else b.style.display='none';
+}
 function roleClass(role){return(role==='ad'||role==='ed')?'ad':role==='srdc'?'srdc':isChapterDirectorRole(role)?'dc':role==='viewer'?'viewer':'sa';}
 function normPersonName(value){return String(value||'').toLowerCase().replace(/\bpvt\b/g,'private').replace(/\bltd\b/g,'limited').replace(/[^a-z0-9]+/g,' ').trim();}
 function uniqueList(values){return[...new Set((values||[]).filter(Boolean))];}
@@ -2542,6 +2569,7 @@ function ensureUserChapterScope(){
   }
 }
 function myChapters(){
+  if(inDcView())return [S.dcView];
   if(isAreaDirector()||isViewer())return S.chapters.map(c=>c.name);
   if(isSeniorDirector())return uniqueList([...(S.user?.chapters||[]),...seniorMappedChapters(S.user?.name)]);
   return(S.user?.chapters&&S.user.chapters.length)?S.user.chapters:(S.user?.chapter?[S.user.chapter]:[]);
@@ -2613,6 +2641,7 @@ function renderAreaDirectorOverviewFilters(allChapters,visibleCount,rerenderFn){
 // OVERVIEW ──
 function renderOverview(){
   const el=document.getElementById('tab-overview');if(!el)return;
+  if(inDcView()){S.dcActiveChapter=S.dcView;renderDCOverview(el);return;}
   if(isDC()){renderDCOverview(el);barterOverviewNotif();return;}
   renderSDOverview(el);
 }
@@ -6051,14 +6080,18 @@ function getChapterMonthRetro(ch,month){
 // /api/barter/* endpoints (never the shared snapshot), so identities stay hidden
 // until a match is confirmed.
 var BARTER_PAY_TYPES=['NEFT','UPI','Cheque','Cash','Bank Transfer'];
-function barterCanTrade(){return['dc','cd','sa1','sa2'].includes(S.user&&S.user.role);}
+// DCs and SAs trade normally; a Senior Director can trade while in DC View (acting as
+// the DC of their own chapter). barterTradeChapter() is the chapter they trade for.
+function barterCanTrade(){return['dc','cd','sa1','sa2'].includes(S.user&&S.user.role)||inDcView();}
+function barterTradeChapter(){return inDcView()?S.dcView:((myChapters()||[])[0]||(S.user&&S.user.chapter)||'');}
 function barterState(){if(!S.barter)S.barter={view:'board',search:'',expanded:{},cats:null,board:null,mine:null,inbox:null,fSr:'',fDc:''};return S.barter;}
 
 async function loadBarter(){
   var st=barterState();
   try{
     if(!st.cats)st.cats=await apiFetch('/barter/categories');
-    var jobs=[apiFetch('/barter/board').then(function(b){st.board=b;})];
+    var boardUrl='/barter/board'+(inDcView()?('?actingChapter='+encodeURIComponent(S.dcView)):'');
+    var jobs=[apiFetch(boardUrl).then(function(b){st.board=b;})];
     if(barterCanTrade()){
       jobs.push(apiFetch('/barter/mine').then(function(m){st.mine=m;}).catch(function(){}));
       jobs.push(apiFetch('/barter/inbox').then(function(i){st.inbox=i;}).catch(function(){}));
@@ -6089,7 +6122,7 @@ function renderBarter(){
 
 function paintBarter(){
   var el=document.getElementById('tab-barter');if(!el||S.tab!=='barter')return;
-  var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector();var senior=isSeniorDirector();
+  var st=barterState();var trade=barterCanTrade();var seesAll=isAreaDirector()&&!inDcView();var senior=isSeniorDirector()&&!inDcView();
   var inboxCount=(st.inbox&&st.inbox.inbox&&st.inbox.inbox.length)||0;
   var views=trade?[['board','Available'],['mine','My Cheques'],['requests','My Requests'],['inbox','Inbox'+(inboxCount?' ('+inboxCount+')':'')],['trades','My Trades']]
     :seesAll?[['board','Available'],['trades','All Trades']]:[['board','Available']];
@@ -6132,7 +6165,7 @@ function barterBoardHTML(){
   var st=barterState();var b=st.board;var cats=st.cats;
   if(!b||!cats)return'<div class="card"><div class="empty">No data yet.</div></div>';
   var counts=b.counts||{},mainTotals=b.mainTotals||{};
-  var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();var senior=isSeniorDirector();
+  var q=(st.search||'').trim().toLowerCase();var trade=barterCanTrade();var senior=isSeniorDirector()&&!inDcView();
   window._bMainMap=[];window._bSubMap=[];
 
   // Leadership only: filter the board down to one Senior DC or one DC. Counts are
@@ -6406,7 +6439,7 @@ async function barterAddCheck(){
   if(!name.trim()||!phone.trim()){toast('Enter the prospect name and contact number');return;}
   if(!company.trim()){toast('Enter the company name');return;}
   if(!pay.trim()){toast('Select a payment type');return;}
-  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),companyName:company.trim(),phone:phone.trim(),paymentType:pay.trim()}});barterAfter('Cheque added');}
+  try{await apiFetch('/barter/checks',{method:'POST',body:{sub:sub.trim(),prospectName:name.trim(),companyName:company.trim(),phone:phone.trim(),paymentType:pay.trim(),chapter:barterTradeChapter()}});barterAfter('Cheque added');}
   catch(e){toast(e.message||'Could not add cheque');}
 }
 async function barterWithdrawCheck(id){
@@ -6415,7 +6448,7 @@ async function barterWithdrawCheck(id){
   catch(e){toast(e.message||'Could not withdraw');}
 }
 async function barterRequest(sub){
-  try{var r=await apiFetch('/barter/requests',{method:'POST',body:{sub:sub}});S.barter.view='requests';barterAfter('Request sent to '+((r.request&&r.request.recipientCount)||0)+' chapter(s)');}
+  try{var r=await apiFetch('/barter/requests',{method:'POST',body:{sub:sub,chapter:barterTradeChapter()}});S.barter.view='requests';barterAfter('Request sent to '+((r.request&&r.request.recipientCount)||0)+' chapter(s)');}
   catch(e){toast(e.message||'Could not send request');}
 }
 async function barterDecline(reqId){
