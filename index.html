@@ -7,15 +7,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Sicilian Growth Tracker">
 <title>Sicilian Growth Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="/vendor/exceljs.min.js"></script>
 <style>
-:root{--navy:#1A1F2E;--red:#E63946;--green:#2D9B6F;--amber:#F4A261;--purple:#7C3AED;--blue:#3B82F6;--surface:#F0F2F7;--card:#fff;--text:#1A1F2E;--muted:#6B7280;--border:#E5E7EB;--r:14px;--sh:0 2px 10px rgba(0,0,0,0.07);}
+:root{--navy:#1D1E24;--ink:#1D1E24;--red:#CF2030;--red-dark:#AD1926;--red-soft:#FBEAEC;--green:#2D9B6F;--amber:#F4A261;--purple:#7C3AED;--blue:#3B82F6;--surface:#F3F4F7;--card:#fff;--text:#1D1E24;--muted:#6B7280;--border:#E5E7EC;--r:14px;--r-sm:9px;--sh:0 1px 2px rgba(17,24,39,.04),0 6px 18px rgba(17,24,39,.06);--sh-lg:0 14px 36px rgba(17,24,39,.16);}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:Calibri, Arial, sans-serif;background:var(--surface);color:var(--text);min-height:100vh;}
+body{font-family:'Inter','Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;background:var(--surface);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;}
 .loader{position:fixed;inset:0;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff;gap:12px;}
 .loader-t1{font-size:32px;font-weight:900;letter-spacing:-.5px;}.loader-t1 em{color:var(--red);font-style:normal;}
 .brand-bni{color:var(--red);font-weight:900;}
-.brand-accent{font-weight:900;background:linear-gradient(95deg,var(--red) 0%,var(--purple) 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--red);}
+.brand-accent{font-weight:900;background:linear-gradient(95deg,var(--red) 0%,#8E1420 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:var(--red);}
 .loader-t2{font-size:11px;opacity:.4;letter-spacing:2px;text-transform:uppercase;}
 .spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
@@ -232,6 +235,61 @@ textarea{resize:vertical;min-height:68px;}
 html,body{max-width:100%;overflow-x:hidden;}
 #mainContent{min-width:0;}
 #mainContent table{max-width:100%;}
+
+/* ============================================================
+   BNI PROFESSIONAL THEME  -  re-skin layer (v2)
+   BNI Red primary + charcoal-ink structure + clean greys.
+   Only re-styles existing classes; no markup or JS changes.
+   ============================================================ */
+::selection{background:rgba(207,32,48,.16);}
+.main{padding:20px 16px;}
+.sec-title{letter-spacing:-.2px;}
+
+/* Header: charcoal with a BNI-red hairline accent */
+.hdr{background:linear-gradient(180deg,#26272E 0%,var(--navy) 100%);border-bottom:2px solid var(--red);padding:11px 18px;box-shadow:0 2px 12px rgba(0,0,0,.18);}
+.hdr-brand .h1{letter-spacing:-.4px;}
+.sync-pill{background:rgba(255,255,255,.08);}
+.uchip{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.08);transition:background .15s;}
+.uchip:hover{background:var(--red);}
+
+/* Nav tabs: subtle pill hover, red active underline */
+.nav{background:var(--navy);border-top:1px solid rgba(255,255,255,.06);padding:0 6px;}
+.nav::after{background:linear-gradient(to right,transparent,var(--navy));}
+.nt{color:rgba(255,255,255,.55);padding:11px 15px;}
+.nt.active{color:#fff;border-bottom-color:var(--red);}
+.nt:hover:not(.active){color:#fff;background:rgba(255,255,255,.05);}
+
+/* Buttons: depth, red-dark hover, press feedback */
+.btn{border-radius:10px;box-shadow:0 1px 2px rgba(17,24,39,.06);}
+.btn-primary{background:var(--red);box-shadow:0 2px 9px rgba(207,32,48,.26);}
+.btn-primary:hover{background:var(--red-dark);}
+.btn-navy:hover{background:#2b2c33;}
+.btn-secondary{background:#EEF0F4;color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{background:#E4E7EC;}
+.btn:active{transform:translateY(1px);}
+
+/* Inputs: BNI-red focus ring */
+input:focus,select:focus,textarea:focus,.ms-btn:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(207,32,48,.14);}
+
+/* Cards & stat tiles: hairline border + layered shadow */
+.card,.ov-stat{border:1px solid var(--border);box-shadow:var(--sh);}
+.ch-card{border:1px solid var(--border);border-top-width:4px;}
+.ch-card:hover{box-shadow:var(--sh-lg);}
+.role-tag{letter-spacing:.2px;}
+
+/* Login: premium ink backdrop + elevated card */
+.login-wrap{background:radial-gradient(1100px 480px at 50% -12%,#2c2d35 0%,var(--navy) 55%);}
+.login-box{box-shadow:0 24px 60px rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.05);}
+.brand .b1{letter-spacing:-.6px;}
+.brand .b3{background:var(--red-soft);}
+
+/* DC hero: red-accented depth */
+.dc-hero{background:linear-gradient(135deg,var(--navy) 0%,#3a1216 100%);}
+
+/* Thin, unobtrusive scrollbars (nav keeps its own hidden bar) */
+*::-webkit-scrollbar{width:10px;height:10px;}
+*::-webkit-scrollbar-thumb{background:#c9ccd3;border-radius:8px;border:2px solid transparent;background-clip:content-box;}
+*::-webkit-scrollbar-thumb:hover{background:#aeb2bb;background-clip:content-box;}
 </style>
 </head>
 <body>
