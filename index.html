@@ -2523,6 +2523,10 @@ function isAreaDirector(){return['ad','ed'].includes(S.user?.role);}
 function isSeniorDirector(){return S.user?.role==='srdc';}
 function isSrdc(){return['ad','ed','srdc'].includes(S.user?.role);}
 function isViewer(){return S.user?.role==='viewer';}
+// The BNI Office master account logs in as the fixed id __srdc__ (runs as role 'ad').
+// It is the only account allowed to reset an Executive Director's PIN.
+function isBniOffice(){return S.user?.id==='__srdc__';}
+function isExecutiveDirector(){return S.user?.role==='ed';}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
 function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
 
@@ -5097,8 +5101,11 @@ function renderSettings(){
   h+='<div class="fg"><label>Tenure</label><select id="fTenure"><option value="apr">Apr-Sep</option><option value="oct">Oct-Mar</option></select></div>';
   h+='<div class="fg"><label>Member Target</label><input type="number" id="fTarget"></div>';
   h+='</div><div class="btn-row"><button class="btn btn-primary" onclick="saveChapter()">Save</button><button class="btn btn-secondary" onclick="cancelChapterForm()">Cancel</button></div></div>';
-  h+='<div class="card"><div class="card-t">BNI Office Login PIN</div>';
-  h+='<div style="display:flex;gap:8px;max-width:260px;"><input type="password" id="newSrPin" placeholder="New PIN" maxlength="6" style="flex:1;"><button class="btn btn-navy btn-sm" onclick="changeSrPin()">Update</button></div></div>';
+  if(isExecutiveDirector()){
+    h+='<div class="card"><div class="card-t">BNI Office Login PIN</div>';
+    h+='<div class="tm" style="margin-bottom:8px;">Only the Executive Director can reset the BNI Office master login PIN.</div>';
+    h+='<div style="display:flex;gap:8px;max-width:260px;"><input type="password" id="newSrPin" placeholder="New PIN" maxlength="6" style="flex:1;"><button class="btn btn-navy btn-sm" onclick="changeSrPin()">Update</button></div></div>';
+  }
   h+='<div class="card"><div class="card-t">Team Call Day</div>';
   h+='<div class="tm" style="margin-bottom:12px;">The day you run your weekly team call. This only changes wording shown to you in-app (e.g. the Attendance report) - chapter meeting days stay set per chapter, and week/data calculations are unaffected.</div>';
   h+='<div style="display:flex;gap:8px;max-width:260px;"><select id="srCallDaySelect" style="flex:1;">'+DAYS.map(function(d){return '<option'+(S.srCallDay===d?' selected':'')+'>'+d+'</option>';}).join('')+'</select><button class="btn btn-navy btn-sm" onclick="saveSrCallDay()">Update</button></div></div>';
@@ -5118,6 +5125,9 @@ function toggleChaptersField(){
   document.getElementById('multiChapField')?.classList.toggle('hidden',!isDC);
   if(isDC)document.getElementById('singleChapField')?.classList.add('hidden');
   else if(!isViewer)document.getElementById('singleChapField')?.classList.remove('hidden');
+  // Only the BNI Office master account may set/reset an Executive Director's PIN.
+  var mPinEl=document.getElementById('mPin');
+  if(mPinEl){var edLocked=(role==='ed'&&!isBniOffice());mPinEl.disabled=edLocked;if(edLocked){mPinEl.value='';mPinEl.placeholder='Only the BNI Office account can reset the ED PIN';}else if(mPinEl.placeholder!=='....'){mPinEl.placeholder='....';}}
 }
 
 function clearMemberForm(){
@@ -5169,6 +5179,8 @@ async function saveMember(){
   const role=document.getElementById('mRole').value;
   const reportsTo=document.getElementById('mReportsTo')?.value.trim()||'';
   if(!name){toast('Name required');return;}if(!id&&(!pin||pin.length<4)){toast('PIN must be 4+ digits');return;}
+  // Only the BNI Office master account may set/reset an Executive Director PIN (server-enforced too).
+  if(role==='ed'&&pin&&!isBniOffice()){toast('Only the BNI Office account can set or reset the Executive Director PIN',6000);return;}
   let chapters=[],chapter='';
   if(role==='viewer'||role==='ad'||role==='ed'){chapters=[];chapter='';}
   else if(role==='dc'||role==='srdc'){const sel=document.getElementById('mChapters');chapters=sel?Array.from(sel.selectedOptions).map(o=>o.value):[];chapter=chapters[0]||'';}
@@ -5205,6 +5217,7 @@ async function saveChapter(){const id=document.getElementById('editChapterId').v
 function cancelChapterForm(){hide('chapterFormCard');}
 
 async function changeSrPin(){
+  if(!isExecutiveDirector()){toast('Only the Executive Director can reset the BNI Office PIN',6000);return;}
   const pin=document.getElementById('newSrPin')?.value;
   if(!pin||pin.length<4){toast('Min 4 digits');return;}
   // Dedicated endpoint; the server bcrypts it and clears any legacy plaintext value.
@@ -7691,7 +7704,7 @@ const ACTIVITY_LOG_LABELS={
   weekly_entry_saved:'Weekly Entry Saved',weekly_entry_deleted:'Weekly Entry Deleted',quick_update:'Quick Update (Call Mode)',
   fee_compliance_toggled:'Fee Compliance Toggled',tlr_report_uploaded:'TLR Report Uploaded',dues_report_uploaded:'Dues Report Uploaded',
   length_of_membership_uploaded:'Length of Membership Uploaded',member_saved:'Member Saved',member_deleted:'Member Deleted',
-  chapter_saved:'Chapter Saved',sr_pin_changed:'Sr. DC PIN Changed',sr_call_day_changed:'Team Call Day Changed',branding_updated:'Branding Updated',
+  chapter_saved:'Chapter Saved',sr_pin_changed:'BNI Office PIN Reset',sr_call_day_changed:'Team Call Day Changed',branding_updated:'Branding Updated',
   monthly_target_saved:'Monthly Target Saved',pipeline_stage_changed:'Pipeline Stage Changed',pipeline_contact_deleted:'Pipeline Contact Removed',
   miyagi_checkpoint_toggled:'Miyagi Checkpoint Toggled',miyagi_checkin_submitted:'Miyagi Check-in Submitted',master_override_login:'Warning: Master Override PIN Used'
 };

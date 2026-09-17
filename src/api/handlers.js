@@ -228,7 +228,11 @@ export async function routeApi({ method, segments, body, authorization, query })
   if (first === "auth" && second === "me" && method === "GET") return ok({ user });
 
   if (first === "auth" && second === "sr-pin" && method === "PUT") {
-    assertAdmin(user);
+    // The BNI Office login PIN (the master account credential) may be reset ONLY by the
+    // Executive Director - not by an Area Director, Senior Director, or DC. In turn the
+    // ED's own PIN can only be reset by the BNI Office account (see the members route),
+    // so the two top-level accounts hold each other's reset and neither resets itself.
+    if (user?.role !== "ed") throw forbidden("Only the Executive Director can reset the BNI Office PIN");
     const pin = String(body?.pin || "");
     if (pin.length < 4) throw badRequest("PIN must be at least 4 digits");
     await setMetaDoc("config", { srPinHash: await bcrypt.hash(pin, 12), srPin: null }, true);
@@ -290,6 +294,20 @@ export async function routeApi({ method, segments, body, authorization, query })
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};
     if (!member.name) throw badRequest("Member name is required");
     if (member.role === "cd") member.role = "dc";
+    // The Executive Director's PIN may be set or reset ONLY by the BNI Office master
+    // account - not by an Area Director, Senior Director, or another ED. This covers
+    // creating an ED account, changing an existing ED's PIN, and the role-swap bypass
+    // (editing a record that is currently ED while flipping its role in the same save).
+    if (pin) {
+      let targetIsEd = member.role === "ed";
+      if (!targetIsEd && id) {
+        const existingDoc = await getDb().collection("members").doc(id).get();
+        if (existingDoc.exists && existingDoc.data().role === "ed") targetIsEd = true;
+      }
+      if (targetIsEd && user?.id !== SR_LOGIN_ID) {
+        throw forbidden("Only the BNI Office account can set or reset the Executive Director PIN");
+      }
+    }
     // Credentials are hashed here and only here; a plaintext `pin` never reaches Firestore.
     if (pin) {
       if (String(pin).length < 4) throw badRequest("PIN must be at least 4 digits");
