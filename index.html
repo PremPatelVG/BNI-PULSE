@@ -2585,6 +2585,31 @@ function isViewer(){return S.user?.role==='viewer';}
 // It is the only account allowed to reset an Executive Director's PIN.
 function isBniOffice(){return S.user?.id==='__srdc__';}
 function isExecutiveDirector(){return S.user?.role==='ed';}
+
+// True cumulative net added since the TLR baseline month, measured LIKE-FOR-LIKE: a
+// chapter counts only when it has both a baseline size in meta/monthlyMembers and a live
+// TLR size, and it is then counted on BOTH sides. Chapters missing from the baseline
+// (e.g. Octavian, which has no TLRs in the source) are excluded rather than treated as
+// pure growth - counting their whole roster as "added" overstates the number badly.
+// Returns null when the data isn't loaded yet.
+function tlrCumulativeNet(chapters){
+  var g=S.monthlyMembers;
+  if(!g||!g.perChapter||!g.perChapter.length||!g.baselineMonth)return null;
+  var nrm=function(s){return String(s||'').toLowerCase().replace(/^bni\s+/,'').replace(/\s+/g,' ').trim();};
+  var live={};(S.tlrData||[]).forEach(function(r){var v=Math.round(parseFloat(r.chapterSize)||0);if(r.name&&v)live[nrm(r.name)]=v;});
+  var wanted={};(chapters||visibleChapters()).forEach(function(c){wanted[nrm(c.name)]=c.name;});
+  var byKey={};g.perChapter.forEach(function(p){byKey[nrm(p.chapter)]=p;});
+  var baseline=0,current=0,used=0,excluded=[];
+  Object.keys(wanted).forEach(function(k){
+    var p=byKey[k],l=live[k];
+    var b=(p&&p.sizes)?p.sizes[g.baselineMonth]:null;
+    if(b==null||l==null){if(l!=null)excluded.push(wanted[k]);return;}
+    baseline+=b;current+=l;used++;
+  });
+  if(!used)return null;
+  return{baseline:baseline,current:current,net:current-baseline,chapters:used,excluded:excluded.sort(),month:g.baselineMonth};
+}
+function shortMonthLabel(m){var p=String(m||'').split('-');return p.length===2?(['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]]+' '+p[0].slice(2)):m;}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
 function isDC(){return['cd','dc','sa1','sa2'].includes(S.user?.role);}
 
@@ -2856,18 +2881,32 @@ function renderAreaDirectorTargets(totalMembers,scoreChapters){
           </div>
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-            <div>
+          ${(function(){
+            // Headline = true cumulative net added since the TLR baseline month, measured
+            // like-for-like (see tlrCumulativeNet). The rolling window below stays as the
+            // short-term movement view.
+            var cn=tlrCumulativeNet(scoreChapters);
+            if(!cn)return `<div><div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Cumulative Net Added</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">baseline not loaded</div></div>`;
+            var col=cn.net>=0?'var(--green)':'var(--red)';
+            return `<div>
               <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Cumulative Net Added</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">since ${esc(shortMonthLabel(cn.month))} · ${cn.chapters} chapters with baseline</div>
+              <div style="display:flex;align-items:flex-end;gap:7px;margin-top:6px;">
+                <div style="font-size:30px;font-weight:900;color:${col};line-height:1;">${cn.net>0?'+':''}${cn.net}</div>
+                <div style="font-size:12px;font-weight:800;color:var(--muted);padding-bottom:3px;">${cn.baseline} → ${cn.current}</div>
+              </div>
+              ${cn.excluded.length?`<div style="font-size:10px;color:var(--muted);margin-top:4px;">No ${esc(shortMonthLabel(cn.month))} TLR (excluded): ${esc(cn.excluded.join(', '))}</div>`:''}
+            </div>`;
+          })()}
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+            <div>
+              <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Recent Movement</div>
               <div style="font-size:11px;color:var(--muted);margin-top:2px;">Last ${netWindowOpt.label}</div>
             </div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;">${netWindowSelect}</div>
           </div>
-          <div style="display:flex;align-items:flex-end;gap:7px;margin-top:6px;">
-            <div style="font-size:30px;font-weight:900;color:${netWindowColor};line-height:1;">${netWindowMovement.net>0?'+':''}${netWindowMovement.net}</div>
-            <div style="font-size:12px;font-weight:800;color:var(--muted);padding-bottom:3px;">active member movement</div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;">
             <div style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center;">
               <div style="font-size:16px;font-weight:900;color:var(--green);">${netWindowMovement.inductions}</div>
               <div style="font-size:10px;color:var(--muted);font-weight:700;">Inductions</div>
@@ -2881,7 +2920,7 @@ function renderAreaDirectorTargets(totalMembers,scoreChapters){
               <div style="font-size:10px;color:var(--muted);font-weight:700;">Net</div>
             </div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:9px;">Calculated from inductions minus drops in the selected days for the chapters currently shown.</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:9px;">Cumulative compares each chapter's live TLR size with its ${esc(shortMonthLabel((S.monthlyMembers||{}).baselineMonth))} size. Recent movement is inductions minus drops in the selected window.</div>
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -2988,27 +3027,46 @@ function renderGrowth12mo(visChapters){
   if(!g||!g.chapters)return'';
   var chs=(visChapters||visibleChapters()).filter(function(c){return g.chapters[c.name];});
   if(!chs.length)return'';
-  // Retention comes straight from the Commission sheet: renewals / (renewals + drops)
-  // over the imported window. No dependence on live SGT dues.
+  // Inductions / drops / net / current come from the TLR month-wise history when it is
+  // loaded - those are real rosters diffed month over month. Renewals and retention stay
+  // on the commission summary, which is the only source that carries them.
+  // Retention: renewals / (renewals + drops) over the imported window.
+  var nrm=function(s){return String(s||'').toLowerCase().replace(/^bni\s+/,'').replace(/\s+/g,' ').trim();};
+  var mm=S.monthlyMembers, useTlr=!!(mm&&mm.perChapter&&mm.perChapter.length);
+  var mmBy={}; if(useTlr)mm.perChapter.forEach(function(p){mmBy[nrm(p.chapter)]=p;});
+  var live={};(S.tlrData||[]).forEach(function(r){var v=Math.round(parseFloat(r.chapterSize)||0);if(r.name&&v)live[nrm(r.name)]=v;});
   var rows=chs.map(function(c){
     var gd=g.chapters[c.name];
-    var ren=gd.renewals||0,drop=gd.drops||0;
+    var ren=gd.renewals||0,cDrop=gd.drops||0;
     // 0 renewals (no renewal cycle yet) => "-" rather than a misleading 0%.
-    var ret=ren>0?Math.round((ren/(ren+drop))*100):null;
-    return{name:c.name,dir:chapterDirectorName(c),start:gd.start,baseline:gd.baseline,ind:gd.inductions,drop:drop,net:gd.cumNet,current:gd.current,ren:ren,ret:ret};
-  }).sort(function(a,b){return b.net-a.net||a.name.localeCompare(b.name);});
-  var tNet=rows.reduce(function(s,r){return s+r.net;},0);
+    var ret=ren>0?Math.round((ren/(ren+cDrop))*100):null;
+    var p=useTlr?mmBy[nrm(c.name)]:null, lv=live[nrm(c.name)];
+    var base=(p&&p.sizes)?p.sizes[mm.baselineMonth]:null;
+    // net is like-for-like: live size minus the chapter's own baseline. Chapters with no
+    // baseline TLR get null rather than a number that would overstate the region.
+    var net=p?((base!=null&&lv!=null)?lv-base:null):gd.cumNet;
+    return{name:c.name,dir:chapterDirectorName(c),start:gd.start,baseline:gd.baseline,
+      ind:p?p.joins:gd.inductions, drop:p?p.drops:cDrop,
+      net:net, current:(lv!=null?lv:gd.current), ren:ren, ret:ret, noBase:!!(p&&base==null)};
+  }).sort(function(a,b){return (b.net==null?-1e9:b.net)-(a.net==null?-1e9:a.net)||a.name.localeCompare(b.name);});
+  var cn=useTlr?tlrCumulativeNet(chs):null;
+  var tNet=cn?cn.net:rows.reduce(function(s,r){return s+(r.net||0);},0);
   var tCur=rows.reduce(function(s,r){return s+r.current;},0);
   var tInd=rows.reduce(function(s,r){return s+r.ind;},0);
   var tDrop=rows.reduce(function(s,r){return s+r.drop;},0);
   var tRen=rows.reduce(function(s,r){return s+r.ren;},0);
-  var tRet=(tRen+tDrop)>0?Math.round((tRen/(tRen+tDrop))*100):null;
+  // Retention stays on commission drops - mixing it with TLR drops would distort the ratio.
+  var tcDrop=chs.reduce(function(s,c){return s+((g.chapters[c.name]||{}).drops||0);},0);
+  var tRet=(tRen+tcDrop)>0?Math.round((tRen/(tRen+tcDrop))*100):null;
   var netCol=tNet>=0?'var(--green)':'var(--red)';
   var retCol=function(v){return v===null?'var(--muted)':v>=85?'var(--green)':v>=70?'var(--amber)':'var(--red)';};
+  var srcNote=useTlr
+    ? `${esc(shortMonthLabel(mm.baselineMonth))} – now · inductions, drops &amp; net from the chapter TLR rosters${cn?` · net compares ${cn.chapters} chapters against their own ${esc(shortMonthLabel(cn.month))} size`:''} · retention from the commission sheet`
+    : `${esc(g.window||'')} - cumulative net add &amp; retention (renewals / (renewals + drops))`;
   return`
     <div class="card" style="margin-bottom:14px;">
       <div class="sec-hdr">
-        <div><div class="sec-title">12-Month Growth</div><div class="tm">${esc(g.window||'')} - cumulative net add &amp; retention (renewals / (renewals + drops))</div></div>
+        <div><div class="sec-title">12-Month Growth</div><div class="tm">${srcNote}</div></div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">
         <div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:${netCol}">${tNet>0?'+':''}${tNet}</div></div>
@@ -3022,7 +3080,10 @@ function renderGrowth12mo(visChapters){
         <table class="rtbl">
           <thead><tr><th>Chapter</th><th>Director</th><th>Start</th><th>Ind</th><th>Drop</th><th>Net Add</th><th>Current</th><th>Renewals</th><th>Retention</th></tr></thead>
           <tbody>${rows.map(function(r){
-            return`<tr><td style="font-weight:700">${esc(r.name)}</td><td>${esc(r.dir)}</td><td>${r.baseline?r.start:'<span class="tm">new</span>'}</td><td style="color:var(--green)">+${r.ind}</td><td style="color:var(--red)">-${r.drop}</td><td style="font-weight:800;color:${r.net>=0?'var(--green)':'var(--red)'}">${r.net>0?'+':''}${r.net}</td><td style="font-weight:700">${r.current}</td><td>${r.ren}</td><td style="font-weight:800;color:${retCol(r.ret)}">${r.ret===null?'-':r.ret+'%'}</td></tr>`;
+            var netCell=(r.net==null)
+              ? `<span class="tm" title="no baseline TLR for this chapter">–</span>`
+              : `${r.net>0?'+':''}${r.net}`;
+            return`<tr><td style="font-weight:700">${esc(r.name)}</td><td>${esc(r.dir)}</td><td>${r.baseline?r.start:'<span class="tm">new</span>'}</td><td style="color:var(--green)">+${r.ind}</td><td style="color:var(--red)">-${r.drop}</td><td style="font-weight:800;color:${r.net==null?'var(--muted)':(r.net>=0?'var(--green)':'var(--red)')}">${netCell}</td><td style="font-weight:700">${r.current}</td><td>${r.ren}</td><td style="font-weight:800;color:${retCol(r.ret)}">${r.ret===null?'-':r.ret+'%'}</td></tr>`;
           }).join('')}</tbody>
         </table>
       </div>
@@ -3132,8 +3193,104 @@ function renderSDOverview(el){
         :''}
       </div>`;
     }).join('')}</div>
+    ${renderMonthScorecard(visChapters)}
     ${isSeniorDirector()?'<div id="srdcBarterTrades"></div>':''}`;
   if(isSeniorDirector())loadSrdcBarterTrades();
+}
+
+// Month-wise scorecard for the Overview - same shape as the week-wise cards above, but
+// each chip is a past month from the TLR history (meta/monthlyMembers). Historical
+// reference for planning; it reads nothing from and writes nothing to the weekly flow.
+function renderMonthScorecard(visChapters){
+  var g=S.monthlyMembers;
+  if(!g||!g.months||!g.months.length||!g.perChapter||!g.perChapter.length)return '';
+  var newestFirst=g.months.slice().reverse();
+  if(!S.ovMonth||newestFirst.indexOf(S.ovMonth)<0)S.ovMonth=newestFirst[0];
+  var mo=S.ovMonth;
+  var idx=g.months.indexOf(mo), prevMo=idx>0?g.months[idx-1]:null;
+  var nrm=function(s){return String(s||'').toLowerCase().replace(/^bni\s+/,'').replace(/\s+/g,' ').trim();};
+  var byKey={};g.perChapter.forEach(function(p){byKey[nrm(p.chapter)]=p;});
+
+  var rows=(visChapters||visibleChapters()).map(function(c){
+    var p=byKey[nrm(c.name)];
+    var size=(p&&p.sizes)?p.sizes[mo]:null;
+    var prev=(p&&p.sizes&&prevMo)?p.sizes[prevMo]:null;
+    var mv=(p&&p.moves)?p.moves[mo]:null;
+    return{ch:c,size:size,prev:prev,net:(size!=null&&prev!=null)?size-prev:null,
+      j:mv?mv.j:null,d:mv?mv.d:null,sc:(p&&p.scores)?p.scores[mo]:null};
+  });
+  var reporting=rows.filter(function(r){return r.size!=null;});
+  if(!reporting.length)return '';
+  var tMem=reporting.reduce(function(s,r){return s+r.size;},0);
+  var tJ=reporting.reduce(function(s,r){return s+(r.j||0);},0);
+  var tD=reporting.reduce(function(s,r){return s+(r.d||0);},0);
+  var tNet=reporting.reduce(function(s,r){return s+(r.net||0);},0);
+  var tG=reporting.reduce(function(s,r){return s+((r.sc&&r.sc.g)||0);},0);
+  var tA=reporting.reduce(function(s,r){return s+((r.sc&&r.sc.a)||0);},0);
+  var tR=reporting.reduce(function(s,r){return s+((r.sc&&r.sc.r)||0);},0);
+  // members-weighted average so big chapters aren't under-weighted
+  var wSum=0,wN=0;reporting.forEach(function(r){if(r.sc&&r.sc.avg!=null){wSum+=r.sc.avg*r.size;wN+=r.size;}});
+  var tAvg=wN?Math.round((wSum/wN)*10)/10:null;
+  var scoreCol=function(v){return v==null?'var(--muted)':v>=60?'var(--green)':v>=40?'var(--amber)':'var(--red)';};
+  var pillCls=function(v){return v==null?'pgr':v>=60?'pg':v>=40?'pa':'pr';};
+
+  var h='<div class="sec-hdr" style="margin-top:20px;">';
+  h+='<div><div class="sec-title">Month-wise Scorecard</div><div class="tm">'+esc(shortMonthLabel(g.months[0]))+' – '+esc(shortMonthLabel(g.months[g.months.length-1]))+' · from the chapter TLRs · reference only</div></div>';
+  h+='<div class="wrow">'+newestFirst.map(function(m){
+    return '<div class="wchip'+(mo===m?' active':'')+'" onclick="S.ovMonth=\''+m+'\';renderOverview()">'+esc(shortMonthLabel(m))+'</div>';
+  }).join('')+'</div></div>';
+  h+='<div class="ov-stats">';
+  h+='<div class="ov-stat"><div class="ov-sv">'+reporting.length+'/'+rows.length+'</div><div class="ov-sl">Reporting</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv">'+tMem+'</div><div class="ov-sl">Members</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:var(--green)">+'+tJ+'</div><div class="ov-sl">Joined</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:var(--red)">-'+tD+'</div><div class="ov-sl">Dropped</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:'+(tNet>=0?'var(--green)':'var(--red)')+'">'+(tNet>0?'+':'')+tNet+'</div><div class="ov-sl">Net</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:'+scoreCol(tAvg)+'">'+(tAvg==null?'-':tAvg.toFixed(1))+'</div><div class="ov-sl">Avg Score</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:var(--green)">'+tG+'</div><div class="ov-sl">Green</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:var(--amber)">'+tA+'</div><div class="ov-sl">Amber</div></div>';
+  h+='<div class="ov-stat"><div class="ov-sv" style="color:var(--red)">'+tR+'</div><div class="ov-sl">Red</div></div>';
+  h+='</div>';
+  // Joined/Dropped/Net only compare chapters that reported in BOTH months, so a chapter
+  // that starts or stops reporting does not show up as a mass join/drop here.
+  if(prevMo){
+    var started=rows.filter(function(r){return r.size!=null&&r.prev==null;}).map(function(r){return r.ch.name;});
+    var stopped=rows.filter(function(r){return r.size==null&&r.prev!=null;}).map(function(r){return r.ch.name;});
+    var both=rows.filter(function(r){return r.size!=null&&r.prev!=null;}).length;
+    var note='Joined / Dropped / Net compare the '+both+' chapters with a TLR in both '+esc(shortMonthLabel(prevMo))+' and '+esc(shortMonthLabel(mo))+'.';
+    if(started.length)note+=' First TLR this month (not counted as joins): '+esc(started.join(', '))+'.';
+    if(stopped.length)note+=' No TLR this month (not counted as drops): '+esc(stopped.join(', '))+'.';
+    h+='<div class="tm" style="margin:-4px 0 10px;font-size:11px;">'+note+'</div>';
+  }
+  h+='<div class="ch-grid">'+rows.map(function(r){
+    var avg=r.sc?r.sc.avg:null;
+    var cls=avg==null?'cgr':avg>=60?'cg':avg>=40?'ca':'cr';
+    var hh='<div class="ch-card '+cls+'">';
+    hh+='<div class="ch-card-hdr"><div><div class="ch-name">'+esc(r.ch.name)+'</div><div class="ch-day">'+esc(r.ch.day||'')+'</div></div>';
+    hh+=(r.size==null?'<span class="badge-out">No TLR</span>':'<span class="tlr-pill '+pillCls(avg)+'">'+(avg==null?'-':avg.toFixed(1))+'</span>')+'</div>';
+    hh+='<div class="ch-sub">Director: '+esc(chapterDirectorName(r.ch))+'</div>';
+    if(r.size!=null){
+      hh+='<div class="ch-stats-top">';
+      hh+='<div><div class="csv">'+r.size+'</div><div class="csl">Members</div></div>';
+      hh+='<div><div class="csv" style="color:var(--green)">+'+(r.j==null?0:r.j)+'</div><div class="csl">Joined</div></div>';
+      hh+='<div><div class="csv" style="color:var(--red)">-'+(r.d==null?0:r.d)+'</div><div class="csl">Dropped</div></div>';
+      hh+='<div><div class="csv" style="color:'+(r.net==null?'var(--muted)':(r.net>=0?'var(--green)':'var(--red)'))+'">'+(r.net==null?'-':(r.net>0?'+':'')+r.net)+'</div><div class="csl">Net</div></div>';
+      hh+='</div>';
+      if(r.sc){
+        hh+='<div class="ch-stats-bot">';
+        hh+='<div><div class="csv" style="color:var(--green)">'+r.sc.g+'</div><div class="csl">Green</div></div>';
+        hh+='<div><div class="csv" style="color:var(--amber)">'+r.sc.a+'</div><div class="csl">Amber</div></div>';
+        hh+='<div><div class="csv" style="color:var(--red)">'+r.sc.r+'</div><div class="csl">Red</div></div>';
+        hh+='</div>';
+        hh+='<div class="tlr-bar-lbl"><span>Avg Score</span><span>'+avg.toFixed(1)+'/100</span></div>';
+        hh+='<div class="tlr-track"><div class="tlr-fill" style="width:'+Math.max(0,Math.min(100,avg))+'%;background:'+scoreCol(avg)+'"></div></div>';
+      }
+    }else{
+      hh+='<div class="tm" style="padding:10px 0;">No TLR for '+esc(shortMonthLabel(mo))+'</div>';
+    }
+    hh+='</div>';
+    return hh;
+  }).join('')+'</div>';
+  return h;
 }
 
 // Senior Director overview: confirmed barter trades their assigned chapters completed,
@@ -6561,22 +6718,27 @@ function renderMonthlyMembers(visChapters){
     var sum=0,have=false; (S.chapters||[]).forEach(function(c){var v=sz[nrm(c.name)];if(v){sum+=v;have=true;}});
     return have?sum:region[region.length-1].members;
   })();
-  var cumNet=current-g.baseline;
+  // Like-for-like cumulative net (only chapters with a baseline TLR, counted on both
+  // sides) - comparing the whole live region against a partial baseline overstates it.
+  var cn=tlrCumulativeNet(visChapters||visibleChapters());
+  var cumNet=cn?cn.net:(current-g.baseline);
   var netCol=cumNet>=0?'var(--green)':'var(--red)';
   var mon=function(m){try{return fmtM(m);}catch(e){return m;}};
-  var shortMon=function(m){var p=String(m||'').split('-');return p.length===2?(['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]]+' '+p[0].slice(2)):m;};
+  var shortMon=shortMonthLabel;
   var visNames=(visChapters||visibleChapters()).map(function(c){return c.name;});
 
   var h='<div class="card" style="margin-bottom:14px;">';
   h+='<div class="sec-hdr"><div><div class="sec-title">Month-wise Members (Reference)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' ('+esc(shortMon(g.baselineMonth))+') · from chapter TLRs · historical reference for planning only</div></div></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
-  h+='<div class="month-card"><div class="month-lbl">Baseline ('+esc(shortMon(g.baselineMonth))+')</div><div class="month-val">'+g.baseline+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Baseline ('+esc(shortMon(g.baselineMonth))+')</div><div class="month-val">'+(cn?cn.baseline:g.baseline)+'</div>'+(cn?'<div class="tm" style="font-size:10px;margin-top:2px;">'+cn.chapters+' chapters</div>':'')+'</div>';
+  h+='<div class="month-card"><div class="month-lbl">Now (same chapters)</div><div class="month-val">'+(cn?cn.current:current)+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(cumNet>0?'+':'')+cumNet+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Region Total (live)</div><div class="month-val">'+current+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Joined</div><div class="month-val" style="color:var(--green)">+'+tJoin+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Dropped</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
   h+='</div>';
-  h+='<div class="tm" style="margin-bottom:6px;">A member counts in a month when that month\'s TLR shows a score for them; present one month and absent the next is counted as a drop. Net = Joined − Dropped. Cumulative Net Add = live members − baseline.</div>';
+  h+='<div class="tm" style="margin-bottom:6px;">A member counts in a month when that month\'s TLR shows a score for them; present one month and absent the next is counted as a drop. Net = Joined − Dropped. <b>Cumulative Net Add compares like with like</b> — only chapters that have a '+esc(shortMon(g.baselineMonth))+' TLR, counted on both sides.'
+    +(cn&&cn.excluded.length?' Excluded (no '+esc(shortMon(g.baselineMonth))+' TLR): '+esc(cn.excluded.join(', '))+'.':'')+'</div>';
   h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Chapters</th><th>Members</th><th>Joined</th><th>Dropped</th><th>Net</th><th>Chapter changes</th></tr></thead><tbody>';
   region.forEach(function(r){
     var notes=[];
