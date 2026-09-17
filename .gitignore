@@ -38,3 +38,26 @@ data/pre-core-commitments.*
 data/precore-netadd-preview.csv
 data/region-growth-preview.csv
 data/induction-verification.csv
+
+# Current members by chapter (derived from TLR) - regional business data, keep local
+data/current-members-by-chapter.csv
+
+# LOM match analysis - member names (PII), keep local
+data/lom-under1yr-match.csv
+data/lom-under1yr-refined.csv
+
+# LOM cumulative match - member names (PII), keep local
+data/lom-cumulative-under1yr.csv
+
+# Miyagi reconcile plan - member names (PII), keep local
+data/miyagi-reconcile-plan.csv
+
+# Miyagi backup before reconcile - PII, keep local
+data/miyagi-backup-*.json
+
+# TLR PDF extraction - member names + scores (PII / business data), keep local
+data/tlr/
+
+# Python bytecode from the TLR extraction scripts
+__pycache__/
+*.pyc

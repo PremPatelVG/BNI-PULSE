@@ -2481,7 +2481,7 @@ function subAll(){
   const u14=db.collection('meta').doc('growthSummary').onSnapshot(d=>{S.growthData=d.exists?d.data():null;if(S.tab==='overview')renderOverview();});
   // Pre-Core 12-month growth (baseline 2928 + Commission drops, pre-core inductions):
   // shown in the Retrospective tab.
-  const u15=db.collection('meta').doc('preCoreGrowth').onSnapshot(d=>{S.preCoreGrowth=d.exists?d.data():null;if(S.tab==='retro')renderRetroTab();});
+  const u15=db.collection('meta').doc('monthlyMembers').onSnapshot(d=>{S.monthlyMembers=d.exists?d.data():null;if(S.tab==='retro')renderRetroTab();});
   // Assign before subGoals() pushes onto the list - the previous order threw away
   // the goals unsubscribe, leaking that listener on every logout.
   S.unsubs=[u1,u2,u3,u4,u5,u6,u7,u7b,u8,u9,u11,u13,u14,u15];
@@ -6542,56 +6542,89 @@ async function barterConfirm(reqId,checkId){
 }
 
 // Pre-Core 12-Month Growth card (Retrospective). Region-level running membership from a
-// 2928 baseline: inductions from the pre-core commitment forms (Commission New only for
-// chapters with no form), drops from the commission sheet. Leadership only. Reads the
-// aggregate meta/preCoreGrowth doc; returns '' if not loaded or not permitted.
-function renderPreCoreGrowth(visChapters){
+// Month-wise member history built from the chapter TLR PDFs (meta/monthlyMembers):
+// how many members each chapter had in each past month, plus joins/drops derived by
+// diffing consecutive months' rosters. REFERENCE ONLY - it is historical planning data
+// and feeds nothing in the weekly flow. Leadership only; '' if not loaded/permitted.
+function renderMonthlyMembers(visChapters){
   if(!(isAreaDirector()||isSeniorDirector()||isViewer()))return '';
-  var g=S.preCoreGrowth;
+  var g=S.monthlyMembers;
   if(!g||!g.region||!g.region.length)return '';
-  var region=g.region, last=region[region.length-1];
-  var tInd=region.reduce(function(s,r){return s+(+r.newCorrected||0);},0);
+  var region=g.region, months=g.months||[];
+  var tJoin=region.reduce(function(s,r){return s+(+r.joins||0);},0);
   var tDrop=region.reduce(function(s,r){return s+(+r.drops||0);},0);
-  // Cumulative net added is anchored to the LIVE current member count minus the baseline,
-  // not the month-by-month projection (which runs slightly ahead due to renewals/timing).
-  // Current members = sum of the latest TLR chapter sizes (region-wide) so it auto-updates
-  // whenever a TLR is uploaded; falls back to the stored value if the TLR isn't loaded.
+  // Current members = live sum of the latest TLR chapter sizes, so it tracks every TLR
+  // upload; falls back to the last month in the series if no TLR is loaded.
   var current=(function(){
     var nrm=function(s){return String(s||'').toLowerCase().replace(/^bni\s+/,'').trim();};
     var sz={}; (S.tlrData||[]).forEach(function(r){if(r.name){var v=Math.round(parseFloat(r.chapterSize)||0);if(v)sz[nrm(r.name)]=v;}});
     var sum=0,have=false; (S.chapters||[]).forEach(function(c){var v=sz[nrm(c.name)];if(v){sum+=v;have=true;}});
-    return have?sum:((g.currentMembers!=null)?g.currentMembers:last.running);
+    return have?sum:region[region.length-1].members;
   })();
   var cumNet=current-g.baseline;
   var netCol=cumNet>=0?'var(--green)':'var(--red)';
   var mon=function(m){try{return fmtM(m);}catch(e){return m;}};
+  var shortMon=function(m){var p=String(m||'').split('-');return p.length===2?(['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]]+' '+p[0].slice(2)):m;};
+  var visNames=(visChapters||visibleChapters()).map(function(c){return c.name;});
+
   var h='<div class="card" style="margin-bottom:14px;">';
-  h+='<div class="sec-hdr"><div><div class="sec-title">12-Month Growth (Pre-Core)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' (start Jul 2025) · net added = live members − baseline</div></div></div>';
+  h+='<div class="sec-hdr"><div><div class="sec-title">Month-wise Members (Reference)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' ('+esc(shortMon(g.baselineMonth))+') · from chapter TLRs · historical reference for planning only</div></div></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
-  h+='<div class="month-card"><div class="month-lbl">Baseline (Jul 25)</div><div class="month-val">'+g.baseline+'</div></div>';
-  var asOf=g.currentMembersAsOf?'as of '+fmtD(g.currentMembersAsOf):'';
-  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div>'+(asOf?'<div class="tm" style="font-size:10px;margin-top:2px;">'+esc(asOf)+'</div>':'')+'</div>';
+  h+='<div class="month-card"><div class="month-lbl">Baseline ('+esc(shortMon(g.baselineMonth))+')</div><div class="month-val">'+g.baseline+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Current Members</div><div class="month-val">'+current+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(cumNet>0?'+':'')+cumNet+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Inductions</div><div class="month-val" style="color:var(--green)">+'+tInd+'</div></div>';
-  h+='<div class="month-card"><div class="month-lbl">Drops</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Joined</div><div class="month-val" style="color:var(--green)">+'+tJoin+'</div></div>';
+  h+='<div class="month-card"><div class="month-lbl">Dropped</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
   h+='</div>';
-  h+='<div class="tm" style="margin-bottom:6px;">Month-by-month movement below (inductions from pre-core forms, drops from commission). The reported running total may run ahead of the live current count — the headline Cumulative Net Add uses the live members − baseline.</div>';
-  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Inductions</th><th>Drops</th><th>Net</th><th>Reported Running</th></tr></thead><tbody>';
+  h+='<div class="tm" style="margin-bottom:6px;">A member counts in a month when that month\'s TLR shows a score for them; present one month and absent the next is counted as a drop. Net = Joined − Dropped. Cumulative Net Add = live members − baseline.</div>';
+  h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Chapters</th><th>Members</th><th>Joined</th><th>Dropped</th><th>Net</th><th>Chapter changes</th></tr></thead><tbody>';
   region.forEach(function(r){
-    h+='<tr><td>'+esc(mon(r.month))+'</td><td style="color:var(--green)">+'+(+r.newCorrected||0)+'</td><td style="color:var(--red)">-'+(+r.drops||0)+'</td><td style="color:'+((+r.net||0)>=0?'var(--green)':'var(--red)')+'"><b>'+((+r.net||0)>0?'+':'')+(+r.net||0)+'</b></td><td><b>'+r.running+'</b></td></tr>';
+    var notes=[];
+    if(r.newChapters&&r.newChapters.length)notes.push('<span style="color:var(--green)">+ '+esc(r.newChapters.join(', '))+'</span>');
+    if(r.missingChapters&&r.missingChapters.length)notes.push('<span style="color:var(--muted)">no TLR: '+esc(r.missingChapters.join(', '))+'</span>');
+    var net=(r.net==null)?null:+r.net;
+    h+='<tr><td>'+esc(mon(r.month))+'</td><td>'+(r.chapters||'')+'</td><td><b>'+r.members+'</b></td>'
+      +'<td style="color:var(--green)">'+(r.joins==null?'':'+'+r.joins)+'</td>'
+      +'<td style="color:var(--red)">'+(r.drops==null?'':'-'+r.drops)+'</td>'
+      +'<td style="color:'+(net==null?'inherit':(net>=0?'var(--green)':'var(--red)'))+'"><b>'+(net==null?'':(net>0?'+':'')+net)+'</b></td>'
+      +'<td class="tm" style="font-size:11px;">'+notes.join(' · ')+'</td></tr>';
   });
   h+='</tbody></table></div>';
-  var visNames=(visChapters||visibleChapters()).map(function(c){return c.name;});
-  var pcRows=(g.perChapter||[]).filter(function(r){return visNames.indexOf(r.chapter)>=0;}).slice().sort(function(a,b){return b.cumNet-a.cumNet;});
+
+  // per-chapter monthly member counts
+  var pcRows=(g.perChapter||[]).filter(function(r){return visNames.indexOf(r.chapter)>=0;});
   if(pcRows.length){
-    h+='<div class="tm" style="margin:12px 0 6px;font-weight:700;">Pre-Core chapters — inductions from commitment forms ('+pcRows.length+')</div>';
-    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th>Inductions (pre-core)</th><th>Drops</th><th>Cumulative Net</th></tr></thead><tbody>';
-    pcRows.forEach(function(r){
-      h+='<tr><td style="font-weight:700">'+esc(r.chapter)+'</td><td style="color:var(--green)">+'+(+r.adds||0)+'</td><td style="color:var(--red)">-'+(+r.drops||0)+'</td><td style="color:'+((+r.cumNet||0)>=0?'var(--green)':'var(--red)')+'"><b>'+((+r.cumNet||0)>0?'+':'')+(+r.cumNet||0)+'</b></td></tr>';
+    h+='<div class="tm" style="margin:14px 0 6px;font-weight:700;">Members per chapter, by month ('+pcRows.length+' chapters)</div>';
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th>';
+    months.forEach(function(m){h+='<th style="text-align:right">'+esc(shortMon(m))+'</th>';});
+    h+='<th style="text-align:right">Joined</th><th style="text-align:right">Dropped</th><th style="text-align:right">Net</th></tr></thead><tbody>';
+    pcRows.slice().sort(function(a,b){return (b.net||0)-(a.net||0);}).forEach(function(r){
+      h+='<tr><td style="font-weight:700;white-space:nowrap">'+esc(r.chapter)+'</td>';
+      months.forEach(function(m){var v=r.sizes&&r.sizes[m];h+='<td style="text-align:right">'+(v==null?'<span class="tm">–</span>':v)+'</td>';});
+      var n=(r.net==null)?null:+r.net;
+      h+='<td style="text-align:right;color:var(--green)">+'+(+r.joins||0)+'</td><td style="text-align:right;color:var(--red)">-'+(+r.drops||0)+'</td>'
+        +'<td style="text-align:right;color:'+(n==null?'inherit':(n>=0?'var(--green)':'var(--red)'))+'"><b>'+(n==null?'–':(n>0?'+':'')+n)+'</b></td></tr>';
     });
     h+='</tbody></table></div>';
   }
+  if(g.excludedChapters&&g.excludedChapters.length)
+    h+='<div class="tm" style="margin-top:8px;font-size:11px;">Not in this history (no TLRs in the source): '+esc(g.excludedChapters.join(', '))+'</div>';
   h+='</div>';
+
+  // --- chapter scorecard (latest month in the TLR history) ---
+  var sc=g.scorecard&&g.scorecard.rows?g.scorecard.rows.filter(function(r){return visNames.indexOf(r.chapter)>=0;}):[];
+  if(sc.length){
+    h+='<div class="card" style="margin-bottom:14px;">';
+    h+='<div class="sec-hdr"><div><div class="sec-title">Chapter Scorecard</div><div class="tm">'+esc(mon(g.scorecard.month))+' · average member TLR score out of 100 · Green ≥60 · Amber 40–59 · Red &lt;40</div></div></div>';
+    h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Chapter</th><th style="text-align:right">Members</th><th style="text-align:right">Avg Score</th><th style="text-align:right">Green</th><th style="text-align:right">Amber</th><th style="text-align:right">Red</th></tr></thead><tbody>';
+    sc.slice().sort(function(a,b){return (b.avg||0)-(a.avg||0);}).forEach(function(r){
+      var col=(r.avg>=60)?'var(--green)':(r.avg>=40?'var(--amber)':'var(--red)');
+      h+='<tr><td style="font-weight:700;white-space:nowrap">'+esc(r.chapter)+'</td><td style="text-align:right">'+r.members+'</td>'
+        +'<td style="text-align:right;color:'+col+'"><b>'+(Math.round((+r.avg||0)*10)/10).toFixed(1)+'</b></td>'
+        +'<td style="text-align:right;color:var(--green)">'+(+r.green||0)+'</td><td style="text-align:right;color:var(--amber)">'+(+r.amber||0)+'</td><td style="text-align:right;color:var(--red)">'+(+r.red||0)+'</td></tr>';
+    });
+    h+='</tbody></table></div></div>';
+  }
   return h;
 }
 
@@ -6605,8 +6638,9 @@ function renderRetroTab(){
   var filterHTML=renderAreaDirectorOverviewFilters(allVisChapters,visChapters.length,'renderRetroTab');
   // 12-Month cumulative growth summary sits at the top of the retrospective.
   var growthHTML=renderGrowth12mo(visChapters);
-  // Pre-Core 12-month growth (baseline 2928 + commission drops) - leadership only.
-  var preCoreHTML=renderPreCoreGrowth(visChapters);
+  // Month-wise member history from the chapter TLRs + chapter scorecard - leadership only.
+  // Reference data for planning; it does not feed the weekly flow.
+  var preCoreHTML=renderMonthlyMembers(visChapters);
   var allMonths=[]; var seen={};
   S.weeklyData.forEach(function(e){if(!visNames.includes(e.chapter))return;var m=e.date.substring(0,7);if(!seen[m]){seen[m]=1;allMonths.push(m);}});
   allMonths.sort().reverse();

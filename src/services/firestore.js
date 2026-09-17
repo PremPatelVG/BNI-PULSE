@@ -26,6 +26,7 @@ const META_DOCS = new Set([
   "dues",
   "growthSummary",
   "preCoreGrowth",
+  "monthlyMembers",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"
@@ -57,6 +58,7 @@ export const SNAPSHOT_META_DOCS = [
   "dues",
   "growthSummary",
   "preCoreGrowth",
+  "monthlyMembers",
   "lengthOfMembership",
   "monthlyTargets",
   "tlr"
