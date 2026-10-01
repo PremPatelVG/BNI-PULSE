@@ -2586,11 +2586,26 @@ function isViewer(){return S.user?.role==='viewer';}
 function isBniOffice(){return S.user?.id==='__srdc__';}
 function isExecutiveDirector(){return S.user?.role==='ed';}
 
-// True cumulative net added since the TLR baseline month, measured LIKE-FOR-LIKE: a
-// chapter counts only when it has both a baseline size in meta/monthlyMembers and a live
-// TLR size, and it is then counted on BOTH sides. Chapters missing from the baseline
-// (e.g. Octavian, which has no TLRs in the source) are excluded rather than treated as
-// pure growth - counting their whole roster as "added" overstates the number badly.
+// A chapter's starting size for the 12-month window, from meta/monthlyMembers:
+//  - a chapter recorded in g.launches as launched during the window starts from 0, since
+//    its members are genuinely new to the region;
+//  - otherwise its size in the baseline month (Aug 2025);
+//  - otherwise its size in the first month it appears in the 12-month data. Those
+//    chapters existed but their early TLRs are missing, so growth is measured from the
+//    first month we have - counting their whole roster as "added" would overstate it.
+// Returns null when there is no data at all for the chapter.
+function chapterBaselineOf(name,p,g){
+  var launch=g.launches&&g.launches[name];
+  if(launch)return{size:0,month:launch,kind:'launched'};
+  if(!p||!p.sizes)return null;
+  if(p.sizes[g.baselineMonth]!=null)return{size:p.sizes[g.baselineMonth],month:g.baselineMonth,kind:'baseline'};
+  var first=(g.months||[]).find(function(m){return p.sizes[m]!=null;});
+  return first?{size:p.sizes[first],month:first,kind:'first-month'}:null;
+}
+
+// Cumulative net added since the start of the 12-month window: each chapter's live TLR
+// size minus its starting size (see chapterBaselineOf), summed on BOTH sides for the same
+// chapters. Chapters with no 12-month data at all (e.g. Octavian) are excluded and named.
 // Returns null when the data isn't loaded yet.
 function tlrCumulativeNet(chapters){
   var g=S.monthlyMembers;
@@ -2599,15 +2614,26 @@ function tlrCumulativeNet(chapters){
   var live={};(S.tlrData||[]).forEach(function(r){var v=Math.round(parseFloat(r.chapterSize)||0);if(r.name&&v)live[nrm(r.name)]=v;});
   var wanted={};(chapters||visibleChapters()).forEach(function(c){wanted[nrm(c.name)]=c.name;});
   var byKey={};g.perChapter.forEach(function(p){byKey[nrm(p.chapter)]=p;});
-  var baseline=0,current=0,used=0,excluded=[];
+  var baseline=0,current=0,used=0,excluded=[],late=[];
   Object.keys(wanted).forEach(function(k){
-    var p=byKey[k],l=live[k];
-    var b=(p&&p.sizes)?p.sizes[g.baselineMonth]:null;
-    if(b==null||l==null){if(l!=null)excluded.push(wanted[k]);return;}
-    baseline+=b;current+=l;used++;
+    var name=wanted[k],l=live[k];
+    var bl=chapterBaselineOf(name,byKey[k],g);
+    if(!bl||l==null){if(l!=null)excluded.push(name);return;}
+    baseline+=bl.size;current+=l;used++;
+    if(bl.kind!=='baseline')late.push({ch:name,month:bl.month,size:bl.size,now:l,kind:bl.kind});
   });
   if(!used)return null;
-  return{baseline:baseline,current:current,net:current-baseline,chapters:used,excluded:excluded.sort(),month:g.baselineMonth};
+  late.sort(function(a,b){return a.ch.localeCompare(b.ch);});
+  return{baseline:baseline,current:current,net:current-baseline,chapters:used,excluded:excluded.sort(),late:late,month:g.baselineMonth};
+}
+// One-line note naming the chapters measured from a later start, for the cards below.
+function lateBaselineNote(cn){
+  if(!cn||!cn.late||!cn.late.length)return'';
+  var first=cn.late.filter(function(x){return x.kind==='first-month';}),launched=cn.late.filter(function(x){return x.kind==='launched';});
+  var parts=[];
+  if(first.length)parts.push('From their first month in the data: '+first.map(function(x){return x.ch+' ('+shortMonthLabel(x.month)+' '+x.size+')';}).join(', '));
+  if(launched.length)parts.push('Launched during the year, counted from 0: '+launched.map(function(x){return x.ch+' ('+shortMonthLabel(x.month)+')';}).join(', '));
+  return parts.join('. ')+'.';
 }
 function shortMonthLabel(m){var p=String(m||'').split('-');return p.length===2?(['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]]+' '+p[0].slice(2)):m;}
 function isChapterDirectorRole(role){return['cd','dc'].includes(role);}
@@ -2891,12 +2917,13 @@ function renderAreaDirectorTargets(totalMembers,scoreChapters){
             var col=cn.net>=0?'var(--green)':'var(--red)';
             return `<div>
               <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;">Cumulative Net Added</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px;">since ${esc(shortMonthLabel(cn.month))} · ${cn.chapters} chapters with baseline</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">since ${esc(shortMonthLabel(cn.month))} · ${cn.chapters} chapters</div>
               <div style="display:flex;align-items:flex-end;gap:7px;margin-top:6px;">
                 <div style="font-size:30px;font-weight:900;color:${col};line-height:1;">${cn.net>0?'+':''}${cn.net}</div>
                 <div style="font-size:12px;font-weight:800;color:var(--muted);padding-bottom:3px;">${cn.baseline} → ${cn.current}</div>
               </div>
-              ${cn.excluded.length?`<div style="font-size:10px;color:var(--muted);margin-top:4px;">No ${esc(shortMonthLabel(cn.month))} TLR (excluded): ${esc(cn.excluded.join(', '))}</div>`:''}
+              ${cn.late.length?`<div style="font-size:10px;color:var(--muted);margin-top:4px;">${esc(lateBaselineNote(cn))}</div>`:''}
+              ${cn.excluded.length?`<div style="font-size:10px;color:var(--muted);margin-top:4px;">No 12-month data (excluded): ${esc(cn.excluded.join(', '))}</div>`:''}
             </div>`;
           })()}
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
@@ -2920,7 +2947,7 @@ function renderAreaDirectorTargets(totalMembers,scoreChapters){
               <div style="font-size:10px;color:var(--muted);font-weight:700;">Net</div>
             </div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:9px;">Cumulative compares each chapter's live TLR size with its ${esc(shortMonthLabel((S.monthlyMembers||{}).baselineMonth))} size. Recent movement is inductions minus drops in the selected window.</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:9px;">Cumulative compares each chapter's live TLR size with its ${esc(shortMonthLabel((S.monthlyMembers||{}).baselineMonth))} size, or with its first month in the 12-month data where earlier TLRs are missing. Recent movement is inductions minus drops in the selected window.</div>
         </div>
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
@@ -3041,13 +3068,13 @@ function renderGrowth12mo(visChapters){
     // 0 renewals (no renewal cycle yet) => "-" rather than a misleading 0%.
     var ret=ren>0?Math.round((ren/(ren+cDrop))*100):null;
     var p=useTlr?mmBy[nrm(c.name)]:null, lv=live[nrm(c.name)];
-    var base=(p&&p.sizes)?p.sizes[mm.baselineMonth]:null;
-    // net is like-for-like: live size minus the chapter's own baseline. Chapters with no
-    // baseline TLR get null rather than a number that would overstate the region.
-    var net=p?((base!=null&&lv!=null)?lv-base:null):gd.cumNet;
+    // net: live size minus the chapter's own starting size - its Aug 25 size, or its first
+    // month in the data where earlier TLRs are missing (same rule as the headline).
+    var bl=p?chapterBaselineOf(c.name,p,mm):null;
+    var net=p?((bl&&lv!=null)?lv-bl.size:null):gd.cumNet;
     return{name:c.name,dir:chapterDirectorName(c),start:gd.start,baseline:gd.baseline,
       ind:p?p.joins:gd.inductions, drop:p?p.drops:cDrop,
-      net:net, current:(lv!=null?lv:gd.current), ren:ren, ret:ret, noBase:!!(p&&base==null)};
+      net:net, current:(lv!=null?lv:gd.current), ren:ren, ret:ret, noBase:!!(p&&!bl)};
   }).sort(function(a,b){return (b.net==null?-1e9:b.net)-(a.net==null?-1e9:a.net)||a.name.localeCompare(b.name);});
   var cn=useTlr?tlrCumulativeNet(chs):null;
   var tNet=cn?cn.net:rows.reduce(function(s,r){return s+(r.net||0);},0);
@@ -3061,7 +3088,7 @@ function renderGrowth12mo(visChapters){
   var netCol=tNet>=0?'var(--green)':'var(--red)';
   var retCol=function(v){return v===null?'var(--muted)':v>=85?'var(--green)':v>=70?'var(--amber)':'var(--red)';};
   var srcNote=useTlr
-    ? `${esc(shortMonthLabel(mm.baselineMonth))} – now · inductions, drops &amp; net from the chapter TLR rosters${cn?` · net compares ${cn.chapters} chapters against their own ${esc(shortMonthLabel(cn.month))} size`:''} · retention from the commission sheet`
+    ? `${esc(shortMonthLabel(mm.baselineMonth))} – now · inductions, drops &amp; net from the chapter TLR rosters${cn?` · net compares ${cn.chapters} chapters against their own ${esc(shortMonthLabel(cn.month))} size (or first month in the data)`:''} · retention from the commission sheet`
     : `${esc(g.window||'')} - cumulative net add &amp; retention (renewals / (renewals + drops))`;
   return`
     <div class="card" style="margin-bottom:14px;">
@@ -3167,13 +3194,13 @@ function renderSDOverview(el){
       const monthEntriesForCh=getCascadedEntries(ch.name).filter(x=>x.date.startsWith(chEntryMonth));
       const mNet=monthEntriesForCh.length?((+monthEntriesForCh[monthEntriesForCh.length-1].membersClose||0)-(+monthEntriesForCh[0].membersStart||0)):0;
       const conv=_tr&&_tr.conversion!==undefined&&_tr.conversion!==''?(function(){var v=parseFloat(String(_tr.conversion).replace('%',''));return isNaN(v)?null:Math.round(v);})():null;
-      return`<div class="ch-card ${tcl}" onclick="openDrill('${esc(ch.name)}')">
+      return`<div class="ch-card ${tcl}" onclick="openDrill('${jsArg(ch.name)}')">
         <div class="ch-card-hdr">
           <div><div class="ch-name">${esc(ch.name)}</div><div class="ch-day">${ch.day}</div></div>
           ${!e?'<span class="badge-out">Not Submitted</span>':`<span class="tlr-pill ${tpc}">TLR ${tlr}</span>`}
         </div>
-        <div class="ch-sub">Director: ${directorName}</div>
-        ${isAreaDirector()?`<div class="ch-sub">Senior Director: ${seniorName}</div>`:''}
+        <div class="ch-sub">Director: ${esc(directorName)}</div>
+        ${isAreaDirector()?`<div class="ch-sub">Senior Director: ${esc(seniorName)}</div>`:''}
         <div class="ch-sub">${e?'by '+e.filledBy:''}</div>
         ${e?`
         <div class="ch-stats-top">
@@ -3527,19 +3554,31 @@ function onChapterChange(){
   var _tlrRow=S.tlrData.find(function(r){return r.name.toLowerCase().includes(ch.toLowerCase())||ch.toLowerCase().includes(r.name.toLowerCase().replace('bni ',''));});
   var _tlrConnect=_tlrRow?Math.round(parseFloat(_tlrRow.chapterSize)||0):null;
   if(latestCascaded){
-    if(ms){
-      ms.value=latestCascaded.membersClose||0;
-      if(isSrdc()){ms.readOnly=false;ms.style.background='var(--card)';ms.style.color='var(--text)';}
-      else{ms.readOnly=true;ms.style.background='var(--surface)';ms.style.color='var(--muted)';}
-    }
+    if(ms)ms.value=latestCascaded.membersClose||0;
+    setMembersStartField(false);
     if(mc)mc.value=_tlrConnect!==null?_tlrConnect:(latestCascaded.membersConnect||'');
   } else {
-    if(ms){ms.value='';ms.readOnly=false;ms.style.background='var(--card)';ms.style.color='var(--text)';}
+    // The chapter's first entry: start from its TLR member count. A blank box here used to
+    // save as 0, and every later week cascaded from that 0.
+    if(ms)ms.value=_tlrConnect!==null?_tlrConnect:'';
+    setMembersStartField(true);
     if(mc)mc.value=_tlrConnect!==null?_tlrConnect:'';
   }
   recalcMembersClose();
   const rl_el=document.getElementById('recentLbl');if(rl_el)rl_el.textContent=ch;
   renderRecentEntries();
+}
+
+// Members at Start is only a real input on a chapter's FIRST weekly entry. Every later
+// week is recalculated from the week before it (getCascadedEntries), so a number typed
+// there would be saved but silently ignored - lowering it never removed anyone. So it is
+// locked on every later week, for every role, and the tooltip says what to do instead.
+function setMembersStartField(editable){
+  var ms=document.getElementById('eMStart');if(!ms)return;
+  ms.readOnly=!editable;
+  ms.style.background=editable?'var(--card)':'var(--surface)';
+  ms.style.color=editable?'var(--text)':'var(--muted)';
+  ms.title=editable?"This chapter's first entry - enter its current member count (its TLR figure).":"Carried forward from last week's close. Record members who join or leave as Inductions and Drops.";
 }
 
 function calcActiveMembers(start,inductions,drops){
@@ -3693,6 +3732,11 @@ async function saveEntry(){
   const{tue:_tue,fri:_fri}=getWeekTueFri(date);
   const _exist=S.weeklyData.find(e=>e.chapter===ch&&e.date>=_tue&&e.date<=_fri&&e.date!==date);
   if(_exist){if(confirm('Warning: '+ch+' already has data for the week of '+fmtWeekChip(getWeekKey(date))+', submitted by '+_exist.filledBy+' on '+fmtD(_exist.date)+'.\n\nClick OK to edit that entry instead.')){loadEdit(_exist.chapter,_exist.date);}return;}
+  // A chapter's first entry sets the member count every later week is built on, so it
+  // can't be saved empty or as 0.
+  if(!S.weeklyData.some(x=>x.chapter===ch&&x.date<date)&&!(+document.getElementById('eMStart')?.value>0)){
+    toast("Enter Members at Start - this is "+ch+"'s first entry, so it sets the chapter's member count (use its TLR figure).",7000);return;
+  }
   const btn=document.getElementById('saveBtn');btn.disabled=true;btn.textContent='Saving...';
   const visList=S.visSel.filter(v=>v.id!=='no_visit').map(v=>v.name);
   const _start=+document.getElementById('eMStart')?.value||0;
@@ -3802,13 +3846,7 @@ function loadEdit(ch,date){
   if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);});}
   // Determine if Members at Start should be locked: check if a prior week exists before this entry's date
   const priorExists=S.weeklyData.some(x=>x.chapter===ch&&x.date<date);
-  const ms=document.getElementById('eMStart');
-  if(ms){
-    // Sr. DC can always edit Members at Start for corrections
-    // DC/SA locked if prior entry exists
-    if(priorExists&&!isSrdc()){ms.readOnly=true;ms.style.background='var(--surface)';ms.style.color='var(--muted)';}
-    else{ms.readOnly=false;ms.style.background='var(--card)';ms.style.color='var(--text)';}
-  }
+  setMembersStartField(!priorExists);
   recalcMembersClose();
   window.scrollTo({top:0,behavior:'smooth'});toast('Loaded for editing');
 }
@@ -4030,7 +4068,7 @@ function renderCallContent(){
         <div><div style="font-size:10px;opacity:.45;margin-bottom:3px;">RENEWALS</div><input type="number" id="qu_ren" min="0" value="${curr.renewals||0}" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:14px;"></div>
       </div>
       <div style="margin-bottom:10px;"><div style="font-size:10px;opacity:.45;margin-bottom:3px;">SUCCESS STORY</div><textarea id="qu_story" rows="2" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;padding:7px 9px;width:100%;font-size:13px;resize:vertical;">${(curr.successStory&&curr.successStory.toLowerCase().trim()!=='none')?curr.successStory:''}</textarea></div>
-      <button class="btn btn-green btn-sm" onclick="quickSave('${esc(curr.chapter)}','${curr.date}')">Save Updates</button>
+      <button class="btn btn-green btn-sm" onclick="quickSave('${jsArg(curr.chapter)}','${jsArg(curr.date)}')">Save Updates</button>
     </div>`:''}
     ${(isSrdc()||isViewer())?`<div style="display:flex;gap:7px;margin-top:10px;flex-wrap:wrap;">
       ${idx>0?`<button class="call-btn" onclick="selCall('${S.chapters[idx-1].name}')"><- ${S.chapters[idx-1].name}</button>`:''}
@@ -6340,11 +6378,15 @@ function renderBarter(){
       // Stop once the tab changes OR the user signs out - a poll firing while signed
       // out just 401s in a loop and races the next sign-in.
       if(S.tab!=='barter'||!S.user||!AUTH_TOKEN){clearInterval(window._barterTimer);window._barterTimer=null;return;}
+      // A backgrounded browser tab doesn't refresh at all - each refresh is four Firestore
+      // lookups, and a Sicilian Trade tab left open all day was the largest avoidable cost.
+      // It catches up on the next tick once the tab is visible again.
+      if(document.hidden)return;
       // Don't repaint (and clobber) a form the user is actively typing in.
       var ae=document.activeElement;
       if(ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName)&&ae.closest&&ae.closest('#tab-barter'))return;
       loadBarter().then(paintBarter);
-    },20000);
+    },60000);
   }
 }
 
@@ -6728,17 +6770,18 @@ function renderMonthlyMembers(visChapters){
   var visNames=(visChapters||visibleChapters()).map(function(c){return c.name;});
 
   var h='<div class="card" style="margin-bottom:14px;">';
-  h+='<div class="sec-hdr"><div><div class="sec-title">Month-wise Members (Reference)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · baseline '+g.baseline+' ('+esc(shortMon(g.baselineMonth))+') · from chapter TLRs · historical reference for planning only</div></div></div>';
+  h+='<div class="sec-hdr"><div><div class="sec-title">Month-wise Members (Reference)</div><div class="tm">'+esc(mon(g.window&&g.window.start))+' – '+esc(mon(g.window&&g.window.end))+' · from chapter TLRs · historical reference for planning only</div></div></div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px;">';
-  h+='<div class="month-card"><div class="month-lbl">Baseline ('+esc(shortMon(g.baselineMonth))+')</div><div class="month-val">'+(cn?cn.baseline:g.baseline)+'</div>'+(cn?'<div class="tm" style="font-size:10px;margin-top:2px;">'+cn.chapters+' chapters</div>':'')+'</div>';
+  h+='<div class="month-card"><div class="month-lbl">Starting members</div><div class="month-val">'+(cn?cn.baseline:g.baseline)+'</div>'+(cn?'<div class="tm" style="font-size:10px;margin-top:2px;">'+cn.chapters+' chapters</div>':'')+'</div>';
   h+='<div class="month-card"><div class="month-lbl">Now (same chapters)</div><div class="month-val">'+(cn?cn.current:current)+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Cumulative Net Add</div><div class="month-val" style="color:'+netCol+'">'+(cumNet>0?'+':'')+cumNet+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Region Total (live)</div><div class="month-val">'+current+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Joined</div><div class="month-val" style="color:var(--green)">+'+tJoin+'</div></div>';
   h+='<div class="month-card"><div class="month-lbl">Dropped</div><div class="month-val" style="color:var(--red)">-'+tDrop+'</div></div>';
   h+='</div>';
-  h+='<div class="tm" style="margin-bottom:6px;">A member counts in a month when that month\'s TLR shows a score for them; present one month and absent the next is counted as a drop. Net = Joined − Dropped. <b>Cumulative Net Add compares like with like</b> — only chapters that have a '+esc(shortMon(g.baselineMonth))+' TLR, counted on both sides.'
-    +(cn&&cn.excluded.length?' Excluded (no '+esc(shortMon(g.baselineMonth))+' TLR): '+esc(cn.excluded.join(', '))+'.':'')+'</div>';
+  h+='<div class="tm" style="margin-bottom:6px;">A member counts in a month when that month\'s TLR shows a score for them; present one month and absent the next is counted as a drop. Net = Joined − Dropped. <b>Cumulative Net Add compares like with like</b> — each chapter\'s live TLR size against its own '+esc(shortMon(g.baselineMonth))+' size, counted on both sides.'
+    +(cn&&cn.late.length?' '+esc(lateBaselineNote(cn)):'')
+    +(cn&&cn.excluded.length?' No 12-month data (excluded): '+esc(cn.excluded.join(', '))+'.':'')+'</div>';
   h+='<div style="overflow-x:auto;"><table class="rtbl"><thead><tr><th>Month</th><th>Chapters</th><th>Members</th><th>Joined</th><th>Dropped</th><th>Net</th><th>Chapter changes</th></tr></thead><tbody>';
   region.forEach(function(r){
     var notes=[];

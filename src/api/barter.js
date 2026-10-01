@@ -87,9 +87,21 @@ async function memberNames(ids) {
 
 // ---- reads -------------------------------------------------------------------
 
-async function board(user, actingChapter) {
+// Every open Sicilian Trade tab polls the board, and the underlying query is the same
+// for everyone (scoping happens afterwards, in memory), so the raw list of available
+// cheques is shared for a short window. Writes that change it clear it immediately.
+const AVAILABLE_TTL_MS = 30000;
+let AVAILABLE_CACHE = null; // { at, rows }
+async function availableChecks() {
+  if (AVAILABLE_CACHE && Date.now() - AVAILABLE_CACHE.at < AVAILABLE_TTL_MS) return AVAILABLE_CACHE.rows;
   const snap = await getDb().collection("checks").where("status", "==", "available").get();
-  let live = snap.docs.map(d => d.data()).filter(notExpired);
+  AVAILABLE_CACHE = { at: Date.now(), rows: snap.docs.map(d => d.data()) };
+  return AVAILABLE_CACHE.rows;
+}
+function dropAvailableCache() { AVAILABLE_CACHE = null; }
+
+async function board(user, actingChapter) {
+  let live = (await availableChecks()).filter(notExpired);
 
   // A Senior Director in "DC View" (actingChapter set to one of their chapters) sees the
   // same anonymous, region-wide board a DC sees - counts only, so they can request across
@@ -130,9 +142,13 @@ async function board(user, actingChapter) {
   return ok({ counts, mainTotals, totalAvailable, holders, scoped: scope ? "chapters" : "region", updatedAt: nowIso() });
 }
 
-async function myAvailableChecks(dcId) {
+// A holder's available cheques. Pass `chapter` to keep only that chapter's: a Senior
+// Director holds cheques for several chapters under one id, and a barter must only ever
+// offer cheques from the chapter it is being made for.
+async function myAvailableChecks(dcId, chapter) {
   const snap = await getDb().collection("checks").where("dcId", "==", dcId).get();
-  return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.status === "available" && notExpired(c));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(c => c.status === "available" && notExpired(c) && (!chapter || c.chapter === chapter));
 }
 
 async function mine(user) {
@@ -187,7 +203,7 @@ async function inbox(user) {
     if (!mineRecipient) continue;
     // The requester's CURRENT available checks - category + opaque check id only
     // (no prospect name, chapter or DC identity until a match confirms).
-    const offered = (await myAvailableChecks(r.requesterDcId)).map(c => ({ sub: c.sub, main: c.main, checkId: c.id }));
+    const offered = (await myAvailableChecks(r.requesterDcId, r.requesterChapter)).map(c => ({ sub: c.sub, main: c.main, checkId: c.id }));
     items.push({ requestId: r.id, requestedSub: r.requestedSub, requestedMain: r.requestedMain, myCheckId: mineRecipient.checkId, offered, createdAt: r.createdAt });
   }
   items.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
@@ -213,16 +229,28 @@ async function trades(user) {
   }
   reqs.sort((a, b) => String(b.matchedAt).localeCompare(String(a.matchedAt)));
 
+  // Fetch every cheque and Director the history needs in one batch, instead of four
+  // sequential reads per trade - the same DCs recur across trades, so this also reads
+  // each of them once.
+  const checkIds = [...new Set(reqs.flatMap(r => [r.wonCheckId, r.tradedOfferedCheckId]).filter(Boolean))];
+  const memberIds = [...new Set(reqs.flatMap(r => [r.requesterDcId, r.confirmedByDcId]).filter(Boolean))];
+  const [checkDocs, memberDocs] = await Promise.all([
+    checkIds.length ? db.getAll(...checkIds.map(id => db.collection("checks").doc(id))) : [],
+    memberIds.length ? db.getAll(...memberIds.map(id => db.collection("members").doc(id))) : []
+  ]);
+  const checkById = new Map(checkDocs.map((d, i) => [checkIds[i], d.exists ? d.data() : {}]));
+  const contactById = new Map(memberDocs.map((d, i) => {
+    const x = d.exists ? d.data() : {};
+    return [memberIds[i], { name: x.name || memberIds[i], phone: x.phone || x.contact || "" }];
+  }));
+  const contactOf = id => contactById.get(id) || { name: id || "", phone: "" };
+
   const out = [];
   for (const r of reqs) {
-    const [wonD, offD] = await Promise.all([
-      r.wonCheckId ? db.collection("checks").doc(r.wonCheckId).get() : Promise.resolve(null),
-      r.tradedOfferedCheckId ? db.collection("checks").doc(r.tradedOfferedCheckId).get() : Promise.resolve(null)
-    ]);
-    const won = wonD && wonD.exists ? wonD.data() : {};  // confirmer's check -> requester (category = requestedSub)
-    const off = offD && offD.exists ? offD.data() : {};  // requester's check -> confirmer
-    const ac = await memberContact(r.requesterDcId);
-    const bc = await memberContact(r.confirmedByDcId);
+    const won = checkById.get(r.wonCheckId) || {};           // confirmer's check -> requester (category = requestedSub)
+    const off = checkById.get(r.tradedOfferedCheckId) || {};  // requester's check -> confirmer
+    const ac = contactOf(r.requesterDcId);
+    const bc = contactOf(r.confirmedByDcId);
     out.push({
       id: r.id, matchedAt: r.matchedAt,
       aName: ac.name, aPhone: ac.phone, aChapter: r.requesterChapter,
@@ -257,6 +285,7 @@ async function addCheck(user, body) {
     prospectName, phone, companyName, paymentType, status: "available", createdAt: nowIso(), expiresAt: plusDaysIso(CHECK_TTL_DAYS)
   };
   const ref = await getDb().collection("checks").add(check);
+  dropAvailableCache();
   return ok({ check: { id: ref.id, ...check } }, 201);
 }
 
@@ -268,6 +297,7 @@ async function withdrawCheck(user, checkId) {
   if (doc.data().dcId !== user.sub) throw forbidden("That cheque isn't yours");
   if (doc.data().status !== "available") throw badRequest("Only an available cheque can be withdrawn");
   await ref.set({ status: "withdrawn", withdrawnAt: nowIso() }, { merge: true });
+  dropAvailableCache();
   return noContent();
 }
 
@@ -279,8 +309,9 @@ async function createRequest(user, body) {
   if (!cats.subs.has(sub)) throw badRequest("Pick a valid sub-category from the list");
   const myChapter = resolveTradeChapter(user, body);
 
-  // Strict barter: you must be holding at least one check to offer in return.
-  const offered = await myAvailableChecks(user.sub);
+  // Strict barter: you must be holding at least one check to offer in return - for the
+  // chapter this request is for, not any chapter you happen to hold cheques in.
+  const offered = await myAvailableChecks(user.sub, myChapter);
   if (!offered.length) throw badRequest("You need at least one available cheque of your own to barter");
 
   // One open request per category at a time.
@@ -330,16 +361,20 @@ async function confirmRequest(user, requestId, body) {
     const offeredRef = db.collection("checks").doc(offeredCheckId);          // comes to me
     const [myCheck, offered] = await Promise.all([t.get(myCheckRef), t.get(offeredRef)]);
     if (!myCheck.exists || myCheck.data().status !== "available" || myCheck.data().dcId !== user.sub) throw badRequest("Your cheque for this category is no longer available");
-    if (!offered.exists || offered.data().status !== "available" || offered.data().dcId !== r.requesterDcId) throw badRequest("That offered cheque is no longer available");
+    if (!offered.exists || offered.data().status !== "available" || offered.data().dcId !== r.requesterDcId || (r.requesterChapter && offered.data().chapter !== r.requesterChapter)) throw badRequest("That offered cheque is no longer available");
 
     const at = nowIso();
-    t.set(reqRef, { status: "confirmed", confirmedByDcId: user.sub, confirmedByChapter: chapterOf(user), wonCheckId: mineRecipient.checkId, tradedOfferedCheckId: offeredCheckId, matchedAt: at }, { merge: true });
+    // The confirming chapter is the one that held the cheque, not the confirmer's first
+    // assigned chapter - they differ for a Senior Director trading in DC View.
+    const confirmedByChapter = mineRecipient.holderChapter || myCheck.data().chapter || chapterOf(user);
+    t.set(reqRef, { status: "confirmed", confirmedByDcId: user.sub, confirmedByChapter, wonCheckId: mineRecipient.checkId, tradedOfferedCheckId: offeredCheckId, matchedAt: at }, { merge: true });
     t.set(myCheckRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: offeredCheckId, matchedAt: at }, { merge: true });
     t.set(offeredRef, { status: "matched", matchedRequestId: requestId, matchedWithCheckId: mineRecipient.checkId, matchedAt: at }, { merge: true });
     const od = offered.data();
     return { requesterDcId: r.requesterDcId, requesterChapter: r.requesterChapter, receivedProspect: od.prospectName, receivedPhone: od.phone || "", receivedCompany: od.companyName || "", receivedPayment: od.paymentType || "", receivedCategory: od.sub, gaveCategory: r.requestedSub };
   });
 
+  dropAvailableCache(); // both cheques just left the board
   // Winner receives the requester's offered check; requester (DC name, chapter, personal
   // phone) is revealed to the winner so the two can coordinate directly.
   const partner = await memberContact(result.requesterDcId);

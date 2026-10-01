@@ -201,6 +201,13 @@ async function cachedCollection(name) {
   });
 }
 
+// The shared, credential-free copy of a snapshot collection (members have pinHash
+// stripped). Lets other readers of the same data - the login directory - reuse the
+// snapshot's cached read instead of paying for their own.
+export function cachedSnapshotCollection(name) {
+  return cachedCollection(name);
+}
+
 // Shared cache for the on-demand collections (miyagiMembers, activityLog). Without it
 // every DC opening the Miyagi tab pays its own ~1.3k reads; with it they share one
 // fetch for the TTL. Safe to key by name: these are not in the snapshot, so there is no

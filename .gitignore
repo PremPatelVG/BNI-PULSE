@@ -61,3 +61,6 @@ data/tlr/
 # Python bytecode from the TLR extraction scripts
 __pycache__/
 *.pyc
+
+# DNA Oct-26 leadership change: inputs, backups and generated PINs (business data / credentials)
+scripts/.dna-oct26/

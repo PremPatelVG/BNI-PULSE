@@ -10,6 +10,7 @@ import {
   applyTlrForMonth,
   buildSnapshot,
   cachedListCollection,
+  cachedSnapshotCollection,
   docToData,
   getMetaDoc,
   getRawMetaDoc,
@@ -30,7 +31,8 @@ import {
   isAreaDirector,
   isSeniorDirector,
   isViewer,
-  notFound
+  notFound,
+  scopedChapterNames
 } from "../services/scope.js";
 
 const COLLECTION_READ_ALLOWLIST = new Set(["attendance", "renewalsDone", "visitorPipeline", "miyagiMembers", "activityLog"]);
@@ -46,6 +48,35 @@ const SCOPED_META_DOCS = { dues: { listField: "members", chapterField: "chapter"
 const AD_ONLY_META = new Set(["tlr"]);
 
 const SR_LOGIN_ID = "__srdc__";
+
+// Accounts a Senior Director may create, edit or delete.
+const CHAPTER_ACCOUNT_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
+
+function memberChapters(m) {
+  if (!m) return [];
+  return [...(m.chapters || []), m.chapter].filter(Boolean);
+}
+
+// Who may write or delete a member account. `roles` lists every role involved - the
+// account's current role and the role being saved - so an account can never be moved
+// past what the caller manages (their own account included).
+//  - Executive Director accounts: only the ED or the BNI Office account.
+//  - Area Director / ED / BNI Office: any other account.
+//  - Senior Director: only Chapter Director and SA accounts, in chapters they oversee.
+function assertCanManageMember(user, roles, chapters) {
+  const involved = roles.filter(Boolean);
+  if (involved.includes("ed") && !(user?.role === "ed" || user?.id === SR_LOGIN_ID)) {
+    throw forbidden("Only the Executive Director or the BNI Office account can manage Executive Director accounts");
+  }
+  if (isAreaDirector(user)) return;
+  if (!involved.every(r => CHAPTER_ACCOUNT_ROLES.has(r))) {
+    throw forbidden("A Senior Director can only manage Chapter Director and Support Ambassador accounts");
+  }
+  const scope = new Set(scopedChapterNames(user) || []);
+  if (chapters.some(c => !scope.has(c))) {
+    throw forbidden("That account belongs to a chapter you don't oversee");
+  }
+}
 
 export function ok(body, status = 200) {
   return { status, body };
@@ -153,8 +184,10 @@ async function login(body) {
 
 // Unauthenticated: the login screen needs names to populate its dropdown. Returns
 // the narrowest possible projection, never credentials.
+// Unauthenticated, so it must stay cheap: served from the shared snapshot cache rather
+// than re-reading every member document on each visit to the login page.
 async function loginDirectory() {
-  const members = await listCollection("members");
+  const members = await cachedSnapshotCollection("members");
   return ok({
     members: members.map(member => ({ id: member.id, ...loginDirectoryMember(member) }))
   });
@@ -224,6 +257,10 @@ export async function routeApi({ method, segments, body, authorization, query })
   if (first === "auth" && second === "branding" && method === "GET") return publicBranding();
 
   const user = verifyToken(authorization);
+  // Tokens carry the account id as `sub` (the JWT convention). Expose it as `id` too, so
+  // identity checks written against the member shape - "is this the BNI Office account?"
+  // - see the real id. Without it user.id was always undefined on signed-in requests.
+  if (user && user.id == null) user.id = user.sub;
 
   if (first === "auth" && second === "me" && method === "GET") return ok({ user });
 
@@ -294,16 +331,19 @@ export async function routeApi({ method, segments, body, authorization, query })
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};
     if (!member.name) throw badRequest("Member name is required");
     if (member.role === "cd") member.role = "dc";
+    // Who may write this account is decided by BOTH its current role and the role being
+    // saved, so nobody can promote an account (their own included) past what they manage.
+    const existing = id ? await getDb().collection("members").doc(id).get() : null;
+    const prev = existing && existing.exists ? existing.data() : null;
+    assertCanManageMember(user,
+      [prev && prev.role, member.role],
+      [...memberChapters(prev), ...memberChapters(member)]);
     // The Executive Director's PIN may be set or reset ONLY by the BNI Office master
     // account - not by an Area Director, Senior Director, or another ED. This covers
     // creating an ED account, changing an existing ED's PIN, and the role-swap bypass
     // (editing a record that is currently ED while flipping its role in the same save).
     if (pin) {
-      let targetIsEd = member.role === "ed";
-      if (!targetIsEd && id) {
-        const existingDoc = await getDb().collection("members").doc(id).get();
-        if (existingDoc.exists && existingDoc.data().role === "ed") targetIsEd = true;
-      }
+      const targetIsEd = member.role === "ed" || (prev && prev.role === "ed");
       if (targetIsEd && user?.id !== SR_LOGIN_ID) {
         throw forbidden("Only the BNI Office account can set or reset the Executive Director PIN");
       }
@@ -322,6 +362,9 @@ export async function routeApi({ method, segments, body, authorization, query })
 
   if (first === "members" && second && method === "DELETE") {
     assertAdmin(user);
+    const existing = await getDb().collection("members").doc(second).get();
+    if (!existing.exists) throw notFound("Member not found");
+    assertCanManageMember(user, [existing.data().role], memberChapters(existing.data()));
     await getDb().collection("members").doc(second).delete();
     invalidateSnapshotCache("members");
     await writeActivity(user, "member_deleted", { memberId: second });
