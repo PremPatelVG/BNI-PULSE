@@ -280,21 +280,22 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
 
   const norm = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").trim();
 
-  // scopedChapterNames() is null for the Area Director / BNI Office (unrestricted -
-  // they replace the whole region's TLR) and the assigned-chapter list for a Senior
-  // Director. A Senior Director's upload is scoped: only rows for their own chapters
-  // are kept, and they are MERGED into the existing region-wide TLR rather than
-  // replacing it, so one Senior Director cannot wipe another's chapters.
+  // scopedChapterNames() is null for the Area Director / BNI Office (unrestricted) and
+  // the assigned-chapter list for a Senior Director. A Senior Director's upload is first
+  // narrowed to their own chapters. In EVERY case the upload is then MERGED into the
+  // existing region-wide TLR by chapter name - the uploaded chapters are updated and any
+  // chapter not in the file is left untouched. So uploading a part-region export (e.g.
+  // one region's traffic-lights report) never wipes the chapters it does not include,
+  // and no Senior Director can wipe another's chapters.
   const scope = scopedChapterNames(user);
-  let storedRows = rows;
   if (Array.isArray(scope)) {
     const scopeSet = new Set(scope.map(norm));
     const inScope = name => { const k = norm(name); if (scopeSet.has(k)) return true; for (const s of scopeSet) if (s && (s.includes(k) || k.includes(s))) return true; return false; };
     rows = rows.filter(r => r.name && inScope(r.name));
-    const existing = (await db.collection("meta").doc("tlr").get()).data() || {};
-    const keep = (existing.rows || []).filter(r => !rows.some(nr => _tn(nr.name) === _tn(r.name)));
-    storedRows = [...keep, ...rows];
   }
+  const existing = (await db.collection("meta").doc("tlr").get()).data() || {};
+  const keep = (existing.rows || []).filter(r => !rows.some(nr => _tn(nr.name) === _tn(r.name)));
+  const storedRows = [...keep, ...rows];
 
   await db.collection("meta").doc("tlr").set({
     rows: storedRows,
