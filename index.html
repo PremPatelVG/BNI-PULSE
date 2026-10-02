@@ -307,10 +307,6 @@ input:focus,select:focus,textarea:focus,.ms-btn:focus{border-color:var(--red);bo
     <div id="loginSVLogoWrap" style="background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 12px rgba(0,0,0,.15);"><img id="loginSVLogo" src="/vendor/sicilian-ventures-logo.png" alt="Sicilian Ventures" style="max-height:54px;max-width:140px;object-fit:contain;display:block;"></div>
   </div>
   <div class="login-box" style="margin:0;">
-    <!-- Sicilian Growth Tracker logo above form -->
-    <div class="login-arg-logo">
-      <img id="loginArgLogo" src="" alt="" style="max-height:96px;max-width:220px;object-fit:contain;display:none;">
-    </div>
     <div class="brand">
       <div class="b1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
       <div class="b2">Regional Leadership Dashboard</div>
@@ -3696,7 +3692,12 @@ async function saveMonthlyTarget(ch,month,target){
 function getCascadedEntries(chapterName){
   var entries=S.weeklyData.filter(function(e){return e.chapter===chapterName;}).sort(function(a,b){return a.date.localeCompare(b.date);});
   if(!entries.length)return[];
-  var runningClose=+entries[0].membersStart||+entries[0].membersClose||0;
+  // Anchor: the first week's typed start, else the chapter's registered opening count
+  // (set from the TLR at registration), so a chapter whose first entry was saved as 0
+  // is not stuck at 0 across every week.
+  var ch0=(S.chapters||[]).find(function(c){return c.name===chapterName;});
+  var opening=(ch0&&+ch0.openingMembers)||0;
+  var runningClose=+entries[0].membersStart||opening||+entries[0].membersClose||0;
   return entries.map(function(e,i){
     var start=i===0?(+e.membersStart||runningClose):runningClose;
     var ind=+e.inductions||0;
@@ -5349,10 +5350,11 @@ function renderSettings(){
   h+='<div class="card hidden" id="chapterFormCard">';
   h+='<div class="card-t" id="chapterFormTitle">Add Chapter</div><input type="hidden" id="editChapterId">';
   h+='<div class="fgrid">';
-  h+='<div class="fg"><label>Chapter Name</label><input type="text" id="fName"></div>';
+  h+='<div class="fg"><label>Chapter Name</label><input type="text" id="fName" oninput="prefillChapterOpening()"></div>';
   h+='<div class="fg"><label>Meeting Day</label><select id="fDay"><option>Monday</option><option>Tuesday</option><option>Wednesday</option><option>Thursday</option><option>Friday</option><option>Saturday</option></select></div>';
   h+='<div class="fg"><label>Tenure</label><select id="fTenure"><option value="apr">Apr-Sep</option><option value="oct">Oct-Mar</option></select></div>';
   h+='<div class="fg"><label>Member Target</label><input type="number" id="fTarget"></div>';
+  h+='<div class="fg"><label>Opening Members <span class="tm">(auto from TLR)</span></label><input type="number" id="fOpening" min="0" placeholder="matched from the TLR"><div class="tm" id="fOpeningHint" style="margin-top:4px;"></div></div>';
   h+='</div><div class="btn-row"><button class="btn btn-primary" onclick="saveChapter()">Save</button><button class="btn btn-secondary" onclick="cancelChapterForm()">Cancel</button></div></div>';
   if(isExecutiveDirector()){
     h+='<div class="card"><div class="card-t">BNI Office Login PIN</div>';
@@ -5464,9 +5466,33 @@ async function saveMember(){
 }
 function cancelMemberForm(){clearMemberForm();hide('memberFormCard');}
 async function delMember(id){if(!confirm('Remove member?'))return;const m=S.members.find(x=>x.id===id);await db.collection('members').doc(id).delete();logActivity('member_deleted',{memberName:m?m.name:id});toast('Removed');}
-function showChapterForm(){show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Add Chapter';document.getElementById('editChapterId').value='';['fName','fTarget'].forEach(id=>document.getElementById(id).value='');}
-function editChapter(id){const c=S.chapters.find(x=>x.id===id);if(!c)return;show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Edit Chapter';document.getElementById('editChapterId').value=id;document.getElementById('fName').value=c.name;document.getElementById('fDay').value=c.day;document.getElementById('fTenure').value=c.tenure||'apr';document.getElementById('fTarget').value=c.target||'';}
-async function saveChapter(){const id=document.getElementById('editChapterId').value;const name=document.getElementById('fName').value.trim();if(!name){toast('Name required');return;}const data={name,day:document.getElementById('fDay').value,tenure:document.getElementById('fTenure').value,target:+document.getElementById('fTarget').value||0,order:id?(S.chapters.find(c=>c.id===id)?.order||99):S.chapters.length+1};await db.collection('chapters').doc(id||name).set(data,{merge:!!id});logActivity('chapter_saved',{chapterName:name});hide('chapterFormCard');toast('Saved');}
+function showChapterForm(){show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Add Chapter';document.getElementById('editChapterId').value='';['fName','fTarget','fOpening'].forEach(id=>{var el=document.getElementById(id);if(el)el.value='';});var hint=document.getElementById('fOpeningHint');if(hint)hint.textContent='';}
+function editChapter(id){const c=S.chapters.find(x=>x.id===id);if(!c)return;show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Edit Chapter';document.getElementById('editChapterId').value=id;document.getElementById('fName').value=c.name;document.getElementById('fDay').value=c.day;document.getElementById('fTenure').value=c.tenure||'apr';document.getElementById('fTarget').value=c.target||'';var op=document.getElementById('fOpening');if(op)op.value=(c.openingMembers!=null?c.openingMembers:'');prefillChapterOpening(true);}
+// The opening member count for a newly registered chapter is read from the latest TLR
+// (its Chapter Size). It anchors the chapter's weekly member cascade, so the chapter is
+// never stuck at 0 before its first weekly entry is filled.
+function tlrSizeForName(name){
+  if(!name)return null;
+  var lc=String(name).toLowerCase().replace(/^bni\s+/,'').trim();
+  var r=(S.tlrData||[]).find(function(x){var xn=String(x.name||'').toLowerCase().replace(/^bni\s+/,'').trim();return xn===lc||xn.indexOf(lc)>=0||lc.indexOf(xn)>=0&&xn.length>2;});
+  if(!r)return null;
+  var v=Math.round(parseFloat(r.chapterSize)||0);
+  return v||null;
+}
+function prefillChapterOpening(keepExisting){
+  var nameEl=document.getElementById('fName'),op=document.getElementById('fOpening'),hint=document.getElementById('fOpeningHint');
+  if(!nameEl||!op)return;
+  var sz=tlrSizeForName(nameEl.value.trim());
+  if(sz!=null&&(!keepExisting||!op.value)){op.value=sz;if(hint)hint.textContent='Matched TLR: '+sz+' members';}
+  else if(hint)hint.textContent=sz==null?'No TLR match yet - enter the launch member count manually':'';
+}
+async function saveChapter(){const id=document.getElementById('editChapterId').value;const name=document.getElementById('fName').value.trim();if(!name){toast('Name required');return;}
+  // Opening member count: use the typed value, else auto-match from the TLR (new chapters).
+  var openField=document.getElementById('fOpening');
+  var opening=openField&&openField.value!==''?(+openField.value||0):tlrSizeForName(name);
+  const data={name,day:document.getElementById('fDay').value,tenure:document.getElementById('fTenure').value,target:+document.getElementById('fTarget').value||0,order:id?(S.chapters.find(c=>c.id===id)?.order||99):S.chapters.length+1};
+  if(opening!=null&&opening!=='')data.openingMembers=+opening||0;
+  await db.collection('chapters').doc(id||name).set(data,{merge:!!id});logActivity('chapter_saved',{chapterName:name});hide('chapterFormCard');toast('Saved'+(data.openingMembers?(' - opening members '+data.openingMembers+' (from TLR)'):''));}
 function cancelChapterForm(){hide('chapterFormCard');}
 
 async function changeSrPin(){
@@ -5642,12 +5668,10 @@ function loadBranding(){
 
 function applyBranding(){
   try{
+    // Optional chapter logo in the app header only. The login page shows just the
+    // baked-in BNI Ahmedabad & Sicilian Ventures logos (/vendor/*.png).
     var hdrL=document.getElementById('hdrArgLogo');
     if(hdrL){hdrL.src=BRANDING.argLogo||'';hdrL.style.display=BRANDING.argLogo?'block':'none';}
-    // BNI Ahmedabad & Sicilian Ventures logos are baked into the login page as
-    // static assets (/vendor/*.png), so they are no longer driven by BRANDING.
-    var cl=document.getElementById('loginArgLogo');
-    if(cl){cl.src=BRANDING.argLogo||'';cl.style.display=BRANDING.argLogo?'block':'none';}
   }catch(e){console.warn('applyBranding:',e);}
 }
 // Note: no polling interval needed here - the onSnapshot listener in loadBranding()
