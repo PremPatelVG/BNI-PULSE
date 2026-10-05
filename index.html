@@ -7788,7 +7788,9 @@ async function toggleMiyagiCheckpoint(memberId,taskKey){
   try{
     await db.collection('miyagiMembers').doc(memberId).update(updates);
     logActivity('miyagi_checkpoint_toggled',{memberName:member.name,task:taskKey,done:!isDone});
+    member.checkpoints=cp;member.score=newScore;if(!isDone)member.lastActivityDate=todayISO();
     toast(isDone?'Checkpoint unmarked':'Yes Checkpoint marked');
+    if(S.tab==='miyagi')renderMiyagiTab();else if(S.tab==='call')renderCallContent();
   }catch(e){toast('Failed: '+e.message);}
 }
 
@@ -7823,8 +7825,13 @@ async function saveMiyagiCheckpoints(memberId){
   try{
     await db.collection('miyagiMembers').doc(memberId).update({checkpoints:cp,score:sc,lastActivityDate:todayISO()});
     logActivity('miyagi_checkpoints_saved',{memberName:m.name,score:sc});
+    // Reflect the saved state in the in-memory copy and re-render. miyagiMembers is an
+    // on-demand collection (not live-subscribed), so without this the tab re-renders
+    // from the stale cache when revisited and the ticks disappear until a full reload.
+    m.checkpoints=cp;m.score=sc;m.lastActivityDate=todayISO();
     delete MIYAGI_PENDING[memberId];
     toast('Miyagi progress saved ('+sc+' pts)');
+    renderMiyagiTab();
   }catch(e){toast('Failed: '+e.message);}
 }
 
@@ -7849,7 +7856,9 @@ async function markMiyagiDropped(memberId){
   try{
     await db.collection('miyagiMembers').doc(memberId).update(data);
     logActivity('miyagi_member_dropped',{memberName:m.name,milestone:data.droppedAtMilestone});
+    Object.assign(m,data);
     toast(m.name+' marked dropped');
+    renderMiyagiTab();
   }catch(e){toast('Failed: '+e.message);}
 }
 async function reactivateMiyagiMember(memberId){
@@ -7857,7 +7866,7 @@ async function reactivateMiyagiMember(memberId){
   if(!m)return;
   var data={status:'active',statusChangedDate:todayISO()};
   if(isLocalPreviewMode()){Object.assign(m,data);if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast(m.name+' reactivated');renderMiyagiTab();return;}
-  try{await db.collection('miyagiMembers').doc(memberId).update(data);toast(m.name+' reactivated');}catch(e){toast('Failed: '+e.message);}
+  try{await db.collection('miyagiMembers').doc(memberId).update(data);Object.assign(m,data);toast(m.name+' reactivated');renderMiyagiTab();}catch(e){toast('Failed: '+e.message);}
 }
 
 // CHECK-IN PREFILL - derive answers from the member's current task completion ──
@@ -8015,8 +8024,10 @@ async function submitMiyagiCheckin(){
   try{
     await db.collection('miyagiMembers').doc(MIYAGI_ACTIVE_CHECKIN.memberId).update({checkins:checkins,lastActivityDate:data.submittedDate});
     logActivity('miyagi_checkin_submitted',{memberName:member?member.name:MIYAGI_ACTIVE_CHECKIN.memberId,checkin:MIYAGI_ACTIVE_CHECKIN.checkinKey});
+    if(member){member.checkins=checkins;member.lastActivityDate=data.submittedDate;}
     toast('Check-in submitted');
     closeMiyagiCheckin();
+    if(S.tab==='miyagi')renderMiyagiTab();
   }catch(e){toast('Failed: '+e.message);}
 }
 
