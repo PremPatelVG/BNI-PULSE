@@ -509,7 +509,7 @@ function splitWeeklyId(docId){
   return {chapter:docId.slice(0,-11),date:docId.slice(-10)};
 }
 
-const GENERIC_COLLECTIONS=new Set(['attendance','renewalsDone','visitorPipeline','miyagiMembers']);
+const GENERIC_COLLECTIONS=new Set(['attendance','renewalsDone','renewalsDropped','visitorPipeline','miyagiMembers']);
 
 async function writeDoc(collection,docId,data,merge){
   if(collection==='meta')return apiFetch('/meta/'+encodeURIComponent(docId),{method:'PUT',body:data});

@@ -45,7 +45,8 @@ export const SNAPSHOT_COLLECTIONS = [
   "weeklyData",
   "visitorPipeline",
   "attendance",
-  "renewalsDone"
+  "renewalsDone",
+  "renewalsDropped"
 ];
 
 // Fetched on demand by the tab that needs them (see COLLECTION_READ_ALLOWLIST).

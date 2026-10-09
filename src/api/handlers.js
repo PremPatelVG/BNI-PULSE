@@ -35,9 +35,9 @@ import {
   scopedChapterNames
 } from "../services/scope.js";
 
-const COLLECTION_READ_ALLOWLIST = new Set(["attendance", "renewalsDone", "visitorPipeline", "miyagiMembers", "activityLog"]);
-const COLLECTION_WRITE_ALLOWLIST = new Set(["attendance", "renewalsDone", "visitorPipeline", "miyagiMembers"]);
-const COLLECTION_DELETE_ALLOWLIST = new Set(["visitorPipeline", "miyagiMembers"]);
+const COLLECTION_READ_ALLOWLIST = new Set(["attendance", "renewalsDone", "renewalsDropped", "visitorPipeline", "miyagiMembers", "activityLog"]);
+const COLLECTION_WRITE_ALLOWLIST = new Set(["attendance", "renewalsDone", "renewalsDropped", "visitorPipeline", "miyagiMembers"]);
+const COLLECTION_DELETE_ALLOWLIST = new Set(["renewalsDropped", "visitorPipeline", "miyagiMembers"]);
 
 // Meta documents only Area/Senior Directors may change.
 const ADMIN_META_DOCS = new Set(["branding", "config"]);
