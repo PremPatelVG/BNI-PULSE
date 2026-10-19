@@ -356,7 +356,11 @@ export async function routeApi({ method, segments, body, authorization, query })
     const docId = id || `m${Date.now()}`;
     await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
     invalidateSnapshotCache("members");
-    await writeActivity(user, "member_saved", { memberName: member.name, passwordChanged: Boolean(pin) });
+    // Record the account and, when it changed, the previous name - so a name being
+    // reverted (e.g. an SA login going back to "<Chapter> SA") can be traced.
+    const details = { memberName: member.name, memberId: docId, passwordChanged: Boolean(pin) };
+    if (prev && prev.name && prev.name !== member.name) details.previousName = prev.name;
+    await writeActivity(user, "member_saved", details);
     return ok({ member: { id: docId, ...stripPrivateMember(member) } }, 201);
   }
 

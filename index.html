@@ -3733,6 +3733,16 @@ async function saveEntry(){
   const{tue:_tue,fri:_fri}=getWeekTueFri(date);
   const _exist=S.weeklyData.find(e=>e.chapter===ch&&e.date>=_tue&&e.date<=_fri&&e.date!==date);
   if(_exist){if(confirm('Warning: '+ch+' already has data for the week of '+fmtWeekChip(getWeekKey(date))+', submitted by '+_exist.filledBy+' on '+fmtD(_exist.date)+'.\n\nClick OK to edit that entry instead.')){loadEdit(_exist.chapter,_exist.date);}return;}
+  // Same chapter + same date already saved, and this isn't an edit opened via "Edit":
+  // saving would silently replace someone's entry, so ask first.
+  const _same=S.weeklyData.find(e=>e.chapter===ch&&e.date===date);
+  if(_same&&EDITING_ENTRY!==ch+'|'+date){
+    const _byRaw=_same.updatedBy||_same.filledBy||'someone';
+    const _byM=(S.members||[]).find(m=>m.id===_byRaw);
+    const _by=_byM?_byM.name:_byRaw;
+    const _when=_same.updatedAt||_same.savedAt;
+    if(!confirm('Warning: '+ch+' already has an entry for '+fmtD(date)+', submitted by '+_by+(_when?' on '+fmtD(String(_when).slice(0,10)):'')+'.\n\nClick OK to OVERWRITE it with what you have entered now, or Cancel to keep the existing entry.\n\n(To change it safely, use the Edit button on that entry.)'))return;
+  }
   // A chapter's first entry sets the member count every later week is built on, so it
   // can't be saved empty or as 0.
   if(!S.weeklyData.some(x=>x.chapter===ch&&x.date<date)&&!(+document.getElementById('eMStart')?.value>0)){
@@ -3820,8 +3830,12 @@ function renderRecentEntries(showAll){
   }
 }
 
+// The entry currently opened with "Edit" (chapter|date). Saving that same entry is an
+// intentional edit; saving over any other existing entry asks for confirmation.
+let EDITING_ENTRY=null;
 function loadEdit(ch,date){
   const e=S.weeklyData.find(x=>x.chapter===ch&&x.date===date);if(!e)return;
+  EDITING_ENTRY=ch+'|'+date;
   if(isSrdc()){const ec=document.getElementById('eChapter');if(ec)ec.value=ch;}
   const dateEl=document.getElementById('eDate');if(dateEl)dateEl.value=date;
   // Use cascaded values so Start/Close reflect correct chain
@@ -4219,16 +4233,25 @@ async function markRenewalDone(chapter,nameEnc,dueDate){
     renderRenewals();
     return;
   }
+  if(RENEWAL_BUSY[key])return;
+  RENEWAL_BUSY[key]=true;
   try{
-    await db.collection('renewalsDone').doc(key).set({chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()});
+    const rec={chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()};
+    await db.collection('renewalsDone').doc(key).set(rec);
+    S.renewalsDone[key]=rec;   // show it immediately, don't wait for the next refresh
     logActivity('renewal_marked_done',{chapter:chapter,name:name,dueDate:dueDate});
     toast(`${name} renewal marked done`);
     renderRenewals();
   }catch(e){
     // A failed write must never look like a successful one.
     toast('Could not mark renewal done: '+e.message,5000);
-  }
+  }finally{delete RENEWAL_BUSY[key];}
 }
+
+// Keys with a renewal write in flight - a second click on the same row is ignored, so a
+// double-click can't drop a member and then immediately undo it (Drop and Undo sit in
+// the same spot).
+const RENEWAL_BUSY={};
 
 async function markRenewalDropped(chapter,nameEnc,dueDate){
   const name=decodeURIComponent(nameEnc);
@@ -4241,14 +4264,20 @@ async function markRenewalDropped(chapter,nameEnc,dueDate){
     renderRenewals();
     return;
   }
+  if(RENEWAL_BUSY[key])return;
+  if(!confirm('Mark '+name+' ('+chapter+') as DROPPED - not renewing?\n\nDue: '+fmtD(dueDate)))return;
+  RENEWAL_BUSY[key]=true;
   try{
-    await db.collection('renewalsDropped').doc(key).set({chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()});
+    const rec={chapter,name,dueDate,markedBy:S.user.name,markedAt:new Date().toISOString()};
+    await db.collection('renewalsDropped').doc(key).set(rec);
+    S.renewalsDropped=S.renewalsDropped||{};
+    S.renewalsDropped[key]=rec;   // show "Dropped" immediately
     logActivity('renewal_marked_dropped',{chapter:chapter,name:name,dueDate:dueDate});
     toast(`${name} marked dropped`);
     renderRenewals();
   }catch(e){
     toast('Could not mark dropped: '+e.message,5000);
-  }
+  }finally{delete RENEWAL_BUSY[key];}
 }
 
 async function unmarkRenewalDropped(chapter,nameEnc,dueDate){
@@ -4260,12 +4289,18 @@ async function unmarkRenewalDropped(chapter,nameEnc,dueDate){
     renderRenewals();
     return;
   }
+  if(RENEWAL_BUSY[key])return;
+  if(!confirm('Undo the drop for '+name+' ('+chapter+')? They will show as pending renewal again.'))return;
+  RENEWAL_BUSY[key]=true;
   try{
     await db.collection('renewalsDropped').doc(key).delete();
+    if(S.renewalsDropped)delete S.renewalsDropped[key];
+    logActivity('renewal_drop_undone',{chapter:chapter,name:name,dueDate:dueDate});
+    toast('Drop undone for '+name);
     renderRenewals();
   }catch(e){
     toast('Could not undo drop: '+e.message,5000);
-  }
+  }finally{delete RENEWAL_BUSY[key];}
 }
 
 // TLR ──
@@ -4863,23 +4898,45 @@ function normalizePhone(p){
 //  - The same renewal (same phone + same due date) is de-duplicated.
 //  - A row with no phone cannot be matched, so it is always accepted; the renewals
 //    view flags it with an "update contact details on BNI Connect" warning.
+// Name tokens with titles stripped, for matching "Krishnakant" to "Krishnakant Joshi".
+function duesNameTokens(s){
+  return String(s||'').toUpperCase().replace(/\b(DR|MR|MRS|MS|CA|ADV|ER)\b\.?/g,'').replace(/[^A-Z\s]/g,'').trim().split(/\s+/).filter(Boolean);
+}
+// Same member? Same chapter, and either the same phone, or - when a phone is missing -
+// the same first name AND the same business, with compatible names (one is first-name
+// only, or the surnames match). Two different people who share a first name almost
+// always differ in business or surname, so they are not merged.
+function sameDuesPerson(a,b){
+  if(String(a.chapter||'').toLowerCase().trim()!==String(b.chapter||'').toLowerCase().trim())return false;
+  var pa=normalizePhone(a.phone),pb=normalizePhone(b.phone);
+  if(pa&&pb)return pa===pb;
+  var ia=String(a.industry||'').toLowerCase().replace(/[^a-z0-9]/g,''),ib=String(b.industry||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(!ia||ia!==ib)return false;
+  var ta=duesNameTokens(a.name),tb=duesNameTokens(b.name);
+  if(!ta.length||!tb.length||ta[0]!==tb[0])return false;
+  if(ta.length<2||tb.length<2)return true;
+  return ta[ta.length-1]===tb[tb.length-1];
+}
 function mergeDuesUpload(existing,incoming){
-  existing=(existing||[]).slice();
+  // Work on copies: upgrading a row's name/phone below must not mutate the data on screen,
+  // or the change-detection (duesSignature) would see no difference and skip the save.
+  existing=(existing||[]).map(function(o){return Object.assign({},o);});
   incoming=uniqueDuesMembers(incoming||[]);
-  var byPhone={};
-  existing.forEach(function(m){
-    var ph=normalizePhone(m.phone);if(!ph)return;
-    (byPhone[ph]=byPhone[ph]||[]).push(m);
-  });
+  var pool=existing.slice();   // existing + rows accepted so far from this upload
   var accepted=[];
   incoming.forEach(function(m){
-    var ph=normalizePhone(m.phone);
-    if(!ph){accepted.push(m);return;}                                  // no phone -> accept + warn on render
-    var prior=byPhone[ph]||[];
-    if(prior.some(function(p){return p.dueDate===m.dueDate;}))return;  // exact same renewal -> duplicate
+    var prior=pool.filter(function(p){return sameDuesPerson(p,m);});
+    var same=prior.find(function(p){return p.dueDate===m.dueDate;});
+    if(same){
+      // Exact same renewal already on file - keep one row, but upgrade it with the fuller
+      // name / a phone number if this report has them.
+      if(duesNameTokens(m.name).length>duesNameTokens(same.name).length)same.name=m.name;
+      if(!normalizePhone(same.phone)&&normalizePhone(m.phone))same.phone=m.phone;
+      return;
+    }
     if(prior.some(function(p){return !isRenewalDone(p);}))return;      // prior decision not made -> hold
     accepted.push(m);
-    (byPhone[ph]=byPhone[ph]||[]).push(m);                             // so later rows in this batch see it
+    pool.push(m);                                                      // so later rows in this batch see it
   });
   return uniqueDuesMembers(existing.concat(accepted));
 }
