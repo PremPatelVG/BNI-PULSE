@@ -5395,7 +5395,7 @@ function renderSettings(){
   h+='<div class="fgrid">';
   h+='<div class="fg"><label>Full Name</label><input type="text" id="mName"></div>';
   h+='<div class="fg"><label>Role</label><select id="mRole" onchange="toggleChaptersField()"><option value="ed">Executive Director</option><option value="ad">Area Director</option><option value="srdc">Senior Director</option><option value="dc">Chapter Director (CD/DC)</option><option value="sa1">SA1</option><option value="sa2">SA2</option><option value="viewer">Viewer</option></select></div>';
-  h+='<div class="fg" id="singleChapField"><label>Chapter</label><select id="mChapter"></select></div>';
+  h+='<div class="fg" id="singleChapField"><label>Chapter</label><select id="mChapter" onchange="syncSaName()"></select></div>';
   h+='<div class="fg full hidden" id="multiChapField"><label>Chapters (hold Ctrl/Cmd for multiple)</label><select id="mChapters" multiple style="height:120px;"></select></div>';
   h+='<div class="fg full"><label>Reports To</label><input type="text" id="mReportsTo" placeholder="Area Director or Senior Director name"></div>';
   h+='<div class="fg"><label>Contact Number</label><input type="tel" id="mPhone" placeholder="10-digit mobile"></div>';
@@ -5430,6 +5430,15 @@ function renderSettings(){
 }
 
 
+// Support Ambassador logins are named "<Chapter> SA" - fill and lock the name field.
+function isSaRole(role){return role==='sa1'||role==='sa2';}
+function syncSaName(){
+  var role=document.getElementById('mRole')?.value,nm=document.getElementById('mName');if(!nm)return;
+  if(isSaRole(role)){
+    var ch=document.getElementById('mChapter')?.value||'';
+    nm.value=ch?ch+' SA':'';nm.readOnly=true;nm.style.background='var(--bg)';nm.title='Support Ambassador logins are always named "<Chapter> SA"';
+  }else if(nm.readOnly){nm.readOnly=false;nm.style.background='';nm.title='';}
+}
 function toggleChaptersField(){
   const role=document.getElementById('mRole')?.value;
   const isViewer=role==='viewer'||role==='ad'||role==='ed';const isDC=role==='dc'||role==='srdc';
@@ -5440,6 +5449,7 @@ function toggleChaptersField(){
   // Only the BNI Office master account may set/reset an Executive Director's PIN.
   var mPinEl=document.getElementById('mPin');
   if(mPinEl){var edLocked=(role==='ed'&&!isBniOffice());mPinEl.disabled=edLocked;if(edLocked){mPinEl.value='';mPinEl.placeholder='Only the BNI Office account can reset the ED PIN';}else if(mPinEl.placeholder!=='....'){mPinEl.placeholder='....';}}
+  syncSaName();
 }
 
 function clearMemberForm(){
@@ -5460,6 +5470,7 @@ function editMember(id){
   toggleChaptersField();
   if(m.role==='dc'||m.role==='srdc'){const sel=document.getElementById('mChapters');if(sel){Array.from(sel.options).forEach(o=>o.selected=(m.chapters||[m.chapter]).includes(o.value));}}
   else{const sel=document.getElementById('mChapter');if(sel)sel.value=m.chapter||'';}
+  syncSaName();
 }
 function memberSeniorDirectorSummary(memberData){
   var role=memberData.role;
@@ -5486,9 +5497,11 @@ function showMemberPasswordConfirmation(memberData,pin,isNew){
 }
 async function saveMember(){
   const id=document.getElementById('editMemberId').value;
-  const name=document.getElementById('mName').value.trim();
+  let name=document.getElementById('mName').value.trim();
   const pin=document.getElementById('mPin').value.trim();
   const role=document.getElementById('mRole').value;
+  // Support Ambassador logins are always "<Chapter> SA" (the server enforces this too).
+  if(isSaRole(role)){const _saCh=document.getElementById('mChapter')?.value||'';if(_saCh)name=_saCh+' SA';}
   const reportsTo=document.getElementById('mReportsTo')?.value.trim()||'';
   if(!name){toast('Name required');return;}if(!id&&(!pin||pin.length<4)){toast('PIN must be 4+ digits');return;}
   // Only the BNI Office master account may set/reset an Executive Director PIN (server-enforced too).

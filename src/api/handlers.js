@@ -331,6 +331,12 @@ export async function routeApi({ method, segments, body, authorization, query })
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};
     if (!member.name) throw badRequest("Member name is required");
     if (member.role === "cd") member.role = "dc";
+    // Support Ambassador logins are one shared account per chapter and are always named
+    // "<Chapter> SA" - the name is derived from the chapter, never typed in.
+    if (member.role === "sa1" || member.role === "sa2") {
+      const saChapter = member.chapter || (Array.isArray(member.chapters) ? member.chapters[0] : "");
+      if (saChapter) member.name = `${saChapter} SA`;
+    }
     // Who may write this account is decided by BOTH its current role and the role being
     // saved, so nobody can promote an account (their own included) past what they manage.
     const existing = id ? await getDb().collection("members").doc(id).get() : null;
