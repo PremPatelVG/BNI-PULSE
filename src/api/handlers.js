@@ -444,7 +444,20 @@ export async function routeApi({ method, segments, body, authorization, query })
     const ref = getDb().collection(first).doc(second);
     const before = await ref.get();
     if (before.exists && before.data().chapter) assertCanWriteChapter(user, before.data().chapter);
-    await ref.set(body || {}, { merge: true });
+    let payload = body || {};
+    // A Miyagi "new member" record (empty checkpoints) must never overwrite an existing
+    // member - that wiped progress whenever a Length-of-Membership upload ran without the
+    // Miyagi list loaded. Against an existing record it may only fill fields that are
+    // missing; existing ticks, score, status, check-ins and dates are kept.
+    if (first === "miyagiMembers" && before.exists) {
+      const cp = payload.checkpoints;
+      if (cp && typeof cp === "object" && !Object.keys(cp).length) {
+        const prevData = before.data();
+        payload = Object.fromEntries(Object.entries(payload).filter(([k]) => prevData[k] === undefined));
+        if (!Object.keys(payload).length) return ok({ row: docToData(before) });
+      }
+    }
+    await ref.set(payload, { merge: true });
     invalidateSnapshotCache(first);
     const doc = await ref.get();
     await writeActivity(user, `${first}_saved`, { id: second });

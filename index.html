@@ -7813,6 +7813,11 @@ function parseLOMLegacy(text){
 
 // AUTO-SYNC: ADD / GRADUATE / DROP ────────────────────────
 async function syncMiyagiMembers(lomRows){
+  // The Miyagi list is loaded on demand. Deciding who is "new" against a list that was
+  // never loaded made every member look new, and re-creating them wiped their progress
+  // (score 0, no ticks). Always load the current list first, and stop if it can't load.
+  await ensureMiyagiLoaded(true);
+  if(!MIYAGI_LOADED){toast('Miyagi sync skipped - could not load the current Miyagi list. Nothing was changed.',7000);return;}
   var teamChapters=visibleChapterNames();
   var relevantRows=(lomRows||S.lomData).filter(function(r){return teamChapters.includes(r.chapter);});
   var currentByKey={};
