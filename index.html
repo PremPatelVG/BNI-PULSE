@@ -2679,7 +2679,11 @@ function switchTab(t){
   const div=document.createElement('div');div.id='tab-'+t;mc.appendChild(div);
   if(t==='overview')renderOverview();
   else if(t==='entry')renderEntry();
-  else if(t==='call'){renderCallMode();ensureMiyagiLoaded();}
+  // The Miyagi list is fetched on demand, and re-fetched every time one of its tabs is
+  // opened (the server answers from its shared cache): loading it only once per sign-in
+  // left people looking at an old copy - e.g. an empty list - after an import or someone
+  // else's update. The cached copy is shown at once and refreshed when the fetch returns.
+  else if(t==='call'){renderCallMode();ensureMiyagiLoaded(true);}
   else if(t==='renewals')renderRenewals();
   else if(t==='retention')renderAreaDirectorRetentionTab();
   else if(t==='tlr')renderTLR();
@@ -2689,7 +2693,8 @@ function switchTab(t){
   else if(t==='pipeline')renderPipelineVelocity();
   else if(t==='miyagi'){
     if(MIYAGI_LOADED)renderMiyagiTab();
-    else{div.innerHTML='<div class="card"><div class="empty">Loading Miyagi…</div></div>';ensureMiyagiLoaded();}
+    else div.innerHTML='<div class="card"><div class="empty">Loading Miyagi…</div></div>';
+    ensureMiyagiLoaded(true);
   }
   else if(t==='sdreport')renderSDReport();
   else if(t==='retro')renderRetroTab();
@@ -8118,12 +8123,24 @@ async function syncMiyagiMembers(lomRows){
   // modifies the Miyagi data of members already in the program - no overwrite of
   // their checkpoints/score, and no auto-graduate or auto-drop. Graduation and
   // drops are handled manually (drops via the Renewals "Drop" button).
-  var failed=[];
-  for(var i=0;i<ops.length;i++){
-    try{await db.collection('miyagiMembers').doc(ops[i].id).set(ops[i].data,{merge:true});}
-    catch(e){console.warn('Miyagi sync error:',e);failed.push(ops[i].data.name+' ('+ops[i].data.chapter+')');}
+  var failed=[],done=0,next=0;
+  var st=document.getElementById('lomStatus'),stBase=st?st.textContent:'';
+  // Written straight through writeDoc, a few at a time, with ONE reload of the list at the
+  // end. Going through doc().set() reloaded the whole Miyagi list after every single
+  // member - for a full re-upload (~1,000 members) that was ~500k Firestore reads.
+  async function worker(){
+    while(next<ops.length){
+      var op=ops[next++];
+      try{await writeDoc('miyagiMembers',op.id,op.data,true);}
+      catch(e){console.warn('Miyagi sync error:',e);failed.push(op.data.name+' ('+op.data.chapter+')');}
+      done++;
+      if(st&&ops.length>20)st.textContent=stBase+' - adding Miyagi members '+done+'/'+ops.length+'...';
+    }
   }
+  await Promise.all([worker(),worker(),worker(),worker()]);
+  if(ops.length)await reloadOnDemand('miyagiMembers');
   var added=ops.length-failed.length;
+  if(st&&ops.length>20)st.textContent=stBase+' - Miyagi: '+added+' member'+(added===1?'':'s')+' added'+(failed.length?', '+failed.length+' NOT added':'');
   if(failed.length)alert('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added, but '+failed.length+' could NOT be added:\n\n'+failed.slice(0,20).join('\n')+(failed.length>20?'\n...and '+(failed.length-20)+' more':'')+'\n\nUpload the Length of Membership report again to retry - members already added are not touched.');
   else toast('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added');
 }
@@ -8597,7 +8614,11 @@ function renderMiyagiTab(){
   h+='</div>';
 
   if(!filtered.length){
-    h+='<div class="empty">No members match this filter</div></div>';
+    // Say plainly when nothing has been uploaded for these chapters yet - "no members
+    // match this filter" read like a broken filter.
+    var scopeHasNone=filtChapter?!allMembers.some(function(m){return m.chapter===filtChapter;}):!allMembers.length;
+    var scopeName=filtChapter||(visChaps.length===1?visChaps[0]:'your chapters');
+    h+='<div class="empty">'+(scopeHasNone?'No Miyagi members have been uploaded for '+esc(scopeName)+' yet.':'No members match this filter')+'</div></div>';
     el.innerHTML=h;
     return;
   }
