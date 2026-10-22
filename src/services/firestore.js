@@ -12,7 +12,9 @@ const PUBLIC_MEMBER_FIELDS = [
   "reportsTo",
   "chapterReportsTo",
   "seniorDirectorId",
-  "areaDirectorId"
+  "areaDirectorId",
+  // When the PIN was last set: sessions signed before it are ended (see routeApi).
+  "pinChangedAt"
 ];
 
 // The subset the pre-login dropdown needs. Narrower than PUBLIC_MEMBER_FIELDS
@@ -32,8 +34,10 @@ const META_DOCS = new Set([
   "tlr"
 ]);
 
-// meta/config holds the Sr. DC master PIN, which must never be serialised to a client.
-const META_PRIVATE_FIELDS = { config: ["srPin"] };
+// meta/config holds the BNI Office master PIN, which must never be serialised to a
+// client - neither the legacy plaintext `srPin` nor its bcrypt `srPinHash` (a hash can
+// be brute-forced offline in minutes when the PIN is a few digits).
+const META_PRIVATE_FIELDS = { config: ["srPin", "srPinHash"] };
 
 // Collections every signed-in client needs on load. Deliberately excludes the two
 // largest, `miyagiMembers` (~1.3k docs) and `activityLog` (~900 and unbounded):
@@ -127,6 +131,7 @@ export async function setMetaDoc(docId, data, merge = true) {
   // Every meta write funnels through here, so this is the one place that has to drop
   // the cached copy of that document.
   invalidateSnapshotCache(docId);
+  await publishCacheStamps();
   return getMetaDoc(docId);
 }
 
@@ -136,10 +141,14 @@ export async function setMetaDoc(docId, data, merge = true) {
 // dues and traffic-light scores.
 const SCOPED_META_ROWS = {
   dues: { listField: "members", chapterField: "chapter" },
-  tlr: { listField: "rows", chapterField: "name" }
+  tlr: { listField: "rows", chapterField: "name" },
+  // Member names and join dates for every chapter; only the Miyagi sync reads it, and
+  // that only for the user's own chapters.
+  lengthOfMembership: { listField: "rows", chapterField: "chapter" }
 };
 
-function scopeMetaDoc(user, docId, doc) {
+// Also used by GET /api/meta/:id, which must return exactly what the snapshot would.
+export function scopeMetaDoc(user, docId, doc) {
   const spec = SCOPED_META_ROWS[docId];
   if (!spec || !doc) return doc;
   const rows = doc[spec.listField];
@@ -166,19 +175,84 @@ function scopeMetaDoc(user, docId, doc) {
 // only weeklyData, so the next poll re-reads ~230 docs instead of the entire snapshot.
 // Previously every write invalidated everything, which - because every write also logs
 // activity - meant the full dataset was re-read continuously during normal use.
+//
+// The cache lives in each server instance's memory, and Netlify runs several instances
+// side by side. Dropping an entry after a write only reached the instance that took the
+// write; the others kept serving their old copy for up to the full TTL, so a save could
+// look lost - and be written back over - when the next request landed elsewhere. Every
+// write therefore also records a new "stamp" for the names it changed in one shared
+// document (_system/cacheStamps). Each request re-reads that one document and drops any
+// cached copy whose stamp has moved, so a change shows everywhere on the next request
+// at the cost of one read, instead of re-reading the data itself.
 const RAW_SNAPSHOT_TTL_MS = Number(process.env.SNAPSHOT_CACHE_MS || 300000);
-const colCache = new Map();   // name  -> { rows, expiresAt }
-const metaCache = new Map();  // docId -> { doc, expiresAt }
+const colCache = new Map();   // name  -> { value, stamp, expiresAt }
+const metaCache = new Map();  // docId -> { value, stamp, expiresAt }
 const inFlight = new Map();   // key   -> Promise
 
-// Pass the collection/meta names that actually changed. No argument clears everything
-// (used only where the change is genuinely global).
-export function invalidateSnapshotCache(names) {
-  if (!names) { colCache.clear(); metaCache.clear(); return; }
-  for (const name of [].concat(names)) { colCache.delete(name); metaCache.delete(name); }
+// The activity log changes on every click and is only an audit view, so its changes are
+// kept to the local instance: sharing them would make every instance re-read 500
+// entries after each action anywhere in the region.
+const LOCAL_ONLY_STAMPS = new Set(["activityLog"]);
+const knownStamps = new Map();    // name -> latest stamp this instance knows of
+const pendingStamps = new Map();  // name -> stamp not yet written to the shared document
+
+function stampsRef() {
+  return getDb().collection("_system").doc("cacheStamps");
 }
 
-function fresh(entry) { return entry && entry.expiresAt > Date.now(); }
+function newStamp() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+// Pass the collection/meta names that actually changed. No argument clears everything
+// (used only where the change is genuinely global). The new stamps are queued here and
+// written by publishCacheStamps(), which writeActivity() awaits - every write path ends
+// by logging its activity, so the stamps land before the response is sent.
+export function invalidateSnapshotCache(names) {
+  const changed = names
+    ? [].concat(names)
+    : [...SNAPSHOT_COLLECTIONS, ...ON_DEMAND_COLLECTIONS, ...SNAPSHOT_META_DOCS];
+  for (const name of changed) {
+    colCache.delete(name);
+    metaCache.delete(name);
+    const stamp = newStamp();
+    knownStamps.set(name, stamp);
+    if (!LOCAL_ONLY_STAMPS.has(name)) pendingStamps.set(name, stamp);
+  }
+}
+
+// A serverless instance can be frozen as soon as its response is sent, so this has to
+// be awaited rather than left running in the background.
+export async function publishCacheStamps() {
+  if (!pendingStamps.size) return;
+  const update = Object.fromEntries(pendingStamps);
+  pendingStamps.clear();
+  try {
+    await stampsRef().set(update, { merge: true });
+  } catch (err) {
+    // Not fatal: the data itself is saved; other instances fall back to the TTL.
+    console.error("Could not publish cache stamps", err);
+  }
+}
+
+// Picks up writes made on other instances. Concurrent callers share one read.
+function syncCacheStamps() {
+  return once("stamps", async () => {
+    try {
+      const doc = await stampsRef().get();
+      for (const [name, stamp] of Object.entries(doc.exists ? doc.data() : {})) {
+        // A stamp of our own still waiting to be written is newer than what was read.
+        if (!pendingStamps.has(name)) knownStamps.set(name, stamp);
+      }
+    } catch (err) {
+      console.error("Could not read cache stamps", err);
+    }
+  });
+}
+
+function fresh(name, entry) {
+  return Boolean(entry) && entry.expiresAt > Date.now() && entry.stamp === knownStamps.get(name);
+}
 
 // Coalesces concurrent callers for the same key onto one Firestore read.
 function once(key, fn) {
@@ -188,49 +262,65 @@ function once(key, fn) {
   return p;
 }
 
-async function cachedCollection(name) {
-  const hit = colCache.get(name);
-  if (fresh(hit)) return hit.rows;
-  return once("c:" + name, async () => {
+// Serves `name` from `cache`, loading it when missing, expired, or stamped by a newer
+// write. The stamp is taken before the read, so a write that lands mid-read leaves the
+// result marked stale; and it is part of the in-flight key, so a request made after a
+// write never joins a read that started before it.
+async function cached(cache, prefix, name, load, { checkStamps = true } = {}) {
+  if (checkStamps) await syncCacheStamps();
+  const hit = cache.get(name);
+  if (fresh(name, hit)) return hit.value;
+  const stamp = knownStamps.get(name);
+  return once(`${prefix}:${name}:${stamp}`, async () => {
+    const value = await load();
+    if (knownStamps.get(name) === stamp) {
+      cache.set(name, { value, stamp, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
+    }
+    return value;
+  });
+}
+
+function cachedCollection(name, options) {
+  return cached(colCache, "c", name, async () => {
     const orderBy = name === "chapters" ? { field: "order" }
       : name === "weeklyData" ? { field: "date", direction: "desc" }
         : null;
-    let rows = await listCollection(name, orderBy);
-    if (name === "members") rows = rows.map(m => ({ id: m.id, ...stripPrivateMember(m) }));
-    colCache.set(name, { rows, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
-    return rows;
-  });
+    const rows = await listCollection(name, orderBy);
+    return name === "members" ? rows.map(m => ({ id: m.id, ...stripPrivateMember(m) })) : rows;
+  }, options);
 }
 
 // The shared, credential-free copy of a snapshot collection (members have pinHash
 // stripped). Lets other readers of the same data - the login directory - reuse the
-// snapshot's cached read instead of paying for their own.
+// snapshot's cached read instead of paying for their own. The login directory is
+// unauthenticated and only lists names, so it skips the stamp check: a public page must
+// not be able to spend a Firestore read per hit, and a name changed seconds ago can wait.
 export function cachedSnapshotCollection(name) {
-  return cachedCollection(name);
+  return cachedCollection(name, { checkStamps: false });
 }
 
 // Shared cache for the on-demand collections (miyagiMembers, activityLog). Without it
 // every DC opening the Miyagi tab pays its own ~1.3k reads; with it they share one
 // fetch for the TTL. Safe to key by name: these are not in the snapshot, so there is no
 // collision with cachedCollection's differently-shaped reads.
-export async function cachedListCollection(name, orderBy, limit) {
-  const hit = colCache.get(name);
-  if (fresh(hit)) return hit.rows;
-  return once("c:" + name, async () => {
-    const rows = await listCollection(name, orderBy, limit);
-    colCache.set(name, { rows, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
-    return rows;
-  });
+export function cachedListCollection(name, orderBy, limit) {
+  return cached(colCache, "c", name, () => listCollection(name, orderBy, limit));
 }
 
-async function cachedMeta(id) {
-  const hit = metaCache.get(id);
-  if (fresh(hit)) return hit.doc;
-  return once("m:" + id, async () => {
-    const doc = await getMetaDoc(id);
-    metaCache.set(id, { doc, expiresAt: Date.now() + RAW_SNAPSHOT_TTL_MS });
-    return doc;
-  });
+function cachedMeta(id) {
+  return cached(metaCache, "m", id, () => getMetaDoc(id));
+}
+
+// The current account record behind a session, checked on every signed-in request. It
+// comes from the shared members cache, which every account change stamps, so a deleted,
+// reassigned or re-PINned account is seen by every server instance on its next request.
+export async function currentMember(id) {
+  return (await cachedCollection("members")).find(m => m.id === id) || null;
+}
+
+// meta/config without its private fields; holds when the BNI Office PIN last changed.
+export function currentConfig() {
+  return cachedMeta("config");
 }
 
 // Unscoped, credential-free snapshot. Safe to share: members are stripped of pinHash
@@ -303,7 +393,7 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
     reportMonth: monthIso,
     monthLabel: monthLabel || "",
     uploadedAt: new Date().toISOString().slice(0, 10),
-    uploadedBy: user?.name || "system"
+    uploadedBy: await actorName(user)
   });
 
   const byChapter = new Map();
@@ -332,22 +422,59 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
 
   // The TLR upload rewrites meta/tlr and touches that month's weekly entries.
   invalidateSnapshotCache(["tlr", "weeklyData"]);
+  await publishCacheStamps();
   return { chaptersUpdated: rows.length, weeklyEntriesUpdated: updated, month: monthIso };
 }
 
-export async function writeActivity(user, action, details = {}) {
+// Must match SR_LOGIN_ID and the name given at login in src/api/handlers.js.
+const BNI_OFFICE_ID = "__srdc__";
+const BNI_OFFICE_NAME = "BNI Office Account";
+
+// The display name of whoever made a request. Session tokens carry only the account id
+// (`sub`), so without this lookup every server-written record was attributed to a raw
+// id such as "sa-bni-calibos", or to "system".
+async function actorName(user) {
+  if (!user) return "system";
+  if (user.name) return user.name;
+  const id = user.sub || user.id;
+  if (!id) return "system";
+  if (id === BNI_OFFICE_ID) return BNI_OFFICE_NAME;
+  const hit = colCache.get("members");
+  let member = fresh("members", hit) ? hit.value.find(m => m.id === id) : null;
+  if (!member) {
+    try {
+      const doc = await getDb().collection("members").doc(id).get();
+      member = doc.exists ? doc.data() : null;
+    } catch {
+      member = null;
+    }
+  }
+  return member?.name || id;
+}
+
+// `source` tells apart what the server itself recorded ("server") from entries a browser
+// reported through POST /api/activity ("browser"), which can't be taken as evidence.
+export async function writeActivity(user, action, details = {}, { source = "server" } = {}) {
   // Logging an action does not change any snapshot collection, so it must NOT drop the
   // shared cache - doing so re-read the entire dataset on every click. Callers that
   // actually change data invalidate their own collection (see routeApi).
   invalidateSnapshotCache("activityLog");
-  await getDb().collection("activityLog").add({
-    team: "bni_chapter_pulse",
-    action,
-    details,
-    userName: user?.name || user?.sub || "system",
-    userRole: user?.role || "system",
-    chapter: user?.chapter || null,
-    timestamp: new Date().toISOString(),
-    createdAt: FieldValue.serverTimestamp()
-  });
+  const userName = await actorName(user);
+  await Promise.all([
+    // Every write path ends here, so this is where the stamps of what it changed are
+    // shared with the other server instances (see invalidateSnapshotCache).
+    publishCacheStamps(),
+    getDb().collection("activityLog").add({
+      team: "bni_chapter_pulse",
+      action,
+      details,
+      userName,
+      userId: user?.sub || user?.id || null,
+      userRole: user?.role || "system",
+      source,
+      chapter: user?.chapter || null,
+      timestamp: new Date().toISOString(),
+      createdAt: FieldValue.serverTimestamp()
+    })
+  ]);
 }

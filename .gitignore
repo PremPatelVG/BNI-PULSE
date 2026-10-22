@@ -64,3 +64,6 @@ __pycache__/
 
 # DNA Oct-26 leadership change: inputs, backups and generated PINs (business data / credentials)
 scripts/.dna-oct26/
+
+# Full Firestore backups (contain PIN hashes, phone numbers and member data)
+backups/

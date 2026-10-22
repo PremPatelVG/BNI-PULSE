@@ -11,12 +11,15 @@ import {
   buildSnapshot,
   cachedListCollection,
   cachedSnapshotCollection,
+  currentConfig,
+  currentMember,
   docToData,
   getMetaDoc,
   getRawMetaDoc,
   invalidateSnapshotCache,
   listCollection,
   loginDirectoryMember,
+  scopeMetaDoc,
   setMetaDoc,
   stripPrivateMember,
   writeActivity
@@ -35,22 +38,71 @@ import {
   scopedChapterNames
 } from "../services/scope.js";
 
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 const COLLECTION_READ_ALLOWLIST = new Set(["attendance", "renewalsDone", "renewalsDropped", "visitorPipeline", "miyagiMembers", "activityLog"]);
 const COLLECTION_WRITE_ALLOWLIST = new Set(["attendance", "renewalsDone", "renewalsDropped", "visitorPipeline", "miyagiMembers"]);
 const COLLECTION_DELETE_ALLOWLIST = new Set(["renewalsDropped", "visitorPipeline", "miyagiMembers"]);
 
+// Who may write each meta document through PUT /api/meta/:id. Anything not listed here
+// is region-wide and Area Director only, so a new document is locked down by default.
 // Meta documents only Area/Senior Directors may change.
 const ADMIN_META_DOCS = new Set(["branding", "config"]);
 // Meta documents holding per-chapter rows, merged server-side so a writer can only
-// ever replace the slice of the document their scope covers.
-const SCOPED_META_DOCS = { dues: { listField: "members", chapterField: "chapter" } };
-// The TLR is region-wide and only the Area Director / BNI Office account may upload it.
-const AD_ONLY_META = new Set(["tlr"]);
+// ever replace the slice of the document their scope covers. The Length-of-Membership
+// list is one of them: written whole, a Senior Director's upload of their own chapters
+// wiped every other chapter's rows.
+const SCOPED_META_DOCS = {
+  dues: { listField: "members", chapterField: "chapter" },
+  lengthOfMembership: { listField: "rows", chapterField: "chapter" }
+};
+// Meta documents keyed by chapter: each top-level key names the chapter it belongs to,
+// and a writer may only set keys for chapters they can write. Goals are edited by each
+// chapter's own DC/SA as well as by leadership.
+const CHAPTER_KEYED_META_DOCS = {
+  chapterGoals: key => key,
+  // `<Chapter>_<YYYY-MM>` or `<Chapter>_<YYYY-MM>_<field>`; chapter names may contain "_".
+  monthlyTargets: key => (String(key).match(/^(.+)_\d{4}-\d{2}(?:_[A-Za-z]+)?$/) || [])[1] || null
+};
 
 const SR_LOGIN_ID = "__srdc__";
 
+// POST /api/activity lets the browser add context to the log (member names, scores...).
+// It used to accept any action name and any details, so anyone could write entries that
+// looked like real deletions or Miyagi saves. Now only the browser's own action names
+// are accepted, their details are kept small and flat, and they are stored with
+// source "browser" - the server's own entries (source "server") are the evidence.
+const BROWSER_ACTIONS = new Set([
+  "attendance_marked", "branding_updated", "dues_report_uploaded", "fee_compliance_toggled",
+  "length_of_membership_uploaded", "miyagi_checkin_submitted", "miyagi_checkpoint_toggled",
+  "miyagi_checkpoints_saved", "miyagi_member_dropped", "monthly_target_saved",
+  "pipeline_contact_deleted", "pipeline_stage_changed", "quick_update", "renewal_drop_undone",
+  "renewal_marked_done", "renewal_marked_dropped", "sr_call_day_changed"
+]);
+// Recorded by the server route that performs the change; a browser copy would only be a
+// duplicate line in the log.
+const SERVER_LOGGED_ACTIONS = new Set(["chapter_saved", "member_deleted", "weekly_entry_saved", "weekly_entry_deleted"]);
+
+function cleanActivityDetails(details) {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return {};
+  const out = {};
+  for (const [key, value] of Object.entries(details).slice(0, 12)) {
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(key)) continue;
+    if (typeof value === "string") out[key] = value.slice(0, 200);
+    else if (typeof value === "number" || typeof value === "boolean" || value === null) out[key] = value;
+  }
+  return out;
+}
+
 // Accounts a Senior Director may create, edit or delete.
 const CHAPTER_ACCOUNT_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
+
+// The chapter fields a Senior Director may set (what the Settings chapter form sends).
+const SRDC_CHAPTER_FIELDS = new Set(["id", "name", "day", "tenure", "target", "order", "openingMembers"]);
 
 function memberChapters(m) {
   if (!m) return [];
@@ -149,9 +201,77 @@ async function srPinMatches(pin) {
   return null;
 }
 
-async function login(body) {
-  const { memberId, pin } = body || {};
-  if (!memberId || !pin) throw badRequest("memberId and pin are required");
+// PIN sign-in is rate-limited. PINs can be 4 digits and the login directory lists every
+// account, so without a limit any account falls to at most 10,000 guesses. Wrong PINs
+// are counted per account and per client IP in Firestore (shared by every server
+// instance) and checked before the PIN is compared, so a locked-out guess also costs no
+// bcrypt work. A correct PIN clears the account's count, never the IP's - otherwise an
+// attacker could reset it by signing in to their own account.
+const LOGIN_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
+// [wrong PINs within the window, minutes locked]: the lock grows with repeated failures.
+const ACCOUNT_LOCK_STEPS = [[5, 15], [10, 60], [15, 240]];
+// One office network can carry many people's honest typos, so the IP limit is looser.
+const IP_LOCK_STEPS = [[30, 30], [60, 240]];
+
+function throttleRef(key) {
+  return getDb().collection("loginThrottle").doc(key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120));
+}
+
+function lockMinutes(failures, steps) {
+  let minutes = 0;
+  for (const [count, mins] of steps) if (failures >= count) minutes = mins;
+  return minutes;
+}
+
+async function readThrottle(key) {
+  if (!key) return null;
+  const doc = await throttleRef(key).get();
+  return doc.exists ? doc.data() : null;
+}
+
+function assertNotLocked(state, who) {
+  const until = Date.parse(state?.lockedUntil || "");
+  if (until > Date.now()) {
+    const minutes = Math.ceil((until - Date.now()) / 60000);
+    throw httpError(429, `Too many wrong attempts ${who}. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`);
+  }
+}
+
+async function recordFailure(key, state, steps) {
+  if (!key) return;
+  const now = Date.now();
+  const fresh = state && now - Date.parse(state.firstFailureAt || 0) < LOGIN_FAILURE_WINDOW_MS;
+  const failures = fresh ? (state.failures || 0) + 1 : 1;
+  const minutes = lockMinutes(failures, steps);
+  await throttleRef(key).set({
+    failures,
+    firstFailureAt: fresh ? state.firstFailureAt : new Date(now).toISOString(),
+    lastFailureAt: new Date(now).toISOString(),
+    lockedUntil: minutes ? new Date(now + minutes * 60000).toISOString() : null
+  });
+}
+
+async function login(body, ip) {
+  const memberId = body?.memberId;
+  const pin = body?.pin == null ? "" : String(body.pin);
+  if (typeof memberId !== "string" || !/^[^/]{1,200}$/.test(memberId) || !pin) throw badRequest("memberId and pin are required");
+
+  const accountKey = `acct_${memberId}`;
+  const ipKey = ip ? `ip_${ip}` : null;
+  const [accountState, ipState] = await Promise.all([readThrottle(accountKey), readThrottle(ipKey)]);
+  assertNotLocked(ipState, "from this network");
+  assertNotLocked(accountState, "for this account");
+
+  // Wrong PIN: count it against the IP always, and against the account only when the
+  // account exists - made-up ids must not each create a throttle record.
+  const wrongPin = async accountExists => {
+    await Promise.all([
+      recordFailure(ipKey, ipState, IP_LOCK_STEPS),
+      accountExists ? recordFailure(accountKey, accountState, ACCOUNT_LOCK_STEPS) : null
+    ]);
+    throw httpError(401, "Incorrect PIN");
+  };
+  const clearAccount = async () => { if (accountState) await throttleRef(accountKey).delete(); };
 
   if (memberId === SR_LOGIN_ID) {
     const result = await srPinMatches(pin);
@@ -160,11 +280,8 @@ async function login(body) {
       err.status = 503;
       throw err;
     }
-    if (!result) {
-      const err = new Error("Incorrect PIN");
-      err.status = 401;
-      throw err;
-    }
+    if (!result) await wrongPin(true);
+    await clearAccount();
     // BNI Office master account: full region-wide access (Area Director role) - the
     // top of the system, can do anything an Area Director can across every chapter.
     const user = { id: SR_LOGIN_ID, name: "BNI Office Account", role: "ad", chapter: null, chapters: [] };
@@ -172,11 +289,8 @@ async function login(body) {
   }
 
   const doc = await getDb().collection("members").doc(memberId).get();
-  if (!doc.exists || !(await pinMatches(doc.data(), pin))) {
-    const err = new Error("Incorrect PIN");
-    err.status = 401;
-    throw err;
-  }
+  if (!doc.exists || !(await pinMatches(doc.data(), pin))) await wrongPin(doc.exists);
+  await clearAccount();
 
   const user = publicUser(doc.id, doc.data());
   return ok({ token: signSession(user), user });
@@ -244,15 +358,36 @@ async function writeScopedMeta(user, docId, body) {
   const { [listField]: _ignored, ...rest } = body || {};
   const meta = await setMetaDoc(docId, { ...rest, [listField]: [...preserved, ...incoming] }, true);
   await writeActivity(user, "meta_saved", { docId, rowCount: incoming.length });
-  return ok({ meta });
+  // The stored document is region-wide; the writer gets back only their own chapters.
+  return ok({ meta: scopeMetaDoc(user, docId, meta) });
 }
 
 // method: "GET" | "POST" | ... ; segments: path below /api, already decoded.
-export async function routeApi({ method, segments, body, authorization, query }) {
+// A session token is valid for 12 hours, but in that time its account can be deleted,
+// moved to other chapters or have its PIN reset. So every request is checked against the
+// current account: a deleted account or a PIN changed after sign-in ends the session, and
+// the role and chapters always come from the record, not the token.
+async function refreshSessionUser(user) {
+  const changedAfterSignIn = changedAt => Math.floor((Date.parse(changedAt || "") || 0) / 1000) > (user.iat || 0);
+  if (user.id === SR_LOGIN_ID) {
+    if (changedAfterSignIn((await currentConfig()).srPinChangedAt)) throw httpError(401, "The BNI Office PIN was changed - please sign in again");
+    return;
+  }
+  const member = await currentMember(user.id);
+  if (!member) throw httpError(401, "This account no longer exists");
+  if (changedAfterSignIn(member.pinChangedAt)) throw httpError(401, "Your PIN was changed - please sign in again");
+  user.role = member.role;
+  user.chapter = member.chapter || null;
+  user.chapters = member.chapters || [];
+}
+
+// `ip` is the client's address as seen by the hosting adapter (used only to rate-limit
+// PIN sign-in); it may be missing, e.g. in local development.
+export async function routeApi({ method, segments, body, authorization, query, ip }) {
   assertRuntimeSecrets();
   const [first, second, third] = segments;
 
-  if (first === "auth" && second === "login" && method === "POST") return login(body);
+  if (first === "auth" && second === "login" && method === "POST") return login(body, ip);
   if (first === "auth" && second === "login-directory" && method === "GET") return loginDirectory();
   if (first === "auth" && second === "branding" && method === "GET") return publicBranding();
 
@@ -261,6 +396,7 @@ export async function routeApi({ method, segments, body, authorization, query })
   // identity checks written against the member shape - "is this the BNI Office account?"
   // - see the real id. Without it user.id was always undefined on signed-in requests.
   if (user && user.id == null) user.id = user.sub;
+  await refreshSessionUser(user);
 
   if (first === "auth" && second === "me" && method === "GET") return ok({ user });
 
@@ -272,7 +408,7 @@ export async function routeApi({ method, segments, body, authorization, query })
     if (user?.role !== "ed") throw forbidden("Only the Executive Director can reset the BNI Office PIN");
     const pin = String(body?.pin || "");
     if (pin.length < 4) throw badRequest("PIN must be at least 4 digits");
-    await setMetaDoc("config", { srPinHash: await bcrypt.hash(pin, 12), srPin: null }, true);
+    await setMetaDoc("config", { srPinHash: await bcrypt.hash(pin, 12), srPin: null, srPinChangedAt: new Date().toISOString() }, true);
     await writeActivity(user, "sr_pin_changed", {});
     return ok({ ok: true });
   }
@@ -304,11 +440,32 @@ export async function routeApi({ method, segments, body, authorization, query })
 
   if (first === "chapters" && method === "POST") {
     assertAdmin(user);
-    if (!body?.name) throw badRequest("Chapter name is required");
-    await getDb().collection("chapters").doc(body.id || body.name).set(body, { merge: Boolean(body.id) });
+    const name = String(body?.name || "").trim();
+    if (!name) throw badRequest("Chapter name is required");
+    const ref = getDb().collection("chapters").doc(body.id || name);
+    const before = await ref.get();
+    const prev = before.exists ? before.data() : null;
+    // "Add Chapter" with the name of an existing chapter used to replace that chapter's
+    // document outright, losing its assignments and opening count.
+    if (!body.id && prev) throw httpError(409, `A chapter named "${name}" already exists - use Edit to change it`);
+    if (body.id && !prev) throw notFound("Chapter not found");
+    // Weekly entries, accounts, Miyagi, renewals, dues and the TLR all refer to a chapter
+    // by its name, so renaming it here would cut it off from all of its data.
+    if (prev && prev.name && prev.name !== name) {
+      throw badRequest(`Renaming a chapter is not supported here: all of ${prev.name}'s data is stored under that name`);
+    }
+    if (!isAreaDirector(user)) {
+      // A Senior Director edits only the chapters they oversee, and only its basic
+      // details - who runs a chapter is assigned by the Area Director.
+      if (prev) assertCanWriteChapter(user, prev.name);
+      const notAllowed = Object.keys(body).filter(key => !SRDC_CHAPTER_FIELDS.has(key));
+      if (notAllowed.length) throw forbidden(`Only the Area Director can change: ${notAllowed.join(", ")}`);
+    }
+    const { id: _id, ...chapter } = { ...body, name };
+    await ref.set(chapter, { merge: Boolean(prev) });
     invalidateSnapshotCache("chapters");
-    await writeActivity(user, "chapter_saved", { chapterName: body.name });
-    return ok({ chapter: body }, 201);
+    await writeActivity(user, "chapter_saved", { chapterName: name, created: !prev });
+    return ok({ chapter: { id: ref.id, ...chapter } }, 201);
   }
 
   if (first === "members" && method === "GET") {
@@ -358,6 +515,7 @@ export async function routeApi({ method, segments, body, authorization, query })
     if (pin) {
       if (String(pin).length < 4) throw badRequest("PIN must be at least 4 digits");
       member.pinHash = await bcrypt.hash(String(pin), 12);
+      member.pinChangedAt = new Date().toISOString();
     }
     const docId = id || `m${Date.now()}`;
     await getDb().collection("members").doc(docId).set(member, { merge: Boolean(id) });
@@ -377,7 +535,7 @@ export async function routeApi({ method, segments, body, authorization, query })
     assertCanManageMember(user, [existing.data().role], memberChapters(existing.data()));
     await getDb().collection("members").doc(second).delete();
     invalidateSnapshotCache("members");
-    await writeActivity(user, "member_deleted", { memberId: second });
+    await writeActivity(user, "member_deleted", { memberId: second, memberName: existing.data().name || "" });
     return noContent();
   }
 
@@ -404,23 +562,39 @@ export async function routeApi({ method, segments, body, authorization, query })
     return noContent();
   }
 
-  if (first === "meta" && second && method === "GET") return ok({ meta: await getMetaDoc(second) });
+  // Scoped exactly like the snapshot: without this, a chapter account could fetch every
+  // chapter's dues rows (names, phone numbers) directly from here.
+  if (first === "meta" && second && method === "GET") return ok({ meta: scopeMetaDoc(user, second, await getMetaDoc(second)) });
 
   if (first === "meta" && second && method === "PUT") {
     assertCanWrite(user);
-    if (ADMIN_META_DOCS.has(second)) assertAdmin(user);
-    if (AD_ONLY_META.has(second) && !isAreaDirector(user)) throw forbidden("Only the Area Director / BNI Office account can update the TLR");
     if (SCOPED_META_DOCS[second]) return writeScopedMeta(user, second, body);
+    if (CHAPTER_KEYED_META_DOCS[second]) {
+      const chapterOf = CHAPTER_KEYED_META_DOCS[second];
+      for (const key of Object.keys(body || {})) {
+        const chapterName = chapterOf(key);
+        if (!chapterName) throw badRequest(`"${key}" is not a chapter entry of ${second}`);
+        assertCanWriteChapter(user, chapterName);
+      }
+    } else if (ADMIN_META_DOCS.has(second)) {
+      assertAdmin(user);
+    } else if (!isAreaDirector(user)) {
+      throw forbidden("Only the Area Director / BNI Office account can change region-wide data");
+    }
     // srPin is only settable through the dedicated hashed endpoint above.
     const { srPin: _blockedPin, srPinHash: _blockedHash, ...safeBody } = body || {};
     const meta = await setMetaDoc(second, safeBody, true);
     await writeActivity(user, "meta_saved", { docId: second });
-    return ok({ meta });
+    return ok({ meta: scopeMetaDoc(user, second, meta) });
   }
 
   if (first === "activity" && method === "POST") {
     assertCanWrite(user);
-    await writeActivity(user, String(body?.action || "unknown"), body?.details || {});
+    const action = String(body?.action || "");
+    // The server already records these itself, with authoritative details.
+    if (SERVER_LOGGED_ACTIONS.has(action)) return noContent();
+    if (!BROWSER_ACTIONS.has(action)) throw badRequest("Unknown activity");
+    await writeActivity(user, action, cleanActivityDetails(body?.details), { source: "browser" });
     return noContent();
   }
 

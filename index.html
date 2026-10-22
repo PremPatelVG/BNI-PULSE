@@ -377,7 +377,7 @@ function onSessionExpired(sentWith){
   if(S.user){S.user=null;stopSync();hide('app');show('loginScreen');toast('Your session expired. Please sign in again.',5000);}
 }
 
-async function apiFetch(path,options){
+async function apiRequest(path,options,timeoutMs){
   const opts=Object.assign({},options||{});
   opts.headers=Object.assign({},opts.headers||{});
   const sentWith=AUTH_TOKEN||null;
@@ -386,14 +386,146 @@ async function apiFetch(path,options){
     opts.headers['Content-Type']='application/json';
     opts.body=JSON.stringify(opts.body);
   }
-  const res=await fetch(API_BASE+path,opts);
-  if(res.status===401){onSessionExpired(sentWith);throw new Error('Session expired - please sign in again');}
+  let timer=null;
+  if(timeoutMs&&typeof AbortController!=='undefined'){const ac=new AbortController();opts.signal=ac.signal;timer=setTimeout(function(){ac.abort();},timeoutMs);}
+  let res;
+  try{res=await fetch(API_BASE+path,opts);}
+  catch(e){
+    // No response at all: offline, dropped connection, or our own timeout.
+    const err=new Error(navigator.onLine===false?'No internet connection':(e&&e.name==='AbortError'?'The server took too long to respond':'Could not reach the server'));
+    err.transient=true;throw err;
+  }finally{if(timer)clearTimeout(timer);}
+  if(res.status===401){onSessionExpired(sentWith);const err=new Error('Session expired - please sign in again');err.status=401;throw err;}
   if(res.status===204)return null;
   const text=await res.text();
   let data=null;
-  if(text){try{data=JSON.parse(text);}catch(e){throw new Error('Unexpected response from server');}}
-  if(!res.ok)throw new Error((data&&data.error)||('Request failed ('+res.status+')'));
+  if(text){try{data=JSON.parse(text);}catch(e){const err=new Error('Unexpected response from server');err.status=res.status;err.transient=res.status>=500;throw err;}}
+  if(!res.ok){
+    const err=new Error((data&&data.error)||('Request failed ('+res.status+')'));
+    err.status=res.status;
+    // Gateway errors and timeouts from Netlify mean the request may not have run.
+    err.transient=res.status===502||res.status===503||res.status===504;
+    throw err;
+  }
   return data;
+}
+
+// ── SAVES ──────────────────────────────────────────────────────────────────
+// Every save is a request to the server, and a save is only reported as done once the
+// server has confirmed it. On a weak (mobile) connection that used to mean a save could
+// fail and be lost without anyone noticing, so writes are handled more carefully:
+//  - PUT and DELETE are idempotent, so one that failed in transit (no response, a
+//    timeout, or a 502/503/504) is retried before giving up.
+//  - While a save is in flight the sync pill says "Saving...", and closing the tab or
+//    logging out asks first.
+//  - A save refused because the session expired is kept in this browser and offered
+//    again after the same person signs back in, instead of vanishing with the form.
+let PENDING_WRITES=0;
+const WRITE_TIMEOUT_MS=30000;
+const WRITE_RETRY_DELAYS_MS=[1500,4000];
+const UNSAVED_KEY='bniPulseUnsavedWrites';
+
+async function apiFetch(path,options){
+  const method=String((options&&options.method)||'GET').toUpperCase();
+  if(method==='GET')return apiRequest(path,options);
+  const idempotent=method==='PUT'||method==='DELETE';
+  const who=S.user&&S.user.id;
+  // The client-side audit entry that follows each save is not the user's data; the
+  // server logs every write itself, so it doesn't hold up closing the tab.
+  const tracked=path!=='/activity';
+  if(tracked){PENDING_WRITES++;updateSavingIndicator();}
+  try{
+    for(let attempt=0;;attempt++){
+      try{return await apiRequest(path,options,WRITE_TIMEOUT_MS);}
+      catch(e){
+        if(e.status===401&&idempotent&&who&&!/^\/auth\//.test(path))stashUnsavedWrite(who,method,path,options&&options.body);
+        if(!idempotent||!e.transient||attempt>=WRITE_RETRY_DELAYS_MS.length){
+          if(e.transient)e.message+='. Please try again.';
+          throw e;
+        }
+        await new Promise(function(r){setTimeout(r,WRITE_RETRY_DELAYS_MS[attempt]);});
+      }
+    }
+  }finally{if(tracked){PENDING_WRITES--;updateSavingIndicator();}}
+}
+
+function updateSavingIndicator(){
+  const txt=document.getElementById('syncTxt');if(!txt)return;
+  if(PENDING_WRITES>0)txt.textContent='Saving...';
+  else setSyncState(SYNC_STATE);
+}
+
+function readUnsavedWrites(){
+  try{const v=JSON.parse(localStorage.getItem(UNSAVED_KEY)||'[]');return Array.isArray(v)?v:[];}catch(e){return[];}
+}
+function writeUnsavedWrites(list){
+  try{if(list.length)localStorage.setItem(UNSAVED_KEY,JSON.stringify(list));else localStorage.removeItem(UNSAVED_KEY);}catch(e){}
+}
+function stashUnsavedWrite(userId,method,path,body){
+  const list=readUnsavedWrites();
+  list.push({userId:userId,method:method,path:path,body:body===undefined?null:body,at:new Date().toISOString()});
+  writeUnsavedWrites(list);
+}
+function describeUnsavedWrite(w){
+  const p=w.path.split('/').filter(Boolean).map(function(s){try{return decodeURIComponent(s);}catch(e){return s;}});
+  const b=w.body||{};
+  if(p[0]==='weekly-data')return(w.method==='DELETE'?'Delete weekly entry':'Weekly entry')+' - '+p[1]+', '+fmtD(p[2]);
+  if(p[0]==='miyagiMembers')return'Miyagi progress - '+(b.name||p[1]);
+  if(p[0]==='renewalsDone')return'Renewal marked done - '+(b.name||p[1]);
+  if(p[0]==='renewalsDropped')return(w.method==='DELETE'?'Undo renewal drop':'Renewal marked dropped')+' - '+(b.name||p[1]);
+  if(p[0]==='visitorPipeline')return'Visitor pipeline - '+(b.name||p[1]);
+  if(p[0]==='attendance')return'Attendance - week '+p[1];
+  if(p[0]==='meta')return'Settings - '+p[1];
+  return w.method+' '+w.path;
+}
+
+// Called once the app has started for a signed-in user: re-offers that user's saves that
+// were refused when their session expired. Other users' entries are left untouched.
+async function offerUnsavedWrites(){
+  if(!S.user||isLocalPreviewMode())return;
+  const all=readUnsavedWrites();
+  const cutoff=Date.now()-7*86400000;
+  const mine=all.filter(function(w){return w.userId===S.user.id&&Date.parse(w.at)>cutoff;});
+  const others=all.filter(function(w){return w.userId!==S.user.id&&Date.parse(w.at)>cutoff;});
+  if(!mine.length){writeUnsavedWrites(others);return;}
+  const lines=mine.slice(0,10).map(function(w){return'- '+describeUnsavedWrite(w)+' ('+new Date(w.at).toLocaleString()+')';}).join('\n');
+  const go=confirm('You have '+mine.length+' change'+(mine.length===1?'':'s')+' that could not be saved because your session had expired:\n\n'+lines+(mine.length>10?'\n...and '+(mine.length-10)+' more':'')+'\n\nClick OK to save '+(mine.length===1?'it':'them')+' now, or Cancel to discard.');
+  // Taken out before replaying: a replay refused again is re-stashed by apiFetch.
+  writeUnsavedWrites(others);
+  if(!go)return;
+  let saved=0;const failed=[];
+  for(const w of mine){
+    try{await apiFetch(w.path,{method:w.method,body:w.body===null?undefined:w.body});saved++;}
+    catch(e){failed.push(describeUnsavedWrite(w)+': '+e.message);}
+  }
+  await refreshSnapshot();
+  if(typeof MIYAGI_LOADED!=='undefined'&&MIYAGI_LOADED)await reloadOnDemand('miyagiMembers');
+  if(failed.length)alert(saved+' saved, '+failed.length+' NOT saved:\n\n'+failed.join('\n'));
+  else toast(saved+' unsaved change'+(saved===1?'':'s')+' saved',5000);
+}
+
+// Unsaved work in this browser: a save still in flight, Miyagi ticks not yet saved, or
+// a weekly entry typed but not saved.
+function hasUnsavedWork(){
+  return PENDING_WRITES>0||(typeof MIYAGI_PENDING!=='undefined'&&Object.keys(MIYAGI_PENDING).length>0)||ENTRY_DIRTY;
+}
+let ENTRY_DIRTY=false;
+if(typeof window.addEventListener==='function'){
+  window.addEventListener('beforeunload',function(e){
+    if(!S.user||!hasUnsavedWork())return;
+    e.preventDefault();e.returnValue='';
+  });
+}
+// Typing into the weekly entry form marks it unsaved (date/chapter pickers alone don't).
+if(typeof document.addEventListener==='function'){
+  ['input','change'].forEach(function(type){
+    document.addEventListener(type,function(e){
+      const t=e.target;
+      if(!t||!t.closest||!t.closest('#tab-entry'))return;
+      if(t.id==='eDate'||t.id==='eChapter')return;
+      ENTRY_DIRTY=true;
+    },true);
+  });
 }
 
 // ── FIRESTORE-SHAPED FACADE OVER THE API ───────────────────────────────────
@@ -2196,6 +2328,9 @@ function showLoginErr(detail){
   document.getElementById('loginPin').focus();
 }
 function logout(){
+  if(hasUnsavedWork()&&!confirm(PENDING_WRITES>0?'A save is still in progress. Log out anyway? It may not be saved.':'You have changes that are not saved yet (a weekly entry or Miyagi ticks). Log out anyway and lose them?'))return;
+  ENTRY_DIRTY=false;
+  if(typeof MIYAGI_PENDING!=='undefined')MIYAGI_PENDING={};
   S.unsubs.forEach(u=>u());S.unsubs=[];
   stopSync();
   resetOnDemandCollections();
@@ -2232,7 +2367,11 @@ function startApp(){
   buildNav();
   if(isLocalPreviewMode())refresh();
   else subAll();
+  // A fresh sign-in starts with nothing typed; anything kept from an expired session is
+  // re-offered below rather than guarded here.
+  ENTRY_DIRTY=false;
   switchTab('overview');
+  offerUnsavedWrites();
 }
 
 async function prepareLocalPreviewData(){
@@ -2526,6 +2665,11 @@ async function loadLocalDuesRows(){
 
 // NAV ──
 function switchTab(t){
+  // Leaving Data Entry rebuilds the form, which would throw away a typed, unsaved entry.
+  if(S.tab==='entry'&&t!=='entry'&&ENTRY_DIRTY){
+    if(!confirm('Your weekly entry is not saved yet. Leave this page and lose it?'))return;
+    ENTRY_DIRTY=false;
+  }
   S.tab=t;
   closeDrill();
   document.querySelectorAll('.nt').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));
@@ -3471,6 +3615,8 @@ function renderEntry(){
   const el=document.getElementById('tab-entry');if(!el)return;
   if(isViewer()){el.innerHTML='<div class="card"><div class="empty">Viewer access - data entry not available</div></div>';return;}
   const isSd=isSrdc();
+  // A freshly built form holds nothing typed and is not an opened entry.
+  EDITING_ENTRY=null;EDITING_VERSION=null;ENTRY_DIRTY=false;
   el.innerHTML=`
     <div class="card">
       <div class="card-t">Weekly Data Entry</div>
@@ -3673,6 +3819,9 @@ function clearForm(){
   S.visSel=[];updateVisDisplay();document.querySelectorAll('#msDD input').forEach(c=>c.checked=false);
   var nfw=document.getElementById('nameFieldsWrap');if(nfw)nfw.style.display='none';
   var nfc=document.getElementById('nameFieldsContainer');if(nfc)nfc.innerHTML='';
+  // A cleared form is no longer the entry that was opened with Edit: saving it over an
+  // existing entry must ask first.
+  EDITING_ENTRY=null;EDITING_VERSION=null;ENTRY_DIRTY=false;
   onChapterChange();
 }
 
@@ -3683,9 +3832,19 @@ function getMonthlyTarget(ch,month){
 async function saveMonthlyTarget(ch,month,target){
   const key=ch+'_'+month;
   const update={};update[key]=+target||0;
-  S.monthlyTargets[key]=+target||0;
-  try{await db.collection('meta').doc('monthlyTargets').set(update,{merge:true});logActivity('monthly_target_saved',{chapter:ch,month:month,target:+target||0});toast('Target saved');}
-  catch(e){toast('Save failed: '+e.message);}
+  const input=window.event&&window.event.target;
+  try{await db.collection('meta').doc('monthlyTargets').set(update,{merge:true});S.monthlyTargets[key]=+target||0;logActivity('monthly_target_saved',{chapter:ch,month:month,target:+target||0});toast('Target saved');}
+  catch(e){markUnsavedInput(input,S.monthlyTargets[key]);toast('Target NOT saved: '+e.message,6000);}
+}
+
+// A grid cell whose save failed goes back to the value the server still holds and is
+// outlined red, so it can't look saved; typing into it again clears the mark.
+function markUnsavedInput(el,savedValue){
+  if(!el||!('value' in el))return;
+  el.value=savedValue==null?'':savedValue;
+  el.style.outline='2px solid var(--red)';
+  el.title='Not saved - please enter it again';
+  el.addEventListener('input',function clear(){el.style.outline='';el.title='';el.removeEventListener('input',clear);});
 }
 
 // CASCADING MEMBER COUNT ───────────────────────────────────────
@@ -3724,24 +3883,40 @@ function getEntryConv(e){
   return(+e.visitors>0)?Math.round((+e.posVisitors||0)/(+e.visitors)*100):0;
 }
 
+// One weekly save at a time: the save now waits on the server before writing, so a
+// second click during that wait would otherwise start a second save.
+let ENTRY_SAVING=false;
 async function saveEntry(){
+  if(ENTRY_SAVING)return;
+  ENTRY_SAVING=true;
+  try{await saveEntryNow();}finally{ENTRY_SAVING=false;}
+}
+async function saveEntryNow(){
   const ch=isSrdc()?document.getElementById('eChapter')?.value:S.dcActiveChapter||S.user?.chapter;
   const dateEl=document.getElementById('eDate');const date=dateEl?.value;
   if(!ch||!date){toast('Select chapter and date');return;}
   const chObj=S.chapters.find(c=>c.name===ch);
   if(chObj){const expD=DAYS.indexOf(chObj.day);const selD=new Date(date+'T00:00:00').getDay();if(selD!==expD){toast(`Warning: ${ch} meets on ${chObj.day}s`);return;}}
+  // Check against what is on the server right now, not this browser's copy (which can
+  // be minutes old), so an entry someone else just saved is never overwritten unasked.
+  if(!isLocalPreviewMode())await refreshSnapshot();
   const{tue:_tue,fri:_fri}=getWeekTueFri(date);
   const _exist=S.weeklyData.find(e=>e.chapter===ch&&e.date>=_tue&&e.date<=_fri&&e.date!==date);
   if(_exist){if(confirm('Warning: '+ch+' already has data for the week of '+fmtWeekChip(getWeekKey(date))+', submitted by '+_exist.filledBy+' on '+fmtD(_exist.date)+'.\n\nClick OK to edit that entry instead.')){loadEdit(_exist.chapter,_exist.date);}return;}
   // Same chapter + same date already saved, and this isn't an edit opened via "Edit":
   // saving would silently replace someone's entry, so ask first.
   const _same=S.weeklyData.find(e=>e.chapter===ch&&e.date===date);
-  if(_same&&EDITING_ENTRY!==ch+'|'+date){
+  if(_same){
     const _byRaw=_same.updatedBy||_same.filledBy||'someone';
     const _byM=(S.members||[]).find(m=>m.id===_byRaw);
     const _by=_byM?_byM.name:_byRaw;
     const _when=_same.updatedAt||_same.savedAt;
-    if(!confirm('Warning: '+ch+' already has an entry for '+fmtD(date)+', submitted by '+_by+(_when?' on '+fmtD(String(_when).slice(0,10)):'')+'.\n\nClick OK to OVERWRITE it with what you have entered now, or Cancel to keep the existing entry.\n\n(To change it safely, use the Edit button on that entry.)'))return;
+    if(EDITING_ENTRY!==ch+'|'+date){
+      if(!confirm('Warning: '+ch+' already has an entry for '+fmtD(date)+', submitted by '+_by+(_when?' on '+fmtD(String(_when).slice(0,10)):'')+'.\n\nClick OK to OVERWRITE it with what you have entered now, or Cancel to keep the existing entry.\n\n(To change it safely, use the Edit button on that entry.)'))return;
+    }else if((_when||'')!==(EDITING_VERSION||'')){
+      // Opened with Edit, but someone saved this entry again after it was opened.
+      if(!confirm('Warning: '+_by+' changed this '+ch+' entry for '+fmtD(date)+(_when?' at '+new Date(_when).toLocaleString():'')+', after you opened it.\n\nClick OK to OVERWRITE their changes with yours, or Cancel and press Edit again to load the latest version.'))return;
+    }
   }
   // A chapter's first entry sets the member count every later week is built on, so it
   // can't be saved empty or as 0.
@@ -3786,8 +3961,15 @@ async function saveEntry(){
     renderRecentEntries();
     return;
   }
+  let _entrySaved=false;
   try{
     await db.collection('weeklyData').doc(ch+'_'+date).set(entry);
+    _entrySaved=true;
+    // The form now holds exactly what was saved: further saves of it are edits of this
+    // version, and it no longer counts as unsaved work.
+    const _saved=S.weeklyData.find(e=>e.chapter===ch&&e.date===date);
+    EDITING_ENTRY=ch+'|'+date;EDITING_VERSION=_saved?(_saved.updatedAt||_saved.savedAt||''):'';
+    ENTRY_DIRTY=false;
     // Save named EOI-Yes visitors into the persistent visitorPipeline tracker
     // Deterministic IDs (chapter_date_index) so re-saving the same week updates rather than duplicates
     for(var i=0;i<_nameRows.length;i++){
@@ -3800,7 +3982,9 @@ async function saveEntry(){
     logActivity('weekly_entry_saved',{chapter:ch,date:date});
     toast('Saved & synced');
   }
-  catch(err){toast('Failed: '+err.message);}
+  catch(err){
+    toast(_entrySaved?('Weekly entry saved, but the EOI visitor names were NOT saved: '+err.message+' - press Save Entry again.'):('Weekly entry NOT saved: '+err.message),7000);
+  }
   btn.disabled=false;btn.innerHTML='Save Entry';
 }
 
@@ -3830,12 +4014,14 @@ function renderRecentEntries(showAll){
   }
 }
 
-// The entry currently opened with "Edit" (chapter|date). Saving that same entry is an
-// intentional edit; saving over any other existing entry asks for confirmation.
-let EDITING_ENTRY=null;
+// The entry currently opened with "Edit" (chapter|date) and the version of it that was
+// opened. Saving that same entry is an intentional edit - unless someone has saved it
+// again since, which asks first; saving over any other existing entry asks too.
+let EDITING_ENTRY=null,EDITING_VERSION=null;
 function loadEdit(ch,date){
   const e=S.weeklyData.find(x=>x.chapter===ch&&x.date===date);if(!e)return;
-  EDITING_ENTRY=ch+'|'+date;
+  EDITING_ENTRY=ch+'|'+date;EDITING_VERSION=e.updatedAt||e.savedAt||'';
+  ENTRY_DIRTY=false;
   if(isSrdc()){const ec=document.getElementById('eChapter');if(ec)ec.value=ch;}
   const dateEl=document.getElementById('eDate');if(dateEl)dateEl.value=date;
   // Use cascaded values so Start/Close reflect correct chain
@@ -3875,7 +4061,10 @@ async function delEntry(ch,date){
     toast('Deleted locally');
     return;
   }
-  await db.collection('weeklyData').doc(ch+'_'+date).delete();logActivity('weekly_entry_deleted',{chapter:ch,date:date});toast('Deleted');
+  try{await db.collection('weeklyData').doc(ch+'_'+date).delete();}
+  catch(e){toast('Entry NOT deleted: '+e.message,6000);return;}
+  logActivity('weekly_entry_deleted',{chapter:ch,date:date});toast('Deleted');
+  renderRecentEntries();
 }
 
 // CALL MODE ──
@@ -4922,23 +5111,59 @@ function mergeDuesUpload(existing,incoming){
   // or the change-detection (duesSignature) would see no difference and skip the save.
   existing=(existing||[]).map(function(o){return Object.assign({},o);});
   incoming=uniqueDuesMembers(incoming||[]);
+  var undecided=function(p){return !isRenewalDone(p)&&!isRenewalDropped(p);};
+  var chKey=function(c){return String(c||'').toLowerCase().trim();};
+  // The due dates this report covers, per chapter. BNI's Upcoming Renewals report lists
+  // only the next few months (and no overdue members); the Membership Dues report lists
+  // every member, with due dates years ahead - treated as the full roster.
+  var win={},byCh={},lo='9999',hi='0000';
+  incoming.forEach(function(m){
+    (byCh[chKey(m.chapter)]=byCh[chKey(m.chapter)]||[]).push(m);
+    var w=win[chKey(m.chapter)]=win[chKey(m.chapter)]||{lo:m.dueDate,hi:m.dueDate};
+    if(m.dueDate<w.lo)w.lo=m.dueDate;if(m.dueDate>w.hi)w.hi=m.dueDate;
+    if(m.dueDate<lo)lo=m.dueDate;if(m.dueDate>hi)hi=m.dueDate;
+  });
+  var fullRoster=incoming.length&&(new Date(hi)-new Date(lo))>400*86400000;
+  // A member BNI no longer lists - within the dates this report covers - has left (or
+  // renewed onto a date outside it): their open row is removed. Rows with a Done/Dropped
+  // decision are kept as the record of that decision.
+  var removed=0;
+  existing=existing.filter(function(p){
+    var w=win[chKey(p.chapter)];
+    if(!w||!undecided(p))return true;
+    if(byCh[chKey(p.chapter)].some(function(m){return sameDuesPerson(p,m);}))return true;
+    if(!fullRoster&&(p.dueDate<w.lo||p.dueDate>w.hi))return true;
+    removed++;return false;
+  });
   var pool=existing.slice();   // existing + rows accepted so far from this upload
-  var accepted=[];
+  var accepted=[],superseded=0,held=0;
   incoming.forEach(function(m){
     var prior=pool.filter(function(p){return sameDuesPerson(p,m);});
     var same=prior.find(function(p){return p.dueDate===m.dueDate;});
     if(same){
       // Exact same renewal already on file - keep one row, but upgrade it with the fuller
-      // name / a phone number if this report has them.
-      if(duesNameTokens(m.name).length>duesNameTokens(same.name).length)same.name=m.name;
+      // name / a phone number if this report has them. A row with a Done/Dropped decision
+      // keeps its name: the decision is stored under it, and renaming would lose it.
+      if(undecided(same)&&duesNameTokens(m.name).length>duesNameTokens(same.name).length)same.name=m.name;
       if(!normalizePhone(same.phone)&&normalizePhone(m.phone))same.phone=m.phone;
       return;
     }
-    if(prior.some(function(p){return !isRenewalDone(p);}))return;      // prior decision not made -> hold
+    var open=prior.filter(undecided);
+    if(open.length){
+      // A later due date than every open one means the member has renewed in BNI
+      // Connect: the new date replaces the open row(s) instead of being held back forever.
+      // An earlier date is still held until the open renewal is decided.
+      if(!open.every(function(p){return p.dueDate<m.dueDate;})){held++;return;}
+      existing=existing.filter(function(p){return open.indexOf(p)<0;});
+      pool=pool.filter(function(p){return open.indexOf(p)<0;});
+      superseded+=open.length;
+    }
     accepted.push(m);
     pool.push(m);                                                      // so later rows in this batch see it
   });
-  return uniqueDuesMembers(existing.concat(accepted));
+  var merged=uniqueDuesMembers(existing.concat(accepted));
+  merged.stats={added:accepted.length-superseded,superseded:superseded,removed:removed,held:held};
+  return merged;
 }
 
 // Stable fingerprint of a dues dataset (chapter|name|dueDate|phone), order-independent.
@@ -4967,9 +5192,12 @@ async function handleDuesUpload(input){
       toast('Already up to date');
       return;
     }
-    const addedCount=merged.length-S.duesData.length;
-    const heldCount=Math.max(0,filtered.length-addedCount);
-    const summary=`${addedCount} new renewal${addedCount!==1?'s':''} added${heldCount>0?`, ${heldCount} already tracked or awaiting a decision`:''}. Previous records preserved.`;
+    const ms=merged.stats||{added:0,superseded:0,removed:0,held:0};
+    const summary=`${ms.added} new renewal${ms.added!==1?'s':''} added`+
+      (ms.superseded?`, ${ms.superseded} moved to a newer due date`:'')+
+      (ms.removed?`, ${ms.removed} no longer listed by BNI removed`:'')+
+      (ms.held?`, ${ms.held} held until the earlier renewal is marked`:'')+
+      `. Done/Dropped records are kept.`;
     if(isLocalPreviewMode()){
       S.duesData=merged;
       saveLocalPreviewState();
@@ -4982,7 +5210,7 @@ async function handleDuesUpload(input){
       S.duesData=merged;
       logActivity('dues_report_uploaded',{memberCount:filtered.length,chapterCount:chapterCount,totalMembers:merged.length});
       st.textContent=summary;toast('Dues synced');}
-    catch(err){st.textContent='Upload failed: '+err.message;}
+    catch(err){st.textContent='Upload failed - the dues report was NOT saved: '+err.message;toast('Dues report NOT saved: '+err.message,7000);}
   }catch(err){st.textContent='Could not parse dues report: '+err.message;}
 }
 
@@ -5343,14 +5571,19 @@ async function importHistorical(){
   btn.disabled=true;btn.textContent='Importing...';
   const existing=new Set(S.weeklyData.map(e=>e.chapter+'_'+e.date));
   const toImport=HIST.filter(r=>!existing.has(r.chapter+'_'+r.date));
-  st.textContent=`Found ${toImport.length} new entries...`;let done=0;
-  for(let i=0;i<toImport.length;i+=20){
-    const batch=db.batch();
-    toImport.slice(i,i+20).forEach(r=>{batch.set(db.collection('weeklyData').doc(r.chapter+'_'+r.date),r);done++;});
-    await batch.commit();st.textContent=`Importing... ${Math.min(i+20,toImport.length)}/${toImport.length}`;
+  st.textContent=`Found ${toImport.length} new entries...`;let done=0;const failed=[];
+  // One write per entry through the API (the browser has no batch API). Each one is
+  // counted only once the server confirms it, and failures are listed, not skipped.
+  for(let i=0;i<toImport.length;i++){
+    const r=toImport[i];
+    try{await writeDoc('weeklyData',r.chapter+'_'+r.date,r,true);done++;}
+    catch(e){failed.push(r.chapter+' '+r.date+': '+e.message);}
+    st.textContent=`Importing... ${i+1}/${toImport.length}`;
   }
-  st.textContent=`${done} imported. ${HIST.length-toImport.length} already existed.`;
-  toast(`${done} historical entries imported`);
+  await refreshSnapshot();
+  st.textContent=`${done} imported. ${HIST.length-toImport.length} already existed.`+(failed.length?` ${failed.length} NOT imported - press Import again to retry them.`:'');
+  if(failed.length)console.warn('Historical import failures:',failed);
+  toast(failed.length?`${done} imported, ${failed.length} NOT imported`:`${done} historical entries imported`,failed.length?7000:2800);
   btn.disabled=false;btn.textContent='⬆ Import Historical Data';
 }
 
@@ -5535,7 +5768,9 @@ async function saveMember(){
   else toast('Saved');
 }
 function cancelMemberForm(){clearMemberForm();hide('memberFormCard');}
-async function delMember(id){if(!confirm('Remove member?'))return;const m=S.members.find(x=>x.id===id);await db.collection('members').doc(id).delete();logActivity('member_deleted',{memberName:m?m.name:id});toast('Removed');}
+async function delMember(id){if(!confirm('Remove member?'))return;const m=S.members.find(x=>x.id===id);
+  try{await db.collection('members').doc(id).delete();}catch(e){toast('Member NOT removed: '+e.message,6000);return;}
+  logActivity('member_deleted',{memberName:m?m.name:id});toast('Removed');}
 function showChapterForm(){show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Add Chapter';document.getElementById('editChapterId').value='';['fName','fTarget','fOpening'].forEach(id=>{var el=document.getElementById(id);if(el)el.value='';});var hint=document.getElementById('fOpeningHint');if(hint)hint.textContent='';}
 function editChapter(id){const c=S.chapters.find(x=>x.id===id);if(!c)return;show('chapterFormCard');document.getElementById('chapterFormTitle').textContent='Edit Chapter';document.getElementById('editChapterId').value=id;document.getElementById('fName').value=c.name;document.getElementById('fDay').value=c.day;document.getElementById('fTenure').value=c.tenure||'apr';document.getElementById('fTarget').value=c.target||'';var op=document.getElementById('fOpening');if(op)op.value=(c.openingMembers!=null?c.openingMembers:'');prefillChapterOpening(true);}
 // The opening member count for a newly registered chapter is read from the latest TLR
@@ -5562,7 +5797,13 @@ async function saveChapter(){const id=document.getElementById('editChapterId').v
   var opening=openField&&openField.value!==''?(+openField.value||0):tlrSizeForName(name);
   const data={name,day:document.getElementById('fDay').value,tenure:document.getElementById('fTenure').value,target:+document.getElementById('fTarget').value||0,order:id?(S.chapters.find(c=>c.id===id)?.order||99):S.chapters.length+1};
   if(opening!=null&&opening!=='')data.openingMembers=+opening||0;
-  await db.collection('chapters').doc(id||name).set(data,{merge:!!id});logActivity('chapter_saved',{chapterName:name});hide('chapterFormCard');toast('Saved'+(data.openingMembers?(' - opening members '+data.openingMembers+' (from TLR)'):''));}
+  const btn=window.event&&window.event.target;if(btn&&btn.tagName==='BUTTON')btn.disabled=true;
+  // No id means "add": the server then refuses a name that already exists instead of
+  // replacing that chapter. With an id it is an edit of that chapter.
+  try{await apiFetch('/chapters',{method:'POST',body:id?Object.assign({id:id},data):data});await refreshSnapshot();}
+  catch(e){toast('Chapter NOT saved: '+e.message,6000);return;}
+  finally{if(btn&&btn.tagName==='BUTTON')btn.disabled=false;}
+  logActivity('chapter_saved',{chapterName:name});hide('chapterFormCard');toast('Saved'+(data.openingMembers?(' - opening members '+data.openingMembers+' (from TLR)'):''));}
 function cancelChapterForm(){hide('chapterFormCard');}
 
 async function changeSrPin(){
@@ -5575,7 +5816,9 @@ async function changeSrPin(){
   document.getElementById('newSrPin').value='';
   toast('BNI Office login PIN changed successfully\nScope: full-access master login\nNew password/PIN: '+pin,10000);
 }
-async function saveSrCallDay(){const day=document.getElementById('srCallDaySelect')?.value;if(!day)return;await db.collection('meta').doc('config').set({srCallDay:day},{merge:true});logActivity('sr_call_day_changed',{day:day});toast('Call day updated');}
+async function saveSrCallDay(){const day=document.getElementById('srCallDaySelect')?.value;if(!day)return;
+  try{await db.collection('meta').doc('config').set({srCallDay:day},{merge:true});}catch(e){toast('Call day NOT saved: '+e.message,6000);return;}
+  logActivity('sr_call_day_changed',{day:day});toast('Call day updated');}
 
 // EXPORT ──
 // RFC 4180 quoting. Names, chapters and success stories routinely contain commas,
@@ -5749,7 +5992,8 @@ function applyBranding(){
 
 async function saveBranding(){
   var arg=document.getElementById('argLogoUrl')?document.getElementById('argLogoUrl').value:'';
-  await db.collection('meta').doc('branding').set({argLogo:arg},{merge:true});
+  try{await db.collection('meta').doc('branding').set({argLogo:arg},{merge:true});}
+  catch(e){toast('Logo NOT saved: '+e.message,6000);return;}
   logActivity('branding_updated',{});
   toast('Logo saved'); applyBranding();
 }
@@ -6084,23 +6328,29 @@ async function adjustWeeklyPipelineInduction(contact,date,delta){
     successStory:'',
     savedAt:new Date().toISOString()
   };
-  var ids=pipelineCountedIds(entry);
+  var ids=pipelineCountedIds(entry).slice();
   var already=ids.includes(contact.id);
   if(delta>0&&already)return;
   if(delta<0&&!already)return;
   if(delta>0)ids.push(contact.id);
   else ids=ids.filter(function(id){return id!==contact.id;});
-  entry.pipelineInductedIds=ids;
-  entry.inductions=Math.max(0,(+entry.inductions||0)+delta);
-  entry.membersClose=calcActiveMembers(+entry.membersStart||0,+entry.inductions||0,+entry.drops||0);
-  entry.updatedAt=new Date().toISOString();
-  entry.updatedBy=S.user.name;
-  var idx=S.weeklyData.findIndex(function(e){return e.chapter===entry.chapter&&e.date===entry.date;});
-  if(idx>=0)S.weeklyData[idx]=Object.assign({},S.weeklyData[idx],entry);
-  else S.weeklyData.unshift(entry);
+  var inductions=Math.max(0,(+entry.inductions||0)+delta);
+  var change={
+    pipelineInductedIds:ids,
+    inductions:inductions,
+    membersClose:calcActiveMembers(+entry.membersStart||0,inductions,+entry.drops||0),
+    updatedAt:new Date().toISOString(),
+    updatedBy:S.user.name
+  };
+  // Written first and applied locally only once the server has it. An existing week is
+  // sent just the fields that change, so the rest of that entry on the server (which may
+  // be newer than this browser's copy) is left as it is; a new week is written whole.
   if(!isLocalPreviewMode()){
-    await db.collection('weeklyData').doc(entry.chapter+'_'+entry.date).set(entry,{merge:true});
+    await db.collection('weeklyData').doc(entry.chapter+'_'+entry.date).set(existing?change:Object.assign({},entry,change),{merge:true});
   }
+  var idx=S.weeklyData.findIndex(function(e){return e.chapter===entry.chapter&&e.date===entry.date;});
+  if(idx>=0)S.weeklyData[idx]=Object.assign({},S.weeklyData[idx],change);
+  else S.weeklyData.unshift(Object.assign({},entry,change));
 }
 
 async function syncPipelineStageToScorecard(contact,oldStage,newStage,oldStageDate,newStageDate){
@@ -6114,13 +6364,18 @@ async function syncPipelineStageToScorecard(contact,oldStage,newStage,oldStageDa
 async function markContactStage(pid,stage){
   var today=todayISO();
   var updates={stage:stage,stageChangedDate:today,stageChangedBy:S.user.name};
+  var stageSaved=false;
   try{
+    // Work from the server's current pipeline and weekly data, not a copy that may be
+    // minutes old - the induction count below is written back from it.
+    if(!isLocalPreviewMode())await refreshSnapshot();
     var localContact=S.visitorPipeline.find(function(p){return p.id===pid;});
     var oldStage=localContact?(localContact.stage||'pipeline'):'pipeline';
     var oldStageDate=localContact?(localContact.stageChangedDate||today):today;
-    if(localContact)Object.assign(localContact,updates);
-    if(S.pipelineFilterStage&&S.pipelineFilterStage!==stage)S.pipelineFilterStage=stage;
+    var contactAfter=localContact?Object.assign({},localContact,updates):null;
     if(isLocalPreviewMode()){
+      if(localContact)Object.assign(localContact,updates);
+      if(S.pipelineFilterStage&&S.pipelineFilterStage!==stage)S.pipelineFilterStage=stage;
       await syncPipelineStageToScorecard(localContact,oldStage,stage,oldStageDate,today);
       saveLocalPreviewState();
       renderPipelineVelocity();
@@ -6129,27 +6384,37 @@ async function markContactStage(pid,stage){
       return;
     }
     await db.collection('visitorPipeline').doc(pid).set(updates,{merge:true});
-    await syncPipelineStageToScorecard(localContact,oldStage,stage,oldStageDate,today);
+    stageSaved=true;
+    // Shown as changed only once the server has it.
+    if(localContact)Object.assign(localContact,updates);
+    if(S.pipelineFilterStage&&S.pipelineFilterStage!==stage)S.pipelineFilterStage=stage;
+    await syncPipelineStageToScorecard(contactAfter,oldStage,stage,oldStageDate,today);
     logActivity('pipeline_stage_changed',{contactId:pid,stage:stage});
     renderPipelineVelocity();
     refresh();
     toast('Updated');
-  }catch(e){toast('Failed: '+e.message);}
+  }catch(e){
+    toast(stageSaved?('Stage saved, but the weekly induction count was NOT updated: '+e.message):('Stage NOT saved: '+e.message),7000);
+    renderPipelineVelocity();
+  }
 }
 
 async function deleteContact(pid){
   if(!confirm('Remove this contact from the pipeline tracker?'))return;
   try{
-    S.visitorPipeline=(S.visitorPipeline||[]).filter(function(p){return p.id!==pid;});
     if(isLocalPreviewMode()){
+      S.visitorPipeline=(S.visitorPipeline||[]).filter(function(p){return p.id!==pid;});
       saveLocalPreviewState();
       renderPipelineVelocity();
       toast('Removed locally');
       return;
     }
-    await db.collection('visitorPipeline').doc(pid).delete();logActivity('pipeline_contact_deleted',{contactId:pid});renderPipelineVelocity();toast('Removed');
+    await db.collection('visitorPipeline').doc(pid).delete();
+    // Removed from the screen only once the server has removed it.
+    S.visitorPipeline=(S.visitorPipeline||[]).filter(function(p){return p.id!==pid;});
+    logActivity('pipeline_contact_deleted',{contactId:pid});renderPipelineVelocity();toast('Removed');
   }
-  catch(e){toast('Failed: '+e.message);}
+  catch(e){toast('Contact NOT removed: '+e.message,6000);}
 }
 
 function renderPipelineVelocity(){
@@ -7344,14 +7609,22 @@ function subGoals(){
 }
 
 async function saveChapterGoal(chapterName, field, value){
+  var input=window.event&&window.event.target;
   if(!S.chapterGoals)S.chapterGoals={};
   if(!S.chapterGoals[chapterName])S.chapterGoals[chapterName]={};
-  S.chapterGoals[chapterName][field]=value;
+  var previous=S.chapterGoals[chapterName][field];
+  // Only the field that changed is sent; the server merges it into the chapter's goals,
+  // so another leader's edit to a different field of the same chapter is kept.
   var update={};
-  update[chapterName]=S.chapterGoals[chapterName];
+  update[chapterName]={};update[chapterName][field]=value;
   try{
     await db.collection('meta').doc('chapterGoals').set(update,{merge:true});
-  }catch(e){console.warn('Goal save error:',e);}
+    S.chapterGoals[chapterName][field]=value;
+    toast('Goal saved',1500);
+  }catch(e){
+    markUnsavedInput(input,previous);
+    toast('Goal NOT saved: '+e.message,6000);
+  }
 }
 
 function renderGoalsTab(){
@@ -7501,19 +7774,21 @@ async function saveMonthlyGoal(ch, monthKey, field, value){
   // field: 'members' | 'netAdd' | 'retention'
   // stored in meta/monthlyTargets as ChapterName_YYYY-MM_field
   // For 'members' also update the main getMonthlyTarget key (ChapterName_YYYY-MM)
+  var input = window.event&&window.event.target;
   var storageKey = ch+'_'+monthKey+'_'+field;
+  var previous = S.monthlyTargets ? S.monthlyTargets[storageKey] : '';
   var update = {};
   update[storageKey] = +value||0;
   // Also store members target as the main monthly target (used by Planning + Retro)
-  if(field==='members'){
-    var mainKey = ch+'_'+monthKey;
-    update[mainKey] = +value||0;
-    if(S.monthlyTargets) S.monthlyTargets[mainKey] = +value||0;
-  }
-  if(S.monthlyTargets) S.monthlyTargets[storageKey] = +value||0;
+  if(field==='members') update[ch+'_'+monthKey] = +value||0;
   try{
     await db.collection('meta').doc('monthlyTargets').set(update,{merge:true});
-  }catch(e){console.warn('Monthly goal save error:',e);}
+    if(S.monthlyTargets) Object.assign(S.monthlyTargets, update);
+    toast('Goal saved',1500);
+  }catch(e){
+    markUnsavedInput(input, previous);
+    toast('Goal NOT saved: '+e.message,6000);
+  }
 }
 
 function getMonthlyGoal(ch, monthKey, field){
@@ -7710,7 +7985,7 @@ async function handleLOMUpload(input){
       if(st)st.textContent='Uploaded '+rows.length+' members';
       toast('Length of Membership synced');
       await syncMiyagiMembers(rows);
-    }catch(err){if(st)st.textContent='Upload failed: '+err.message;}
+    }catch(err){if(st)st.textContent='Upload failed - the report was NOT saved: '+err.message;toast('Length of Membership NOT saved: '+err.message,7000);}
   }catch(err){if(st)st.textContent='Could not parse Miyagi report: '+err.message;}
 }
 
@@ -7843,11 +8118,14 @@ async function syncMiyagiMembers(lomRows){
   // modifies the Miyagi data of members already in the program - no overwrite of
   // their checkpoints/score, and no auto-graduate or auto-drop. Graduation and
   // drops are handled manually (drops via the Renewals "Drop" button).
+  var failed=[];
   for(var i=0;i<ops.length;i++){
     try{await db.collection('miyagiMembers').doc(ops[i].id).set(ops[i].data,{merge:true});}
-    catch(e){console.warn('Miyagi sync error:',e);}
+    catch(e){console.warn('Miyagi sync error:',e);failed.push(ops[i].data.name+' ('+ops[i].data.chapter+')');}
   }
-  toast('Miyagi sync: '+ops.length+' new member'+(ops.length===1?'':'s')+' added');
+  var added=ops.length-failed.length;
+  if(failed.length)alert('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added, but '+failed.length+' could NOT be added:\n\n'+failed.slice(0,20).join('\n')+(failed.length>20?'\n...and '+(failed.length-20)+' more':'')+'\n\nUpload the Length of Membership report again to retry - members already added are not touched.');
+  else toast('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added');
 }
 
 // CHECKPOINT MARKING ──────────────────────────────────────
@@ -7893,22 +8171,45 @@ async function saveMiyagiCheckpoints(memberId){
   var m=S.miyagiMembers.find(function(x){return x.id===memberId;});
   if(!m)return;
   if(!pend){toast('No changes to save');return;}
-  var cp=Object.assign({},m.checkpoints||{});
-  Object.keys(pend).forEach(function(k){cp[k]=pend[k]?{done:true,date:todayISO(),markedBy:S.user.name}:{done:false};});
-  var sc=calcMiyagiScore(cp);
-  if(isLocalPreviewMode()){m.checkpoints=cp;m.score=sc;m.lastActivityDate=todayISO();delete MIYAGI_PENDING[memberId];if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast('Miyagi progress saved');renderMiyagiTab();return;}
+  // Only the ticks changed here are sent. The server merges them into the member's
+  // stored checkpoints, so a tick someone else saved meanwhile is kept; sending the
+  // whole map from this browser's (possibly old) copy re-asserted stale values.
+  var changed={},sentPend=Object.assign({},pend);
+  Object.keys(pend).forEach(function(k){changed[k]=pend[k]?{done:true,date:todayISO(),markedBy:S.user.name}:{done:false};});
+  if(isLocalPreviewMode()){var cp=Object.assign({},m.checkpoints||{},changed);m.checkpoints=cp;m.score=calcMiyagiScore(cp);m.lastActivityDate=todayISO();delete MIYAGI_PENDING[memberId];if(typeof saveLocalPreviewState==='function')saveLocalPreviewState();toast('Miyagi progress saved');renderMiyagiTab();return;}
+  if(MIYAGI_SAVING[memberId])return;
+  MIYAGI_SAVING[memberId]=true;
+  var btn=document.getElementById('miyagiSave_'+memberId);if(btn){btn.disabled=true;btn.textContent='Saving...';}
   try{
-    await db.collection('miyagiMembers').doc(memberId).update({checkpoints:cp,score:sc,lastActivityDate:todayISO()});
+    var url='/miyagiMembers/'+encodeURIComponent(memberId);
+    var r=await apiFetch(url,{method:'PUT',body:{checkpoints:changed,lastActivityDate:todayISO()}});
+    var row=r&&r.row;
+    // The server answers with the record as stored. Check every tick really is there
+    // before calling it saved.
+    if(!row||!row.checkpoints)throw new Error('the server did not confirm the save');
+    var notStored=Object.keys(changed).filter(function(k){return !!(row.checkpoints[k]&&row.checkpoints[k].done)!==changed[k].done;});
+    if(notStored.length)throw new Error('these ticks were not stored: '+notStored.map(miyagiTaskLabel).join(', '));
+    // The score comes from the stored ticks - everyone's - not from this browser's copy.
+    var sc=calcMiyagiScore(row.checkpoints);
+    if(row.score!==sc){var r2=await apiFetch(url,{method:'PUT',body:{score:sc}});row=(r2&&r2.row)||Object.assign(row,{score:sc});}
+    // The in-memory copy becomes exactly what the server holds. miyagiMembers is fetched
+    // on demand (not polled), so without this the tab would re-render stale ticks.
+    Object.assign(m,row);
+    // Clear only what was sent: a box ticked while this save was in flight stays staged.
+    var still=MIYAGI_PENDING[memberId]||{};
+    Object.keys(sentPend).forEach(function(k){if(still[k]===sentPend[k])delete still[k];});
+    if(!Object.keys(still).length)delete MIYAGI_PENDING[memberId];
     logActivity('miyagi_checkpoints_saved',{memberName:m.name,score:sc});
-    // Reflect the saved state in the in-memory copy and re-render. miyagiMembers is an
-    // on-demand collection (not live-subscribed), so without this the tab re-renders
-    // from the stale cache when revisited and the ticks disappear until a full reload.
-    m.checkpoints=cp;m.score=sc;m.lastActivityDate=todayISO();
-    delete MIYAGI_PENDING[memberId];
     toast('Miyagi progress saved ('+sc+' pts)');
     renderMiyagiTab();
-  }catch(e){toast('Failed: '+e.message);}
+  }catch(e){
+    // The ticks stay staged, so pressing Save again retries them.
+    toast('Miyagi progress NOT saved: '+e.message,7000);
+    if(btn){btn.disabled=false;btn.textContent='Save changes';}
+  }finally{delete MIYAGI_SAVING[memberId];}
 }
+const MIYAGI_SAVING={};
+function miyagiTaskLabel(key){var t=MIYAGI_TASKS.find(function(x){return x.key===key;});return t?t.label:key;}
 
 // MANUAL DROP - a member who leaves stops receiving updates; record the milestone ──
 function miyagiMonthsSinceJoin(member){
@@ -8094,12 +8395,13 @@ async function submitMiyagiCheckin(){
     if(el)data[f.key]=el.value;
   });
   var member=S.miyagiMembers.find(function(m){return m.id===MIYAGI_ACTIVE_CHECKIN.memberId;});
-  var checkins=Object.assign({},member.checkins||{});
-  checkins[MIYAGI_ACTIVE_CHECKIN.checkinKey]=data;
+  // Only this check-in is sent; the server merges it in, so other check-ins on the
+  // member's record are never rewritten from this browser's copy.
+  var change={};change[MIYAGI_ACTIVE_CHECKIN.checkinKey]=data;
   try{
-    await db.collection('miyagiMembers').doc(MIYAGI_ACTIVE_CHECKIN.memberId).update({checkins:checkins,lastActivityDate:data.submittedDate});
+    await db.collection('miyagiMembers').doc(MIYAGI_ACTIVE_CHECKIN.memberId).update({checkins:change,lastActivityDate:data.submittedDate});
     logActivity('miyagi_checkin_submitted',{memberName:member?member.name:MIYAGI_ACTIVE_CHECKIN.memberId,checkin:MIYAGI_ACTIVE_CHECKIN.checkinKey});
-    if(member){member.checkins=checkins;member.lastActivityDate=data.submittedDate;}
+    if(member){member.checkins=Object.assign({},member.checkins||{},change);member.lastActivityDate=data.submittedDate;}
     toast('Check-in submitted');
     closeMiyagiCheckin();
     if(S.tab==='miyagi')renderMiyagiTab();

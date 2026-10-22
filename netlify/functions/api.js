@@ -4,7 +4,15 @@ import { routeApi } from "../../src/api/handlers.js";
 
 async function readJson(req) {
   const text = await req.text();
-  return text ? JSON.parse(text) : {};
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    // A malformed body is the caller's mistake (400), not a server failure (500).
+    const err = new Error("Request body is not valid JSON");
+    err.status = 400;
+    throw err;
+  }
 }
 
 function pathSegments(req) {
@@ -12,7 +20,7 @@ function pathSegments(req) {
   return pathname.split("/").filter(Boolean).map(part => decodeURIComponent(part));
 }
 
-export default async (req) => {
+export default async (req, context) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204 });
 
   try {
@@ -22,7 +30,8 @@ export default async (req) => {
       segments: pathSegments(req),
       body: hasBody ? await readJson(req) : undefined,
       authorization: req.headers.get("authorization"),
-      query: Object.fromEntries(new URL(req.url).searchParams)
+      query: Object.fromEntries(new URL(req.url).searchParams),
+      ip: context?.ip || req.headers.get("x-nf-client-connection-ip") || null
     });
 
     if (result.status === 204 || result.body === null) return new Response(null, { status: result.status });

@@ -13,7 +13,8 @@ router.use(async (req, res, next) => {
       segments,
       body: req.body,
       authorization: req.get("authorization"),
-      query: req.query
+      query: req.query,
+      ip: req.ip || null
     });
 
     if (result.status === 204 || result.body === null) return res.status(result.status).end();
