@@ -8110,23 +8110,39 @@ async function syncMiyagiMembers(lomRows){
   if(!MIYAGI_LOADED){toast('Miyagi sync skipped - could not load the current Miyagi list. Nothing was changed.',7000);return;}
   var teamChapters=visibleChapterNames();
   var relevantRows=(lomRows||S.lomData).filter(function(r){return teamChapters.includes(r.chapter);});
-  var currentByKey={};
-  relevantRows.forEach(function(r){currentByKey[miyagiId(r.chapter,r.name)]=r;});
 
-  var ops=[];
+  // A report row is already in the Miyagi program when a member has the same chapter,
+  // first name and last name (letter case, spacing and punctuation aside). Members
+  // added from the chapter sheets store only a full name, so it is compared with
+  // "first last"; members added by this parser also store first and last name.
+  var lomKey=function(ch,first,last){return miyagiId(ch,String(first||'')+' '+String(last||''));};
+  var inProgram={};
+  S.miyagiMembers.forEach(function(m){
+    inProgram[m.id]=true;
+    inProgram[miyagiId(m.chapter,m.name)]=true;
+    if(m.firstName!==undefined||m.lastName!==undefined)inProgram[lomKey(m.chapter,m.firstName,m.lastName)]=true;
+  });
 
-  // Auto-add newly eligible members (<12 months, not already tracked)
+  var ops=[],skipped=0;
+
+  // Add newly eligible members (<12 months) who are not in the program yet. Each new
+  // member keeps BNI's first name, last name and Cumulative Start Date on record.
   relevantRows.forEach(function(r){
     if(r.recentMonths===null||r.recentMonths>=12)return;
-    var mid=miyagiId(r.chapter,r.name);
-    var existing=S.miyagiMembers.find(function(m){return m.id===mid;});
-    if(!existing){
-      ops.push({id:mid,data:{
-        name:r.name,chapter:r.chapter,joinDate:r.recentStart,
-        status:'active',score:0,checkpoints:{},checkins:{},
-        lastActivityDate:todayISO(),createdAt:todayISO()
-      }});
-    }
+    var hasFirstLast=String(r.firstName||'').trim()||String(r.lastName||'').trim();
+    // r.name is "first last" from the report, tidied (e.g. a trailing chapter name removed).
+    var key=miyagiId(r.chapter,r.name);
+    if(inProgram[key]){skipped++;return;}
+    inProgram[key]=true;   // the same person twice in one report is added once
+    var data={
+      name:r.name,chapter:r.chapter,joinDate:r.recentStart,
+      status:'active',score:0,checkpoints:{},checkins:{},
+      lastActivityDate:todayISO(),createdAt:todayISO()
+    };
+    if(hasFirstLast){data.firstName=String(r.firstName||'').trim();data.lastName=String(r.lastName||'').trim();}
+    if(r.cumulativeStart)data.cumulativeStart=r.cumulativeStart;
+    if(r.cumulativeLength)data.cumulativeLength=r.cumulativeLength;
+    ops.push({id:key,data:data});
   });
 
   // A Length-of-Membership upload ONLY adds newly eligible members. It never
@@ -8150,9 +8166,10 @@ async function syncMiyagiMembers(lomRows){
   await Promise.all([worker(),worker(),worker(),worker()]);
   if(ops.length)await reloadOnDemand('miyagiMembers');
   var added=ops.length-failed.length;
-  if(st&&ops.length>20)st.textContent=stBase+' - Miyagi: '+added+' member'+(added===1?'':'s')+' added'+(failed.length?', '+failed.length+' NOT added':'');
+  var skippedNote=skipped?', '+skipped+' already in the program (skipped)':'';
+  if(st)st.textContent=stBase+' - Miyagi: '+added+' new member'+(added===1?'':'s')+' added'+skippedNote+(failed.length?', '+failed.length+' NOT added':'');
   if(failed.length)alert('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added, but '+failed.length+' could NOT be added:\n\n'+failed.slice(0,20).join('\n')+(failed.length>20?'\n...and '+(failed.length-20)+' more':'')+'\n\nUpload the Length of Membership report again to retry - members already added are not touched.');
-  else toast('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added');
+  else toast('Miyagi sync: '+added+' new member'+(added===1?'':'s')+' added'+skippedNote,5000);
 }
 
 // CHECKPOINT MARKING ──────────────────────────────────────
