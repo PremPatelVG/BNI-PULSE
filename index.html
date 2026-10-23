@@ -5085,89 +5085,69 @@ function normalizePhone(p){
   return digits.length>10?digits.slice(-10):digits;
 }
 
-// Merge a freshly uploaded dues report into the stored dataset. Rules:
-//  - Previous records are never deleted (full renewal history is kept).
-//  - A member (matched by phone) may have only ONE outstanding renewal at a time:
-//    a new entry is only accepted once the prior one's decision is made (renewed).
-//  - The same renewal (same phone + same due date) is de-duplicated.
-//  - A row with no phone cannot be matched, so it is always accepted; the renewals
-//    view flags it with an "update contact details on BNI Connect" warning.
-// Name tokens with titles stripped, for matching "Krishnakant" to "Krishnakant Joshi".
-function duesNameTokens(s){
-  return String(s||'').toUpperCase().replace(/\b(DR|MR|MRS|MS|CA|ADV|ER)\b\.?/g,'').replace(/[^A-Z\s]/g,'').trim().split(/\s+/).filter(Boolean);
+// A dues row's member identity for matching uploads: first name, last name, chapter and
+// business. Rows saved before first/last names were stored separately fall back to
+// splitting the full name (first word / the rest).
+function duesMatchKey(m){
+  var n=function(s){return String(s||'').toLowerCase().replace(/\s+/g,' ').trim();};
+  var first=m.firstName,last=m.lastName;
+  if(first===undefined&&last===undefined){
+    var parts=n(m.name).split(' ');first=parts.shift()||'';last=parts.join(' ');
+  }
+  return[n(m.chapter),n(first),n(last),n(m.industry)].join('|');
 }
-// Same member? Same chapter, and either the same phone, or - when a phone is missing -
-// the same first name AND the same business, with compatible names (one is first-name
-// only, or the surnames match). Two different people who share a first name almost
-// always differ in business or surname, so they are not merged.
-function sameDuesPerson(a,b){
-  if(String(a.chapter||'').toLowerCase().trim()!==String(b.chapter||'').toLowerCase().trim())return false;
-  var pa=normalizePhone(a.phone),pb=normalizePhone(b.phone);
-  if(pa&&pb)return pa===pb;
-  var ia=String(a.industry||'').toLowerCase().replace(/[^a-z0-9]/g,''),ib=String(b.industry||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-  if(!ia||ia!==ib)return false;
-  var ta=duesNameTokens(a.name),tb=duesNameTokens(b.name);
-  if(!ta.length||!tb.length||ta[0]!==tb[0])return false;
-  if(ta.length<2||tb.length<2)return true;
-  return ta[ta.length-1]===tb[tb.length-1];
-}
+
+// Merge a freshly uploaded Membership Dues report into the stored list. Rules:
+//  - A report row whose first name, last name, chapter and business all match a row
+//    already on file is NOT added again. If its due date differs (the member renewed),
+//    the existing row moves to the new due date.
+//  - Any other report row is added as a new renewal.
+//  - A member BNI no longer lists - within the due dates this report covers - has left:
+//    their open row is removed. Rows with a Done/Dropped decision are always kept.
 function mergeDuesUpload(existing,incoming){
-  // Work on copies: upgrading a row's name/phone below must not mutate the data on screen,
-  // or the change-detection (duesSignature) would see no difference and skip the save.
+  // Work on copies: updating a row below must not mutate the data on screen, or the
+  // change-detection (duesSignature) would see no difference and skip the save.
   existing=(existing||[]).map(function(o){return Object.assign({},o);});
   incoming=uniqueDuesMembers(incoming||[]);
   var undecided=function(p){return !isRenewalDone(p)&&!isRenewalDropped(p);};
   var chKey=function(c){return String(c||'').toLowerCase().trim();};
+  var inReport={};
+  incoming.forEach(function(m){inReport[duesMatchKey(m)]=true;});
   // The due dates this report covers, per chapter. BNI's Upcoming Renewals report lists
   // only the next few months (and no overdue members); the Membership Dues report lists
   // every member, with due dates years ahead - treated as the full roster.
-  var win={},byCh={},lo='9999',hi='0000';
+  var win={},lo='9999',hi='0000';
   incoming.forEach(function(m){
-    (byCh[chKey(m.chapter)]=byCh[chKey(m.chapter)]||[]).push(m);
     var w=win[chKey(m.chapter)]=win[chKey(m.chapter)]||{lo:m.dueDate,hi:m.dueDate};
     if(m.dueDate<w.lo)w.lo=m.dueDate;if(m.dueDate>w.hi)w.hi=m.dueDate;
     if(m.dueDate<lo)lo=m.dueDate;if(m.dueDate>hi)hi=m.dueDate;
   });
   var fullRoster=incoming.length&&(new Date(hi)-new Date(lo))>400*86400000;
-  // A member BNI no longer lists - within the dates this report covers - has left (or
-  // renewed onto a date outside it): their open row is removed. Rows with a Done/Dropped
-  // decision are kept as the record of that decision.
   var removed=0;
   existing=existing.filter(function(p){
     var w=win[chKey(p.chapter)];
-    if(!w||!undecided(p))return true;
-    if(byCh[chKey(p.chapter)].some(function(m){return sameDuesPerson(p,m);}))return true;
+    if(!w||!undecided(p)||inReport[duesMatchKey(p)])return true;
     if(!fullRoster&&(p.dueDate<w.lo||p.dueDate>w.hi))return true;
     removed++;return false;
   });
-  var pool=existing.slice();   // existing + rows accepted so far from this upload
-  var accepted=[],superseded=0,held=0;
+  var onFile={};
+  existing.forEach(function(p){var k=duesMatchKey(p);(onFile[k]=onFile[k]||[]).push(p);});
+  var added=0,updated=0;
   incoming.forEach(function(m){
-    var prior=pool.filter(function(p){return sameDuesPerson(p,m);});
-    var same=prior.find(function(p){return p.dueDate===m.dueDate;});
-    if(same){
-      // Exact same renewal already on file - keep one row, but upgrade it with the fuller
-      // name / a phone number if this report has them. A row with a Done/Dropped decision
-      // keeps its name: the decision is stored under it, and renaming would lose it.
-      if(undecided(same)&&duesNameTokens(m.name).length>duesNameTokens(same.name).length)same.name=m.name;
-      if(!normalizePhone(same.phone)&&normalizePhone(m.phone))same.phone=m.phone;
-      return;
+    var rows=onFile[duesMatchKey(m)];
+    if(!rows){existing.push(m);onFile[duesMatchKey(m)]=[m];added++;return;}
+    // Already on file: never added twice. A row already at this due date stays as it is;
+    // otherwise the latest one moves to the report's due date.
+    var row=rows.find(function(p){return p.dueDate===m.dueDate;});
+    if(!row){
+      row=rows.slice().sort(function(a,b){return String(b.dueDate).localeCompare(String(a.dueDate));})[0];
+      row.dueDate=m.dueDate;updated++;
     }
-    var open=prior.filter(undecided);
-    if(open.length){
-      // A later due date than every open one means the member has renewed in BNI
-      // Connect: the new date replaces the open row(s) instead of being held back forever.
-      // An earlier date is still held until the open renewal is decided.
-      if(!open.every(function(p){return p.dueDate<m.dueDate;})){held++;return;}
-      existing=existing.filter(function(p){return open.indexOf(p)<0;});
-      pool=pool.filter(function(p){return open.indexOf(p)<0;});
-      superseded+=open.length;
-    }
-    accepted.push(m);
-    pool.push(m);                                                      // so later rows in this batch see it
+    if(!normalizePhone(row.phone)&&normalizePhone(m.phone))row.phone=m.phone;
+    if(row.firstName===undefined&&m.firstName!==undefined){row.firstName=m.firstName;row.lastName=m.lastName;}
   });
-  var merged=uniqueDuesMembers(existing.concat(accepted));
-  merged.stats={added:accepted.length-superseded,superseded:superseded,removed:removed,held:held};
+  var merged=uniqueDuesMembers(existing);
+  merged.stats={added:added,updated:updated,removed:removed,unchanged:incoming.length-added-updated};
   return merged;
 }
 
@@ -5197,11 +5177,11 @@ async function handleDuesUpload(input){
       toast('Already up to date');
       return;
     }
-    const ms=merged.stats||{added:0,superseded:0,removed:0,held:0};
+    const ms=merged.stats||{added:0,updated:0,removed:0,unchanged:0};
     const summary=`${ms.added} new renewal${ms.added!==1?'s':''} added`+
-      (ms.superseded?`, ${ms.superseded} moved to a newer due date`:'')+
+      (ms.updated?`, ${ms.updated} moved to a new due date`:'')+
+      (ms.unchanged?`, ${ms.unchanged} already on file (same first name, last name, chapter and business) not added again`:'')+
       (ms.removed?`, ${ms.removed} no longer listed by BNI removed`:'')+
-      (ms.held?`, ${ms.held} held until the earlier renewal is marked`:'')+
       `. Done/Dropped records are kept.`;
     if(isLocalPreviewMode()){
       S.duesData=merged;
@@ -5227,6 +5207,12 @@ function parseDuesRows(rows){
     var iChapter=colIndex(h,['Chapter Name','Chapter']);
     var iFirst=colIndex(h,['First Name','First']);
     var iLast=colIndex(h,['Last Name','Last']);
+    // BNI's Membership Dues report heads BOTH name columns "Sort First" (first name, then
+    // last name). Without this every row was saved with its first name only.
+    if(iLast<0&&iFirst>=0){
+      var iSecond=h.findIndex(function(x,i){return i>iFirst&&String(x||'').trim().toLowerCase()===String(h[iFirst]||'').trim().toLowerCase();});
+      if(iSecond>=0)iLast=iSecond;
+    }
     // Only unambiguous combined-name columns. Bare 'Member'/'Name' were removed
     // because they substring-match 'Membership Type', 'First Name' and 'Chapter Name',
     // which pulled the wrong column when a report uses separate First/Last columns.
@@ -5240,18 +5226,21 @@ function parseDuesRows(rows){
       var chapter=matchChapterName(cellAt(row,iChapter));
       // Prefer First+Last (matches the standalone importer); fall back to a combined
       // name column only when there are no separate name columns.
-      var name=(iFirst>=0||iLast>=0)?(cellAt(row,iFirst)+' '+cellAt(row,iLast)).trim():(iName>=0?cellAt(row,iName):'');
+      var firstName,lastName;
+      if(iFirst>=0||iLast>=0){firstName=cellAt(row,iFirst).trim();lastName=cellAt(row,iLast).trim();}
+      else{var parts=(iName>=0?cellAt(row,iName):'').trim().split(/\s+/);firstName=parts.shift()||'';lastName=parts.join(' ');}
+      var name=(firstName+' '+lastName).trim();
       var status=cellAt(row,iStatus)||'Active';
       var dueDate=toIsoDate(cellAt(row,iDue));
       if(chapter&&name&&dueDate&&(iStatus<0||/active/i.test(status))){
-        members.push({chapter:chapter,name:name,industry:cellAt(row,iIndustry),type:cellAt(row,iType),status:status,dueDate:dueDate,phone:cellAt(row,iPhone)});
+        members.push({chapter:chapter,name:name,firstName:firstName,lastName:lastName,industry:cellAt(row,iIndustry),type:cellAt(row,iType),status:status,dueDate:dueDate,phone:cellAt(row,iPhone)});
       }
     });
     return members;
   }
   rows.forEach(function(cells){
     if(cells[0]&&cells[0].indexOf('>')>=0&&cells[5]==='Active'&&cells[6]){
-      members.push({chapter:matchChapterName(cells[0]),name:(cells[1]+' '+cells[2]).trim(),industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
+      members.push({chapter:matchChapterName(cells[0]),name:(cells[1]+' '+cells[2]).trim(),firstName:String(cells[1]||'').trim(),lastName:String(cells[2]||'').trim(),industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
     }
   });
   return members;
@@ -5290,7 +5279,7 @@ function parseDuesLegacy(text){
     if(!cells.length)return;
     if(cells[0]&&cells[0].includes('>')&&cells[5]==='Active'&&cells[6]){
       const name=(cells[1]+' '+cells[2]).trim();
-      members.push({chapter:matchChapterName(cells[0]),name,industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
+      members.push({chapter:matchChapterName(cells[0]),name,firstName:String(cells[1]||'').trim(),lastName:String(cells[2]||'').trim(),industry:cells[3],type:cells[4],status:cells[5],dueDate:toIsoDate(cells[6])});
     }
   });return members;
 }
