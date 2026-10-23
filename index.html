@@ -3779,10 +3779,31 @@ function renderNameFields(){
   container.innerHTML=h;
 }
 
+// Who can be ticked as having visited a chapter: its DC and SA accounts, plus its Senior
+// DC. The Senior DC comes from the chapter record: their account is filed under the one
+// chapter they also direct, so a DC's or SA's browser never receives it for the other
+// chapters they oversee - the dropdown used to list only the DC and SA there.
+function visitorOptions(chapter){
+  const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(chapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
+  const opts=chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')',plain:m.name}));
+  const ch=(S.chapters||[]).find(c=>c.name===chapter);
+  if(ch&&ch.seniorDirector&&!opts.some(o=>o.id===ch.seniorDirectorId)){
+    opts.push({id:ch.seniorDirectorId||('srdc_'+String(ch.seniorDirector).replace(/[^A-Za-z0-9]+/g,'_')),name:ch.seniorDirector+' ('+rl('srdc')+')',plain:ch.seniorDirector});
+  }
+  // A Senior DC who also directs this chapter has a DC account and a Senior DC account;
+  // list the person once, with both roles.
+  const merged=[];
+  opts.forEach(o=>{
+    const same=merged.find(x=>x.plain.trim().toLowerCase()===o.plain.trim().toLowerCase());
+    if(!same){merged.push(Object.assign({roles:[o.name.slice(o.plain.length+2,-1)]},o));return;}
+    const role=o.name.slice(o.plain.length+2,-1);
+    if(same.roles.indexOf(role)<0){same.roles.push(role);same.name=same.plain+' ('+same.roles.join(' & ')+')';}
+  });
+  return merged;
+}
 function buildVisDD(chapter){
   S.visSel=[];
-  const chMems=S.members.filter(m=>(m.chapters||[m.chapter]).includes(chapter)).filter((m,i,a)=>a.findIndex(x=>x.id===m.id)===i);
-  const opts=[{id:'no_visit',name:'No Visit'},...chMems.map(m=>({id:m.id,name:m.name+' ('+rl(m.role)+')'}))];
+  const opts=[{id:'no_visit',name:'No Visit'},...visitorOptions(chapter)];
   const dd=document.getElementById('msDD');if(!dd)return;
   dd.innerHTML=opts.map(o=>`<div class="ms-opt" onclick="visOptClick(event,'${o.id}','${o.name.replace(/'/g,"\\'")}')"><input type="checkbox" id="vc_${o.id}" onclick="event.stopPropagation();setVis('${o.id}','${o.name.replace(/'/g,"\\'")}',this.checked)"><span>${esc(o.name)}</span></div>`).join('');
   updateVisDisplay();
@@ -4049,7 +4070,7 @@ function loadEdit(ch,date){
   const concEl=document.getElementById('eConcall');if(concEl)concEl.value=e.concall||'Yes';
   const stEl=document.getElementById('eStory');if(stEl)stEl.value=e.successStory||'';
   buildVisDD(ch);
-  if(e.visitors_list?.length){e.visitors_list.forEach(name=>{const m=S.members.find(x=>x.name===name||name.includes(x.name));if(m)toggleVis(m.id,m.name);});}
+  if(e.visitors_list?.length){const _vo=visitorOptions(ch);e.visitors_list.forEach(name=>{const o=_vo.find(x=>x.plain===name||name.includes(x.plain));if(o)toggleVis(o.id,o.plain);});}
   // Determine if Members at Start should be locked: check if a prior week exists before this entry's date
   const priorExists=S.weeklyData.some(x=>x.chapter===ch&&x.date<date);
   setMembersStartField(!priorExists);
