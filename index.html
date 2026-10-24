@@ -215,9 +215,6 @@ textarea{resize:vertical;min-height:68px;}
 
 .logo-bar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}
 .logo-bar img{max-height:48px;max-width:100px;object-fit:contain;}
-.login-arg-logo{display:flex;justify-content:center;margin-bottom:12px;}
-.login-arg-logo img{max-height:64px;max-width:160px;object-fit:contain;}
-.hdr-logo{height:38px;width:auto;object-fit:contain;margin-right:10px;}
 .radar-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .preview-card{background:var(--surface);border-radius:8px;padding:10px;}
 /* Area Director filter bar. The old fixed minmax(220px,...) tracks summed wider
@@ -330,7 +327,6 @@ input:focus,select:focus,textarea:focus,.ms-btn:focus{border-color:var(--red);bo
 <div id="app" class="hidden">
   <div class="hdr">
     <div class="hdr-brand" style="display:flex;align-items:center;">
-      <img id="hdrArgLogo" src="" alt="" class="hdr-logo" style="display:none;">
       <div>
         <div class="h1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
         <div class="h2">Regional Leadership Dashboard</div>
@@ -877,7 +873,6 @@ function getWeeks(){
 
 // BOOT ──
 async function boot(){
-  try{loadBranding();}catch(e){console.warn('Branding load failed:',e);}
   var previewMode=new URLSearchParams(location.search).get('preview');
   if(previewMode==='tlr'){
     await startLocalTlrPreview();
@@ -904,7 +899,6 @@ async function boot(){
     catch(seedErr){console.warn('Built-in hierarchy unavailable:',seedErr);}
   }
   hide('loaderScreen');show('loginScreen');
-  applyBranding();
 }
 
 // TEAM_ID: hardcoded to 'bni_chapter_pulse' for now. Every activityLog write is tagged with this
@@ -2359,7 +2353,6 @@ function startApp(){
   const isViewer=role==='viewer';
   const isDC=['cd','dc','sa1','sa2'].includes(role);
   document.getElementById('userChip').textContent=(isSd?'* ':'')+S.user.name+' - Logout';
-  loadBranding();
   ensureUserChapterScope();
   // Set active chapter for DC
   if(isDC) S.dcActiveChapter=S.user.chapters?.[0]||S.user.chapter;
@@ -2403,7 +2396,6 @@ async function startLocalLoginPreview(){
   show('loginScreen');
   document.getElementById('syncDot')?.classList.add('off');
   var syncTxt=document.getElementById('syncTxt');if(syncTxt)syncTxt.textContent='Local Preview';
-  applyBranding();
 }
 
 async function startLocalTlrPreview(){
@@ -2413,7 +2405,6 @@ async function startLocalTlrPreview(){
   hide('loginScreen');
   show('app');
   document.getElementById('userChip').textContent='Local TLR Preview - Logout';
-  loadBranding();
   buildNav();
   switchTab('overview');
 }
@@ -2623,7 +2614,6 @@ function subAll(){
   subGoals();
   startSync();
   // Load branding after subscriptions are set up
-  try{loadBranding();}catch(e){console.warn('Branding load failed:',e);}
 }
 
 function refresh(){
@@ -5676,10 +5666,6 @@ function renderSettings(){
   h+='<div class="card"><div class="card-t">Team Call Day</div>';
   h+='<div class="tm" style="margin-bottom:12px;">The day you run your weekly team call. This only changes wording shown to you in-app (e.g. the Attendance report) - chapter meeting days stay set per chapter, and week/data calculations are unaffected.</div>';
   h+='<div style="display:flex;gap:8px;max-width:260px;"><select id="srCallDaySelect" style="flex:1;">'+DAYS.map(function(d){return '<option'+(S.srCallDay===d?' selected':'')+'>'+d+'</option>';}).join('')+'</select><button class="btn btn-navy btn-sm" onclick="saveSrCallDay()">Update</button></div></div>';
-  h+='<div class="card"><div class="card-t">Branding - Chapter Logo</div>';
-  h+='<div class="tm" style="margin-bottom:12px;">The BNI Ahmedabad and Sicilian Ventures logos are built into the login page. This optional URL adds a chapter logo to the header and login card.</div>';
-  h+='<div class="fg"><label>Chapter Logo URL</label><input type="url" id="argLogoUrl" placeholder="https://..." value="'+(BRANDING.argLogo||'')+'"></div>';
-  h+='<div class="btn-row"><button class="btn btn-navy" onclick="saveBranding()">Save Logo</button></div></div>';
   el.innerHTML=h;
   popSelects();
 }
@@ -5978,47 +5964,6 @@ if(document.readyState==='loading'){
 
 
 // // NEW FEATURES - safe string concatenation versions
-// // BRANDING ────────────────────────────────────────────
-let BRANDING = {bniLogo:'',svLogo:'',argLogo:''};
-// Load cached branding synchronously so logos paint instantly on repeat visits,
-// instead of waiting on a Firestore round-trip every single page load.
-try{
-  var _cachedBranding=localStorage.getItem('bni_branding_cache');
-  if(_cachedBranding)BRANDING=Object.assign({},BRANDING,JSON.parse(_cachedBranding));
-}catch(e){}
-
-function loadBranding(){
-  applyBranding(); // paint from cache immediately, before the network round-trip resolves
-  if(isOfflinePreviewParam()||isLocalPreviewMode())return;
-  // Logos appear on the login screen, so this reads the public branding endpoint
-  // rather than the authenticated snapshot.
-  apiFetch('/auth/branding').then(function(payload){
-    const branding=payload&&payload.branding;
-    if(!branding)return;
-    BRANDING=Object.assign({},BRANDING,branding);
-    try{localStorage.setItem('bni_branding_cache',JSON.stringify(BRANDING));}catch(e){}
-    applyBranding();
-  }).catch(function(e){console.warn('Branding load failed:',e);});
-}
-
-function applyBranding(){
-  try{
-    // Optional chapter logo in the app header only. The login page shows just the
-    // baked-in BNI Ahmedabad & Sicilian Ventures logos (/vendor/*.png).
-    var hdrL=document.getElementById('hdrArgLogo');
-    if(hdrL){hdrL.src=BRANDING.argLogo||'';hdrL.style.display=BRANDING.argLogo?'block':'none';}
-  }catch(e){console.warn('applyBranding:',e);}
-}
-// Note: no polling interval needed here - the onSnapshot listener in loadBranding()
-// already fires applyBranding() on every change, live.
-
-async function saveBranding(){
-  var arg=document.getElementById('argLogoUrl')?document.getElementById('argLogoUrl').value:'';
-  try{await db.collection('meta').doc('branding').set({argLogo:arg},{merge:true});}
-  catch(e){toast('Logo NOT saved: '+e.message,6000);return;}
-  logActivity('branding_updated',{});
-  toast('Logo saved'); applyBranding();
-}
 
 // HEALTH SCORE ─────────────────────────────────────────
 function calcHealthScore(chapterName){
@@ -8809,7 +8754,6 @@ function startSrdcPreview(rolePreview){
   document.getElementById('userChip').textContent=(isSrdc()?'* ':'')+S.user.name+' - '+rl(S.user.role);
   buildNav();
   popSelects();
-  applyBranding();
   switchTab('overview');
 }
 
