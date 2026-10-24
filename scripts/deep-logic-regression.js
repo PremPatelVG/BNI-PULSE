@@ -289,7 +289,9 @@ assert(/Alpha/.test(scorecard) && /<strong>\+1<\/strong>/.test(scorecard), "Chap
 
 const adTargets = await runInApp(`return renderAreaDirectorTargets(11,S.chapters);`);
 assert(/Cumulative Net Added/.test(adTargets), "AD target card renders cumulative net section");
-assert(/active member movement/.test(adTargets), "AD cumulative net card renders movement label");
+// The card shows the like-for-like cumulative net since the TLR baseline month (the old
+// "active member movement" label was replaced when the card was redesigned).
+assert(/since [^<]+ · \d+ chapters|baseline not loaded/.test(adTargets), "AD cumulative net card renders its baseline line");
 
 await runInApp(`S.tab='renewals'; renderRenewals();`);
 let renewalsHtml = await runInApp(`return document.getElementById('tab-renewals').innerHTML;`);
