@@ -96,9 +96,14 @@ assert(/from = "\/config\.js"/.test(netlifyToml), "Netlify redirects /config.js 
 assert(/from = "\/healthz"/.test(netlifyToml), "Netlify redirects /healthz to function");
 assert(/publish = "dist"/.test(netlifyToml), "Netlify publish directory is dist");
 
-assert(/FIREBASE_PROJECT_ID=bnipulse/.test(envText), "Local Firebase project id is configured");
-assert(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) || /FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Local Firebase Admin credential is configured");
-warn(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) && !/FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Production Netlify must use FIREBASE_SERVICE_ACCOUNT_BASE64, not local FIREBASE_SERVICE_ACCOUNT_PATH");
+// .env is never in git, so a fresh clone skips the checks of this machine's set-up.
+if (envText) {
+  assert(/FIREBASE_PROJECT_ID=bnipulse/.test(envText), "Local Firebase project id is configured");
+  assert(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) || /FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Local Firebase Admin credential is configured");
+  warn(/FIREBASE_SERVICE_ACCOUNT_PATH=.+\.json/.test(envText) && !/FIREBASE_SERVICE_ACCOUNT_BASE64=.+/.test(envText), "Production Netlify must use FIREBASE_SERVICE_ACCOUNT_BASE64, not local FIREBASE_SERVICE_ACCOUNT_PATH");
+} else {
+  console.log("SKIP .env is not here (never in git) - the local set-up checks are skipped");
+}
 
 // NOTE: local-tlr-data.json and local-dues-data.json are import *sources*, read by
 // the browser on localhost only. In production the app reads meta/tlr and meta/dues
