@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../firebaseAdmin.js";
-import { filterRowsToScope, scopedChapterNames } from "./scope.js";
+import { canReadChapter, filterRowsToScope, isChapterRole, scopedChapterNames } from "./scope.js";
 
 // Fields that may leave the server on a member record. `pin` and `pinHash` are
 // deliberately absent: credentials never travel to the browser.
@@ -17,9 +17,9 @@ const PUBLIC_MEMBER_FIELDS = [
   "pinChangedAt"
 ];
 
-// The subset the pre-login dropdown needs. Narrower than PUBLIC_MEMBER_FIELDS
-// because this one is served without authentication.
-const LOGIN_DIRECTORY_FIELDS = ["name", "role", "chapter", "chapters", "reportsTo"];
+// The subset the pre-login dropdown needs (it groups by role and labels by chapter).
+// Narrower than PUBLIC_MEMBER_FIELDS because this one is served without authentication.
+const LOGIN_DIRECTORY_FIELDS = ["name", "role", "chapter", "chapters"];
 
 const META_DOCS = new Set([
   "branding",
@@ -147,10 +147,95 @@ const SCOPED_META_ROWS = {
   lengthOfMembership: { listField: "rows", chapterField: "chapter" }
 };
 
+// Meta documents keyed by chapter: each top-level key names the chapter it belongs to.
+// Also the write rule for PUT /api/meta/:id (a writer may only set their own chapters).
+export const CHAPTER_KEYED_META_DOCS = {
+  chapterGoals: key => key,
+  // `<Chapter>_<YYYY-MM>` or `<Chapter>_<YYYY-MM>_<field>`; chapter names may contain "_".
+  monthlyTargets: key => (String(key).match(/^(.+)_\d{4}-\d{2}(?:_[A-Za-z]+)?$/) || [])[1] || null
+};
+
+// Region-wide history built for leadership views (TLR month-wise members, the 12-month
+// growth summary, Pre-Core growth). Every chapter's rows were sent to every account; a
+// scoped account now keeps only its own chapters' rows, and chapter accounts (DC / SA),
+// whose screens show no region totals, lose those too. Senior Directors keep the totals
+// their region card shows. Chapter names in these imports are matched loosely, the way
+// the dashboard matches them ("BNI Faustus" = "Faustus").
+const REGION_META_DOCS = {
+  monthlyMembers: { lists: ["perChapter", "scorecard.rows"], keyed: ["launches"], totals: ["region", "baseline"] },
+  growthSummary: {
+    keyed: ["chapters"],
+    totals: ["regionCumNet", "regionCurrent", "regionInductions", "regionDrops", "regionRenewals", "regionRetention", "chaptersCount"]
+  },
+  preCoreGrowth: {
+    lists: ["perChapter"],
+    totals: ["region", "baseline", "endTotal", "netOverWindow", "cumulativeNetAdded", "currentMembers"]
+  }
+};
+
+const looseChapter = name => String(name || "").toLowerCase().replace(/^bni\s+/, "").replace(/\s+/g, " ").trim();
+
+function scopeChapterKeyedDoc(user, docId, doc) {
+  const chapterOf = CHAPTER_KEYED_META_DOCS[docId];
+  return Object.fromEntries(Object.entries(doc).filter(([key]) => {
+    if (key === "id") return true;
+    const chapterName = chapterOf(key);
+    return !chapterName || canReadChapter(user, chapterName);
+  }));
+}
+
+function scopeRegionDoc(user, docId, doc) {
+  const allowed = scopedChapterNames(user);
+  if (allowed === null) return doc;
+  const spec = REGION_META_DOCS[docId];
+  const mine = new Set(allowed.map(looseChapter));
+  const out = { ...doc };
+  for (const path of spec.lists || []) {
+    const [field, sub] = path.split(".");
+    if (sub) {
+      if (out[field] && Array.isArray(out[field][sub])) {
+        out[field] = { ...out[field], [sub]: out[field][sub].filter(row => mine.has(looseChapter(row?.chapter))) };
+      }
+    } else if (Array.isArray(out[field])) {
+      out[field] = out[field].filter(row => mine.has(looseChapter(row?.chapter)));
+    }
+  }
+  for (const field of spec.keyed || []) {
+    if (out[field] && typeof out[field] === "object") {
+      out[field] = Object.fromEntries(Object.entries(out[field]).filter(([name]) => mine.has(looseChapter(name))));
+    }
+  }
+  if (isChapterRole(user)) for (const field of spec.totals || []) delete out[field];
+  return out;
+}
+
+// `attendance` is keyed by week, with one field per account (`m11: true`, `m11_name`)
+// and per chapter. Scoped accounts keep only the fields of their own chapters and of the
+// accounts that belong to them - the attendance screens only ever show those.
+function scopeAttendance(user, rows, members) {
+  const allowed = scopedChapterNames(user);
+  if (allowed === null) return rows;
+  const chapters = new Set(allowed);
+  const ids = new Set(members
+    .filter(m => [...(m.chapters || []), m.chapter].some(c => chapters.has(c)))
+    .map(m => m.id));
+  return rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) =>
+    key === "id" || chapters.has(key) || ids.has(key.replace(/_name$/, "")))));
+}
+
+// GET /api/attendance: scoped exactly like the snapshot's copy.
+export async function scopeAttendanceRows(user, rows) {
+  if (scopedChapterNames(user) === null) return rows;
+  return scopeAttendance(user, rows, await cachedCollection("members"));
+}
+
 // Also used by GET /api/meta/:id, which must return exactly what the snapshot would.
 export function scopeMetaDoc(user, docId, doc) {
+  if (!doc) return doc;
+  if (CHAPTER_KEYED_META_DOCS[docId]) return scopeChapterKeyedDoc(user, docId, doc);
+  if (REGION_META_DOCS[docId]) return scopeRegionDoc(user, docId, doc);
   const spec = SCOPED_META_ROWS[docId];
-  if (!spec || !doc) return doc;
+  if (!spec) return doc;
   const rows = doc[spec.listField];
   if (!Array.isArray(rows)) return doc;
   const filtered = filterRowsToScope(
@@ -346,8 +431,8 @@ export async function buildSnapshot(user) {
       return [name, scoped];
     }
     // `attendance` is keyed by week with member ids as fields, so it carries no chapter
-    // of its own and is left intact; every other collection is scoped.
-    if (name === "attendance") return [name, rows];
+    // of its own; it is scoped field by field instead.
+    if (name === "attendance") return [name, scopeAttendance(user, rows, raw.collections.members)];
     return [name, filterRowsToScope(user, rows)];
   }));
 
@@ -367,7 +452,13 @@ export async function applyTlrForMonth(user, { monthIso, monthLabel, rows }) {
   const _tn = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").replace(/[^a-z0-9]+/g, "").trim();
   const _rich = r => Object.values(r).filter(v => v !== "" && v != null).length;
   const _idx = new Map(); const _rows = [];
-  (rows || []).forEach(r => { const k = _tn(r.name); if (!k) return; if (_idx.has(k)) { const j = _idx.get(k); if (_rich(r) > _rich(_rows[j])) _rows[j] = r; return; } _idx.set(k, _rows.length); _rows.push(r); });
+  // The rows come from an uploaded spreadsheet and many of their cells are printed on the
+  // dashboard as they are. No real TLR cell holds angle brackets, so they are dropped
+  // rather than stored as page markup.
+  const _plain = r => (r && typeof r === "object")
+    ? Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" ? v.replace(/[<>]/g, "") : v]))
+    : r;
+  (rows || []).map(_plain).forEach(r => { const k = _tn(r.name); if (!k) return; if (_idx.has(k)) { const j = _idx.get(k); if (_rich(r) > _rich(_rows[j])) _rows[j] = r; return; } _idx.set(k, _rows.length); _rows.push(r); });
   rows = _rows;
 
   const norm = s => String(s || "").toLowerCase().replace(/^bni\s+/, "").trim();
@@ -434,7 +525,7 @@ const BNI_OFFICE_NAME = "BNI Office Account";
 // The display name of whoever made a request. Session tokens carry only the account id
 // (`sub`), so without this lookup every server-written record was attributed to a raw
 // id such as "sa-bni-calibos", or to "system".
-async function actorName(user) {
+export async function actorName(user) {
   if (!user) return "system";
   if (user.name) return user.name;
   const id = user.sub || user.id;

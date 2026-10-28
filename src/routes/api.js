@@ -6,6 +6,8 @@ import { routeApi } from "../api/handlers.js";
 const router = express.Router();
 
 router.use(async (req, res, next) => {
+  // API answers carry member data: never cached on the way (helmet already sends nosniff).
+  res.set("Cache-Control", "no-store");
   try {
     const segments = req.path.split("/").filter(Boolean).map(part => decodeURIComponent(part));
     const result = await routeApi({

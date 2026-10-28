@@ -1,5 +1,6 @@
 // Single implementation of every API route. The Express server and the Netlify
 // function are thin adapters over this module, so the two deployments cannot drift.
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { routeBarter } from "./barter.js";
@@ -7,8 +8,10 @@ import { config, requireProductionSecrets } from "../config.js";
 import { getDb } from "../firebaseAdmin.js";
 import { signSession } from "../middleware/auth.js";
 import {
+  actorName,
   applyTlrForMonth,
   buildSnapshot,
+  CHAPTER_KEYED_META_DOCS,
   cachedListCollection,
   cachedSnapshotCollection,
   currentConfig,
@@ -19,6 +22,7 @@ import {
   invalidateSnapshotCache,
   listCollection,
   loginDirectoryMember,
+  scopeAttendanceRows,
   scopeMetaDoc,
   setMetaDoc,
   stripPrivateMember,
@@ -60,14 +64,9 @@ const SCOPED_META_DOCS = {
   dues: { listField: "members", chapterField: "chapter" },
   lengthOfMembership: { listField: "rows", chapterField: "chapter" }
 };
-// Meta documents keyed by chapter: each top-level key names the chapter it belongs to,
-// and a writer may only set keys for chapters they can write. Goals are edited by each
-// chapter's own DC/SA as well as by leadership.
-const CHAPTER_KEYED_META_DOCS = {
-  chapterGoals: key => key,
-  // `<Chapter>_<YYYY-MM>` or `<Chapter>_<YYYY-MM>_<field>`; chapter names may contain "_".
-  monthlyTargets: key => (String(key).match(/^(.+)_\d{4}-\d{2}(?:_[A-Za-z]+)?$/) || [])[1] || null
-};
+// Meta documents keyed by chapter (CHAPTER_KEYED_META_DOCS, shared with the read-side
+// scoping): a writer may only set keys for chapters they can write. Goals are edited by
+// each chapter's own DC/SA as well as by leadership.
 
 const SR_LOGIN_ID = "__srdc__";
 
@@ -79,7 +78,7 @@ const SR_LOGIN_ID = "__srdc__";
 const BROWSER_ACTIONS = new Set([
   "attendance_marked", "branding_updated", "dues_report_uploaded", "fee_compliance_toggled",
   "length_of_membership_uploaded", "miyagi_checkin_submitted", "miyagi_checkpoint_toggled",
-  "miyagi_checkpoints_saved", "miyagi_member_dropped", "monthly_target_saved",
+  "miyagi_checkpoints_saved", "miyagi_completion_undone", "miyagi_member_completed", "miyagi_member_dropped", "monthly_target_saved",
   "pipeline_contact_deleted", "pipeline_stage_changed", "quick_update", "renewal_drop_undone",
   "renewal_marked_done", "renewal_marked_dropped", "sr_call_day_changed"
 ]);
@@ -96,6 +95,30 @@ function cleanActivityDetails(details) {
     else if (typeof value === "number" || typeof value === "boolean" || value === null) out[key] = value;
   }
   return out;
+}
+
+// Weekly entry fields that hold counts. The dashboard prints them as they are, so a
+// non-number sent straight to the API (say a script tag as "visitors") would end up in
+// every leader's page. Numeric text is stored as a number; anything else is refused.
+const WEEKLY_NUMBER_FIELDS = [
+  "membersStart", "inductions", "drops", "membersClose", "membersConnect", "visitors", "posVisitors",
+  "tlr", "conversionPct", "onetwentyone", "references", "tyfcb", "eoiYes", "eoiMaybe", "eoiNo",
+  "eoiPending", "eoi", "pipeline", "renewals", "training"
+];
+
+function cleanWeeklyNumbers(body) {
+  const entry = { ...(body || {}) };
+  for (const field of WEEKLY_NUMBER_FIELDS) {
+    if (!(field in entry)) continue;
+    const value = entry[field];
+    if (value === null || value === "" || (typeof value === "number" && Number.isFinite(value))) continue;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+      entry[field] = Number(value);
+      continue;
+    }
+    throw badRequest(`${field} must be a number`);
+  }
+  return entry;
 }
 
 // Accounts a Senior Director may create, edit or delete.
@@ -158,7 +181,8 @@ export function verifyToken(authorization) {
     throw err;
   }
   try {
-    return jwt.verify(token, config.jwtSecret);
+    // Sessions are only ever signed with HS256 (see signSession); nothing else is accepted.
+    return jwt.verify(token, config.jwtSecret, { algorithms: ["HS256"] });
   } catch {
     const err = new Error("Invalid or expired session");
     err.status = 401;
@@ -201,20 +225,35 @@ async function srPinMatches(pin) {
   return null;
 }
 
-// PIN sign-in is rate-limited. PINs can be 4 digits and the login directory lists every
-// account, so without a limit any account falls to at most 10,000 guesses. Wrong PINs
-// are counted per account and per client IP in Firestore (shared by every server
-// instance) and checked before the PIN is compared, so a locked-out guess also costs no
-// bcrypt work. A correct PIN clears the account's count, never the IP's - otherwise an
+// PIN sign-in is rate-limited. Older PINs can be 4 digits and the login directory lists
+// every account, so without a limit any account falls to at most 10,000 guesses. Wrong
+// PINs are counted in Firestore (shared by every server instance) and checked before the
+// PIN is compared, so a locked-out guess also costs no bcrypt work. They are counted:
+//  - per account from each network: the usual lock. Counting per account alone let
+//    anyone lock a colleague out (say the Area Director before a meeting) by typing
+//    wrong PINs on purpose; now that only locks the network the guesses came from.
+//  - per account across all networks, with a much higher bar, so guessing spread over
+//    many networks still stops.
+//  - per network, across all accounts.
+// A correct PIN clears the account's counts, never the network's - otherwise an
 // attacker could reset it by signing in to their own account.
 const LOGIN_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
 // [wrong PINs within the window, minutes locked]: the lock grows with repeated failures.
 const ACCOUNT_LOCK_STEPS = [[5, 15], [10, 60], [15, 240]];
+const ACCOUNT_TOTAL_LOCK_STEPS = [[25, 30], [50, 120], [100, 240]];
 // One office network can carry many people's honest typos, so the IP limit is looser.
 const IP_LOCK_STEPS = [[30, 30], [60, 240]];
+// New PINs (the issued ones are 6 random digits); existing shorter PINs still sign in.
+const MIN_PIN_LENGTH = 6;
 
 function throttleRef(key) {
   return getDb().collection("loginThrottle").doc(key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120));
+}
+
+// Keeps the network part of a throttle key short and fixed-length (an IPv6 address would
+// otherwise push the account id past the key length limit).
+function networkTag(ip) {
+  return crypto.createHash("sha256").update(String(ip)).digest("hex").slice(0, 16);
 }
 
 function lockMinutes(failures, steps) {
@@ -256,22 +295,31 @@ async function login(body, ip) {
   const pin = body?.pin == null ? "" : String(body.pin);
   if (typeof memberId !== "string" || !/^[^/]{1,200}$/.test(memberId) || !pin) throw badRequest("memberId and pin are required");
 
-  const accountKey = `acct_${memberId}`;
+  // Without a client address (local development) the account count is the only one.
   const ipKey = ip ? `ip_${ip}` : null;
-  const [accountState, ipState] = await Promise.all([readThrottle(accountKey), readThrottle(ipKey)]);
+  const accountKey = ip ? `acctip_${networkTag(ip)}_${memberId}` : `acct_${memberId}`;
+  const totalKey = ip ? `acct_${memberId}` : null;
+  const [accountState, totalState, ipState] = await Promise.all([readThrottle(accountKey), readThrottle(totalKey), readThrottle(ipKey)]);
   assertNotLocked(ipState, "from this network");
   assertNotLocked(accountState, "for this account");
+  assertNotLocked(totalState, "for this account");
 
   // Wrong PIN: count it against the IP always, and against the account only when the
   // account exists - made-up ids must not each create a throttle record.
   const wrongPin = async accountExists => {
     await Promise.all([
       recordFailure(ipKey, ipState, IP_LOCK_STEPS),
-      accountExists ? recordFailure(accountKey, accountState, ACCOUNT_LOCK_STEPS) : null
+      accountExists ? recordFailure(accountKey, accountState, ACCOUNT_LOCK_STEPS) : null,
+      accountExists ? recordFailure(totalKey, totalState, ACCOUNT_TOTAL_LOCK_STEPS) : null
     ]);
     throw httpError(401, "Incorrect PIN");
   };
-  const clearAccount = async () => { if (accountState) await throttleRef(accountKey).delete(); };
+  const clearAccount = async () => {
+    await Promise.all([
+      accountState ? throttleRef(accountKey).delete() : null,
+      totalState ? throttleRef(totalKey).delete() : null
+    ]);
+  };
 
   if (memberId === SR_LOGIN_ID) {
     const result = await srPinMatches(pin);
@@ -407,7 +455,7 @@ export async function routeApi({ method, segments, body, authorization, query, i
     // so the two top-level accounts hold each other's reset and neither resets itself.
     if (user?.role !== "ed") throw forbidden("Only the Executive Director can reset the BNI Office PIN");
     const pin = String(body?.pin || "");
-    if (pin.length < 4) throw badRequest("PIN must be at least 4 digits");
+    if (pin.length < MIN_PIN_LENGTH) throw badRequest(`PIN must be at least ${MIN_PIN_LENGTH} digits`);
     await setMetaDoc("config", { srPinHash: await bcrypt.hash(pin, 12), srPin: null, srPinChangedAt: new Date().toISOString() }, true);
     await writeActivity(user, "sr_pin_changed", {});
     return ok({ ok: true });
@@ -513,7 +561,7 @@ export async function routeApi({ method, segments, body, authorization, query, i
     }
     // Credentials are hashed here and only here; a plaintext `pin` never reaches Firestore.
     if (pin) {
-      if (String(pin).length < 4) throw badRequest("PIN must be at least 4 digits");
+      if (String(pin).length < MIN_PIN_LENGTH) throw badRequest(`PIN must be at least ${MIN_PIN_LENGTH} digits`);
       member.pinHash = await bcrypt.hash(String(pin), 12);
       member.pinChangedAt = new Date().toISOString();
     }
@@ -547,7 +595,12 @@ export async function routeApi({ method, segments, body, authorization, query, i
   if (first === "weekly-data" && second && third && method === "PUT") {
     assertCanWriteChapter(user, second);
     const id = `${second}_${third}`;
-    const entry = { ...body, chapter: second, date: third, updatedAt: new Date().toISOString(), updatedBy: user.sub };
+    // Who saved it last - the account, plus its name and role so every chapter account
+    // (SA, DC or Senior DC) can be told whose data they are about to replace.
+    const entry = {
+      ...cleanWeeklyNumbers(body), chapter: second, date: third,
+      updatedAt: new Date().toISOString(), updatedBy: user.sub, updatedByName: await actorName(user), updatedByRole: user.role
+    };
     await getDb().collection("weeklyData").doc(id).set(entry, { merge: true });
     invalidateSnapshotCache("weeklyData");
     await writeActivity(user, "weekly_entry_saved", { chapter: second, date: third });
@@ -607,7 +660,7 @@ export async function routeApi({ method, segments, body, authorization, query, i
       : first === "miyagiMembers"
         ? await cachedListCollection(first)
         : await listCollection(first);
-    return ok({ rows: first === "attendance" ? rows : filterRowsToScope(user, rows) });
+    return ok({ rows: first === "attendance" ? await scopeAttendanceRows(user, rows) : filterRowsToScope(user, rows) });
   }
 
   if (COLLECTION_WRITE_ALLOWLIST.has(first) && second && method === "PUT") {

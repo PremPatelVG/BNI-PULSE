@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fake from "../helpers/fake-firestore.mjs";
-import { seedRegion, users } from "../helpers/region.mjs";
+import { seedRegion, users, call } from "../helpers/region.mjs";
 import { loadPage } from "../helpers/page.mjs";
 
 let page;
@@ -47,35 +47,142 @@ test("saving a weekly entry writes it to the server; the meeting day and first-e
   assert.equal(await page.run(`return ENTRY_DIRTY;`), false);
 });
 
-test("overwrite protection: asks before replacing an entry, and again if someone changed it after Edit", async () => {
-  fake.seed("weeklyData", "Alpha_2026-10-06", { chapter: "Alpha", date: "2026-10-06", membersStart: 30, visitors: 2, updatedAt: "2026-10-06T10:00:00.000Z", updatedBy: "dc-alpha" });
+// A week of Alpha data saved by its DC (as the server stores it).
+const dcSaved = (extra = {}) => fake.seed("weeklyData", "Alpha_2026-10-06", {
+  chapter: "Alpha", date: "2026-10-06", membersStart: 30, inductions: 1, visitors: 2, references: 5, successStory: "Big deal",
+  filledBy: "Dev Alpha", filledByRole: "dc", savedAt: "2026-10-06T09:00:00.000Z",
+  updatedAt: "2026-10-06T09:00:00.000Z", updatedBy: "dc-alpha", updatedByName: "Dev Alpha", updatedByRole: "dc", ...extra
+});
+const openWeek = date => page.run(`document.getElementById('eDate').value='${date}';showWeekEntryInForm();`);
+const field = id => page.run(`return String(document.getElementById('${id}').value);`);
+const setField = (id, v) => page.run(`document.getElementById('${id}').value='${v}';`);
+const save = () => page.run(`await saveEntry();`);
+
+test("a week someone already filled opens with their latest data and says who saved it", async () => {
+  dcSaved();
   fake.seed("_system", "cacheStamps", { weeklyData: "t1" });
   await page.loadData();
-  await fill("2026-10-06", { eMStart: "30", eVis: "7" });
-  page.answerConfirm(false);
-  await page.run(`await saveEntry();`);
-  assert.match(page.log.confirms.at(-1), /already has an entry .* submitted by Dev Alpha/s);
-  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 2, "Cancel keeps their entry");
-  // Open it with Edit, then someone else saves it again before we do.
-  await page.run(`loadEdit('Alpha','2026-10-06');`);
-  fake.seed("weeklyData", "Alpha_2026-10-06", { ...fake.read("weeklyData", "Alpha_2026-10-06"), visitors: 9, updatedAt: "2026-10-06T11:00:00.000Z", updatedBy: "dc-alpha" });
-  fake.seed("_system", "cacheStamps", { weeklyData: "t2" });
-  await fill("2026-10-06", { eMStart: "30", eVis: "4" });
+  await openWeek("2026-10-06");
+  assert.deepEqual([await field("eVis"), await field("eRefs"), await field("eStory"), await field("eInd")], ["2", "5", "Big deal", "1"]);
+  const note = page.el("entryWeekNote");
+  assert.equal(note.style.display, "block");
+  assert.match(note.innerHTML, /submitted by <strong>Dev Alpha \(DC\)<\/strong>/);
+  assert.match(note.innerHTML, /show the latest saved data/);
+  // A week with nothing saved starts blank again.
+  await openWeek("2026-10-13");
+  assert.deepEqual([await field("eVis"), await field("eRefs"), await field("eStory")], ["0", "0", ""]);
+  assert.equal(note.style.display, "none");
+});
+
+test("saving over someone else's week asks Override or Cancel - and any role can override any other", async () => {
+  dcSaved();
+  fake.seed("_system", "cacheStamps", { weeklyData: "t1" });
+  await page.loadData();
+  await openWeek("2026-10-06");
+  await setField("eVis", "7");
+  page.answerOverride(false);
+  await save();
+  assert.equal(page.log.overrides.length, 1);
+  assert.match(page.log.overrides[0], /Alpha<\/strong> - meeting on .*submitted by <strong>Dev Alpha \(DC\)<\/strong>/s);
+  assert.match(page.log.overrides[0], />Override<\/button>.*>Cancel<\/button>/s);
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 2, "Cancel keeps the DC's data");
+  assert.ok(page.log.toasts.some(t => /Not saved/.test(t)));
+  assert.equal(await field("eVis"), "7", "what the SA typed is still in the form");
+
+  // The SA overrides the DC...
+  page.answerOverride(true);
+  await save();
+  let e = fake.read("weeklyData", "Alpha_2026-10-06");
+  assert.deepEqual([e.visitors, e.references, e.filledBy, e.updatedByName, e.updatedByRole], [7, 5, "Alpha SA", "Alpha SA", "sa1"]);
+
+  // ...the DC then sees the SA's data and can override it...
+  await page.signIn(users.dcAlpha);
+  await page.loadData();
+  await page.run(`S.dcActiveChapter='Alpha';EDITING_ENTRY=null;`);
+  await openWeek("2026-10-06");
+  assert.equal(await field("eVis"), "7");
+  assert.match(page.el("entryWeekNote").innerHTML, /Alpha SA \(SA\)/);
+  await setField("eVis", "8");
   page.clearLog();
-  await page.run(`await saveEntry();`);
-  assert.match(page.log.confirms.at(-1), /changed this Alpha entry .* after you opened it/s);
+  await save();
+  assert.match(page.log.overrides[0], /submitted by <strong>Alpha SA \(SA\)/);
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 8);
+
+  // ...and so can the Senior DC, after which the SA is told it was the Senior DC.
+  await page.signIn(users.srdc);
+  await page.loadData();
+  await page.run(`document.getElementById('eChapter').value='Alpha';EDITING_ENTRY=null;`);
+  await openWeek("2026-10-06");
+  await setField("eVis", "9");
+  page.clearLog();
+  await save();
+  assert.match(page.log.overrides[0], /Dev Alpha \(DC\)/);
+  e = fake.read("weeklyData", "Alpha_2026-10-06");
+  assert.deepEqual([e.visitors, e.updatedByName, e.updatedByRole], [9, "Sameer Senior", "srdc"]);
+  await page.signIn(users.saAlpha);
+  await page.loadData();
+  await page.run(`EDITING_ENTRY=null;`);
+  await openWeek("2026-10-06");
+  assert.match(page.el("entryWeekNote").innerHTML, /Sameer Senior \(Senior DC\)/);
+});
+
+test("re-saving your own latest save does not ask; a newer save by anyone asks again and Cancel shows it", async () => {
+  await openWeek("2026-10-06");
+  await fill("2026-10-06", { eMStart: "30", eVis: "3" });
+  await save();
+  await setField("eVis", "4");
+  await save();
+  assert.equal(page.log.overrides.length, 0, "the first save and re-saving your own data never ask");
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 4);
+
+  // The DC saves the week while the SA still has it open.
+  assert.equal((await call(users.dcAlpha, "PUT", "weekly-data/Alpha/2026-10-06", { visitors: 9 })).status, 200);
+  await setField("eVis", "5");
+  page.answerOverride(false);
+  await save();
+  assert.match(page.log.overrides[0], /saved again after you opened it/);
+  assert.match(page.log.overrides[0], /last updated by <strong>Dev Alpha \(DC\)/);
   assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 9);
-  page.answerConfirm(true);
-  await page.run(`await saveEntry();`);
-  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 4, "OK overwrites deliberately");
+  assert.equal(await field("eVis"), "9", "Cancel loads the latest data into the form");
+
+  // Overriding it still asks (it is the DC's save now), then saves.
   page.clearLog();
-  await fill("2026-10-06", { eMStart: "30", eVis: "5" });
-  await page.run(`await saveEntry();`);
-  assert.equal(page.log.confirms.length, 0, "saving again after your own save does not ask");
+  page.answerOverride(true);
+  await setField("eVis", "6");
+  await save();
+  assert.equal(page.log.overrides.length, 1);
+  assert.doesNotMatch(page.log.overrides[0], /saved again after you opened it/);
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 6);
+
+  // Clear empties the form; the week is still saved, so saving asks again.
   await page.run(`clearForm();`);
-  await fill("2026-10-06", { eMStart: "30" });
-  await page.run(`await saveEntry();`);
-  assert.match(page.log.confirms.at(-1), /already has an entry/, "after Clear it asks again");
+  assert.equal(await field("eVis"), "0");
+  assert.match(page.el("entryWeekNote").innerHTML, /Show saved data/);
+  page.clearLog();
+  await fill("2026-10-06", { eMStart: "30", eVis: "1" });
+  await save();
+  assert.equal(page.log.overrides.length, 1, "after Clear it asks again");
+});
+
+test("Call Mode quick update asks the same way before replacing someone else's data", async () => {
+  dcSaved();
+  fake.seed("_system", "cacheStamps", { weeklyData: "t1" });
+  await page.loadData();
+  const quick = (vis, version) => page.run(`
+    document.getElementById('qu_vis').value='${vis}';document.getElementById('qu_ind').value='1';
+    globalThis.event={target:document.getElementById('quBtn')};await quickSave('Alpha','2026-10-06','${version}');`);
+  page.answerOverride(false);
+  await quick(4, "2026-10-06T09:00:00.000Z");
+  assert.match(page.log.overrides[0], /Dev Alpha \(DC\)/);
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 2);
+  page.answerOverride(true);
+  await quick(4, "2026-10-06T09:00:00.000Z");
+  const e = fake.read("weeklyData", "Alpha_2026-10-06");
+  assert.deepEqual([e.visitors, e.updatedByName, e.references], [4, "Alpha SA", 5]);
+  page.clearLog();
+  await quick(5, e.updatedAt);
+  assert.equal(page.log.overrides.length, 0, "updating your own latest save does not ask");
+  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 5);
 });
 
 test("delete: shows an error when the server refuses", async () => {

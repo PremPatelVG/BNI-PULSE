@@ -7,15 +7,18 @@ import { invalidateSnapshotCache } from "../../src/services/firestore.js";
 beforeEach(() => seedRegion());
 
 test("weekly data: chapter scope, server-stamped fields, delete", async () => {
-  const r = await call(users.saAlpha, "PUT", "weekly-data/Alpha/2026-10-06", { visitors: 4, chapter: "Beta", updatedBy: "someone else" });
+  const r = await call(users.saAlpha, "PUT", "weekly-data/Alpha/2026-10-06", { visitors: 4, chapter: "Beta", updatedBy: "someone else", updatedByName: "Someone", updatedByRole: "ed" });
   assert.equal(r.status, 200);
   const e = fake.read("weeklyData", "Alpha_2026-10-06");
   assert.equal(e.chapter, "Alpha", "path wins over body");
   assert.equal(e.date, "2026-10-06");
-  assert.equal(e.updatedBy, "sa-alpha");
+  assert.deepEqual([e.updatedBy, e.updatedByName, e.updatedByRole], ["sa-alpha", "Alpha SA", "sa1"], "who saved it comes from the session");
   assert.ok(e.updatedAt);
-  await call(users.saAlpha, "PUT", "weekly-data/Alpha/2026-10-06", { eoi: 2 });
-  assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").visitors, 4, "saves merge");
+  // Any account on the chapter may update it, whatever their role; the stamp follows.
+  await call(users.srdc, "PUT", "weekly-data/Alpha/2026-10-06", { eoi: 2 });
+  const e2 = fake.read("weeklyData", "Alpha_2026-10-06");
+  assert.equal(e2.visitors, 4, "saves merge");
+  assert.deepEqual([e2.updatedByName, e2.updatedByRole], ["Sameer Senior", "srdc"]);
   assert.equal((await call(users.saAlpha, "PUT", "weekly-data/Beta/2026-10-09", { visitors: 1 })).status, 403);
   assert.equal((await call(users.viewer, "PUT", "weekly-data/Alpha/2026-10-13", { visitors: 1 })).status, 403);
   assert.equal((await call(users.dcBeta, "DELETE", "weekly-data/Alpha/2026-10-06")).status, 403);

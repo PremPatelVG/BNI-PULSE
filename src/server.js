@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { config, requireProductionSecrets } from "./config.js";
 import apiRoutes from "./routes/api.js";
+import { CSP_DIRECTIVES, PERMISSIONS_POLICY, REFERRER_POLICY } from "./securityHeaders.js";
 
 requireProductionSecrets();
 
@@ -15,10 +16,18 @@ const app = express();
 
 app.disable("x-powered-by");
 app.use(helmet({
-  contentSecurityPolicy: false
+  contentSecurityPolicy: { useDefaults: false, directives: CSP_DIRECTIVES },
+  frameguard: { action: "deny" },
+  referrerPolicy: { policy: REFERRER_POLICY }
 }));
+app.use((req, res, next) => {
+  res.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
+  next();
+});
+// The dashboard calls its own server, so no other site needs to. Without CORS_ORIGIN
+// set, cross-site requests get no CORS headers (it used to allow any site).
 app.use(cors({
-  origin: config.corsOrigin ? config.corsOrigin.split(",").map(origin => origin.trim()) : true,
+  origin: config.corsOrigin ? config.corsOrigin.split(",").map(origin => origin.trim()) : false,
   credentials: true
 }));
 app.use(express.json({ limit: "2mb" }));

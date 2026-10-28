@@ -27,9 +27,12 @@ vm.runInContext(script, ctx, { filename: "index.html" });
 
 const run = code => vm.runInContext(`(function(){${code}})()`, ctx);
 
-// Load the real chapter set so chapter-matching is realistic.
-const tlr = JSON.parse(fs.readFileSync("local-tlr-data.json", "utf8")).rows;
-const chapterNames = [...new Set(tlr.map(r => r.name))];
+// Load the real chapter set so chapter-matching is realistic. The local data files are
+// kept out of git; on a fresh clone the chapters in the page's own history are used and
+// the data-file checks below are skipped.
+const readLocal = (file, key) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8"))[key] : null;
+const tlr = readLocal("local-tlr-data.json", "rows");
+const chapterNames = tlr ? [...new Set(tlr.map(r => r.name))] : run(`return [...new Set(HIST.map(e=>e.chapter))]`);
 run(`S.user={id:'ad',name:'AD',role:'ad',chapters:[]};S.chapters=${JSON.stringify(chapterNames.map((n, i) => ({ name: n, order: i + 1 })))};`);
 
 let pass = 0, fail = 0;
@@ -85,10 +88,13 @@ check("tlr: score is last number", tlrParsed[0] && tlrParsed[0].score, "85");
 check("tlr: chapterSize first", tlrParsed[0] && tlrParsed[0].chapterSize, "53");
 
 console.log("\n=== parsed data-file integrity ===");
-const dues = JSON.parse(fs.readFileSync("local-dues-data.json", "utf8")).members;
-check("dues file: every row has chapter/name/dueDate", dues.every(m => m.chapter && m.name && m.dueDate), true);
-check("dues file: every dueDate is ISO", dues.every(m => /^\d{4}-\d{2}-\d{2}$/.test(m.dueDate)), true);
-check("tlr file: every row has name+score", tlr.every(r => r.name && r.score !== undefined && r.score !== ""), true);
+const dues = readLocal("local-dues-data.json", "members");
+if (dues) {
+  check("dues file: every row has chapter/name/dueDate", dues.every(m => m.chapter && m.name && m.dueDate), true);
+  check("dues file: every dueDate is ISO", dues.every(m => /^\d{4}-\d{2}-\d{2}$/.test(m.dueDate)), true);
+} else console.log("SKIP local-dues-data.json is not here (local data, not in git)");
+if (tlr) check("tlr file: every row has name+score", tlr.every(r => r.name && r.score !== undefined && r.score !== ""), true);
+else console.log("SKIP local-tlr-data.json is not here (local data, not in git)");
 
 console.log(`\n${fail ? "PARSER FAILURES: " + fail : "ALL PARSER CHECKS PASSED"} (${pass} passed)`);
 process.exit(fail ? 1 : 0);

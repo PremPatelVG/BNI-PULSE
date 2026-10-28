@@ -24,8 +24,8 @@ function makeElement(id = "") {
 
 export function loadPage() {
   const elements = new Map();
-  const log = { toasts: [], confirms: [], alerts: [], calls: [] };
-  let confirmAnswer = true;
+  const log = { toasts: [], confirms: [], alerts: [], calls: [], overrides: [] };
+  let confirmAnswer = true, overrideAnswer = true;
   const failures = []; // { match: RegExp on "METHOD /path", kind: "network" | status }
 
   async function fetchImpl(url, opts = {}) {
@@ -70,6 +70,16 @@ export function loadPage() {
       readyState: "loading", hidden: false, activeElement: null,
       addEventListener() {}, removeEventListener() {}, execCommand() { return true; },
       createElement: t => makeElement(t), querySelector() { return null; }, querySelectorAll() { return []; },
+      // The Override / Cancel pop-up is recorded and answered like confirm() is.
+      body: Object.assign(makeElement("body"), {
+        appendChild(c) {
+          if (c.id === "overrideModal") {
+            log.overrides.push(c.innerHTML);
+            Promise.resolve().then(() => vm.runInContext(`answerOverride(${overrideAnswer})`, ctx));
+          }
+          return c;
+        }
+      }),
       getElementById: id => { if (!elements.has(id)) elements.set(id, makeElement(id)); return elements.get(id); }
     },
     window: { __BNI_PULSE_CONFIG__: { firebase: {} }, scrollTo() {} }
@@ -93,8 +103,9 @@ export function loadPage() {
     },
     set: (name, value) => { ctx["__set_" + name] = value; return vm.runInContext(`${name}=globalThis.__set_${name}`, ctx); },
     answerConfirm(v) { confirmAnswer = v; },
+    answerOverride(v) { overrideAnswer = v; },
     failNext(match, kind = "network", times = 1) { for (let i = 0; i < times; i++) failures.push({ match, kind }); },
-    clearLog() { log.toasts.length = 0; log.confirms.length = 0; log.alerts.length = 0; log.calls.length = 0; },
+    clearLog() { log.toasts.length = 0; log.confirms.length = 0; log.alerts.length = 0; log.calls.length = 0; log.overrides.length = 0; },
     // Signs the page in as a seeded account (session token + S.user from the member record).
     async signIn(user) {
       const rec = user.id === "__srdc__" ? { name: "BNI Office Account" } : fake.read("members", user.id) || {};

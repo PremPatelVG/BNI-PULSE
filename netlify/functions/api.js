@@ -20,8 +20,11 @@ function pathSegments(req) {
   return pathname.split("/").filter(Boolean).map(part => decodeURIComponent(part));
 }
 
+// API answers carry member data: never cached on the way, never sniffed as another type.
+const API_HEADERS = { "cache-control": "no-store", "x-content-type-options": "nosniff" };
+
 export default async (req, context) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 204 });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: API_HEADERS });
 
   try {
     const hasBody = !["GET", "HEAD", "DELETE"].includes(req.method);
@@ -34,12 +37,12 @@ export default async (req, context) => {
       ip: context?.ip || req.headers.get("x-nf-client-connection-ip") || null
     });
 
-    if (result.status === 204 || result.body === null) return new Response(null, { status: result.status });
-    return Response.json(result.body, { status: result.status });
+    if (result.status === 204 || result.body === null) return new Response(null, { status: result.status, headers: API_HEADERS });
+    return Response.json(result.body, { status: result.status, headers: API_HEADERS });
   } catch (err) {
     const status = err.status || 500;
     if (status >= 500) console.error(err);
-    return Response.json({ error: err.message || "Internal server error" }, { status });
+    return Response.json({ error: err.message || "Internal server error" }, { status, headers: API_HEADERS });
   }
 };
 

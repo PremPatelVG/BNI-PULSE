@@ -13,6 +13,8 @@ test("Netlify function: routes, CORS preflight, JSON errors", async () => {
   assert.equal((await netlifyApi(new Request(BASE + "snapshot", { method: "OPTIONS" }), {})).status, 204);
   const dir = await netlifyApi(new Request(BASE + "auth/login-directory"), {});
   assert.equal(dir.status, 200);
+  assert.equal(dir.headers.get("cache-control"), "no-store", "API answers are never cached");
+  assert.equal(dir.headers.get("x-content-type-options"), "nosniff");
   assert.equal((await dir.json()).members.length, 9);
   const unauth = await netlifyApi(new Request(BASE + "snapshot"), {});
   assert.equal(unauth.status, 401);
@@ -45,7 +47,8 @@ function expressRun(method, url, { body, headers = {}, ip } = {}) {
   return new Promise((resolve, reject) => {
     const req = { method, url, originalUrl: "/api" + url, path: url.split("?")[0], body, query: {}, ip, headers, get: h => headers[h.toLowerCase()] };
     const res = {
-      statusCode: 200, sent: undefined,
+      statusCode: 200, sent: undefined, headers: {},
+      set(k, v) { this.headers[k] = v; return this; },
       status(c) { this.statusCode = c; return this; },
       json(b) { this.sent = b; resolve(this); return this; },
       end() { resolve(this); return this; }
@@ -57,6 +60,7 @@ function expressRun(method, url, { body, headers = {}, ip } = {}) {
 test("Express router: same router, errors passed to the error handler", async () => {
   const dir = await expressRun("GET", "/auth/login-directory");
   assert.equal(dir.statusCode, 200);
+  assert.equal(dir.headers["Cache-Control"], "no-store", "API answers are never cached");
   assert.equal(dir.sent.members.length, 9);
   const snap = await expressRun("GET", "/snapshot", { headers: { authorization: tokenFor(users.saAlpha) } });
   assert.deepEqual(snap.sent.collections.chapters.map(c => c.name), ["Alpha"]);

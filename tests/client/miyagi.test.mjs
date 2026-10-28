@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fake from "../helpers/fake-firestore.mjs";
-import { seedRegion, users } from "../helpers/region.mjs";
+import { seedRegion, users, call } from "../helpers/region.mjs";
 import { loadPage } from "../helpers/page.mjs";
 
 let page;
@@ -113,4 +113,70 @@ test("Length of Membership sync: chapter + first + last name; new members keep B
   assert.deepEqual([neha.firstName, neha.lastName, neha.cumulativeStart, neha.joinDate, neha.score], ["Neha", "Rao", "2026-08-01", "2026-08-01", 0]);
   assert.equal(fake.read("miyagiMembers", "alpha_ravi_shah").score, 5, "existing progress untouched");
   assert.match(page.el("lomStatus").textContent, /1 new member added, 2 already in the program \(skipped\)/);
+});
+
+const today = () => new Date().toISOString().slice(0, 10);
+// Member names in the Miyagi Completed table, in the order shown.
+const completedNames = html => [...html.matchAll(/<td style="font-weight:700">([^<]*)<\/td>/g)].map(m => m[1]);
+
+test("1-YEAR DONE moves a member to Miyagi Completed with the date, final belt and who marked it; Undo moves them back", async () => {
+  await page.run(`await ensureMiyagiLoaded(true);`);
+  // Unsaved ticks would be lost when the card closes, so they have to be saved first.
+  await page.run(`MIYAGI_PENDING={alpha_ravi_shah:{powerTeam:true}};await markMiyagiOneYearDone('alpha_ravi_shah');MIYAGI_PENDING={};`);
+  assert.ok(page.log.toasts.some(t => /Save the ticked tasks first/.test(t)));
+  assert.equal(fake.read("miyagiMembers", "alpha_ravi_shah").status, "active");
+
+  page.clearLog();
+  await page.run(`await markMiyagiOneYearDone('alpha_ravi_shah');`);
+  assert.match(page.log.confirms[0], /Mark Ravi Shah \(Alpha\) as 1-YEAR DONE/);
+  const m = fake.read("miyagiMembers", "alpha_ravi_shah");
+  assert.deepEqual([m.status, m.completedDate, m.completedBy, m.finalScore, m.finalBelt], ["graduated", today(), "Alpha SA", 5, "White"]);
+  assert.ok(page.log.calls.some(c => c.path === "/activity" && c.body.action === "miyagi_member_completed"), "logged");
+  for (const action of ["miyagi_member_completed", "miyagi_completion_undone"]) {
+    assert.equal((await call(users.saAlpha, "POST", "activity", { action, details: { memberName: "Ravi Shah" } })).status, 204, action + " is accepted");
+  }
+
+  const miyagi = await page.run(`S.tab='miyagi';renderMiyagiTab();return document.getElementById('tab-miyagi').innerHTML;`);
+  assert.doesNotMatch(miyagi, /Ravi Shah/, "no longer in the Miyagi list");
+  assert.match(miyagi, /1-YEAR DONE/);
+  const done = await page.run(`S.tab='miyagidone';renderMiyagiCompletedTab();return document.getElementById('tab-miyagidone').innerHTML;`);
+  assert.deepEqual(completedNames(done), ["Ravi Shah"]);
+  assert.doesNotMatch(done, /All Months/, "a chapter account gets no filters");
+
+  await page.run(`await undoMiyagiOneYearDone('alpha_ravi_shah');`);
+  assert.equal(fake.read("miyagiMembers", "alpha_ravi_shah").status, "active");
+  assert.equal(fake.read("miyagiMembers", "alpha_ravi_shah").score, 5, "progress kept");
+});
+
+test("Miyagi Completed: leaders filter by chapter, month and date range; Senior DCs see only their chapters", async () => {
+  const done = (id, name, chapter, completedDate) =>
+    fake.seed("miyagiMembers", id, { name, chapter, joinDate: "2025-09-01", status: "graduated", completedDate, finalScore: 40, finalBelt: "Yellow", checkpoints: {} });
+  done("alpha_a", "Asha Alpha", "Alpha", "2026-09-10");
+  done("beta_b", "Bhavin Beta", "Beta", "2026-10-05");
+  done("gamma_c", "Chirag Gamma", "Gamma", "2026-10-20");
+  const view = async (code = "") => completedNames(await page.run(
+    `${code};S.tab='miyagidone';renderMiyagiCompletedTab();return document.getElementById('tab-miyagidone').innerHTML;`));
+
+  for (const u of [users.ad, users.ed, users.office]) {
+    await page.signIn(u);
+    await page.run(`S.chapters=[{name:'Alpha'},{name:'Beta'},{name:'Gamma'}];setMiyagiDoneFilter('clear');await ensureMiyagiLoaded(true);`);
+    assert.deepEqual(await view(), ["Chirag Gamma", "Bhavin Beta", "Asha Alpha"], u.id + ": newest first");
+    assert.match(page.el("tab-miyagidone").innerHTML, /All Chapters[\s\S]*All Months[\s\S]*From date[\s\S]*To date/, u.id);
+    assert.deepEqual(await view(`setMiyagiDoneFilter('chapter','Beta')`), ["Bhavin Beta"], u.id);
+    assert.deepEqual(await view(`setMiyagiDoneFilter('clear');setMiyagiDoneFilter('month','2026-10')`), ["Chirag Gamma", "Bhavin Beta"], u.id);
+    assert.match(page.el("tab-miyagidone").innerHTML, /<option value="2026-09">Sep 2026<\/option>/);
+    assert.deepEqual(await view(`setMiyagiDoneFilter('clear');setMiyagiDoneFilter('from','2026-09-10');setMiyagiDoneFilter('to','2026-10-05')`), ["Bhavin Beta", "Asha Alpha"], u.id + ": both ends included");
+    assert.deepEqual(await view(`setMiyagiDoneFilter('chapter','Gamma')`), [], u.id);
+    assert.match(page.el("tab-miyagidone").innerHTML, /No members match these filters/);
+  }
+
+  await page.signIn(users.srdc);
+  await page.run(`setMiyagiDoneFilter('clear');await ensureMiyagiLoaded(true);`);
+  assert.deepEqual(await view(), ["Chirag Gamma", "Asha Alpha"]);
+  assert.match(page.el("tab-miyagidone").innerHTML, /All Months/, "Senior DC gets the filters");
+
+  await page.signIn(users.dcBeta);
+  await page.run(`await ensureMiyagiLoaded(true);`);
+  assert.deepEqual(await view(), ["Bhavin Beta"]);
+  assert.doesNotMatch(page.el("tab-miyagidone").innerHTML, /All Months|From date/);
 });

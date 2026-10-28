@@ -3,7 +3,13 @@ import fs from "node:fs";
 const failures = [];
 const warnings = [];
 
+// local-tlr-data.json and local-dues-data.json hold real chapter data, so they are kept
+// out of git: on a fresh clone they are absent and the checks on them are skipped.
 function readJson(file) {
+  if (!fs.existsSync(file)) {
+    console.log(`SKIP ${file} is not here (local data, not in git) - its checks are skipped`);
+    return null;
+  }
   try {
     return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (error) {

@@ -9,7 +9,7 @@ beforeEach(() => seedRegion());
 test("credentials never leave the server: members, login directory, meta/config", async () => {
   const member = { name: "A", role: "dc", chapter: "X", chapters: ["X"], pin: "1", pinHash: "h", phone: "9", reportsTo: "S", pinChangedAt: "2026-01-01" };
   assert.deepEqual(Object.keys(fs.stripPrivateMember(member)).sort(), ["chapter", "chapters", "name", "pinChangedAt", "reportsTo", "role"]);
-  assert.deepEqual(Object.keys(fs.loginDirectoryMember(member)).sort(), ["chapter", "chapters", "name", "reportsTo", "role"]);
+  assert.deepEqual(Object.keys(fs.loginDirectoryMember(member)).sort(), ["chapter", "chapters", "name", "role"]);
   const cfg = await fs.getMetaDoc("config");
   assert.equal("srPinHash" in cfg, false);
   assert.equal("srPin" in fs.stripPrivateMeta("config", { srPin: "1", srCallDay: "Friday" }), false);

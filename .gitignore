@@ -67,3 +67,18 @@ scripts/.dna-oct26/
 
 # Full Firestore backups (contain PIN hashes, phone numbers and member data)
 backups/
+
+# Local import sources with member data (names, phones, emails, addresses) - never commit.
+# The dashboard reads this data from Firestore; these files only feed local checks.
+local-dues-data.json
+local-tlr-data.json
+
+# PIN / login management scripts - keep local (they map the account and PIN layout)
+scripts/reset-*-pins.js
+scripts/create-*-logins.js
+scripts/audit-login-pins.js
+scripts/verify-pins-vs-sheets.js
+scripts/export-dc-srdc-pins.js
+
+# Generated Excel reports (chapter / leadership data) - keep local
+reports/

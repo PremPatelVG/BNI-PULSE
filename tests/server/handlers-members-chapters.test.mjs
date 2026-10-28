@@ -27,13 +27,13 @@ test("members: a Senior DC manages only DC/SA accounts in their own chapters", a
 test("members: Executive Director accounts - only the ED or BNI Office; ED PIN only by BNI Office", async () => {
   assert.equal((await save(users.ad, { id: "ed-1", name: "Esha Director", role: "ed" })).status, 403);
   assert.equal((await call(users.ad, "DELETE", "members/ed-1")).status, 403);
-  assert.equal((await save(users.ed, { id: "ed-1", name: "Esha Director", role: "ed", pin: "7777" })).status, 403, "ED cannot reset own PIN");
-  assert.equal((await save(users.office, { id: "ed-1", name: "Esha Director", role: "ed", pin: "7777" })).status, 201);
-  assert.equal((await save(users.ad, { id: "dc-alpha", name: "Dev Alpha", role: "ed", pin: "7777" })).status, 403, "no role-swap bypass");
+  assert.equal((await save(users.ed, { id: "ed-1", name: "Esha Director", role: "ed", pin: "777777" })).status, 403, "ED cannot reset own PIN");
+  assert.equal((await save(users.office, { id: "ed-1", name: "Esha Director", role: "ed", pin: "777777" })).status, 201);
+  assert.equal((await save(users.ad, { id: "dc-alpha", name: "Dev Alpha", role: "ed", pin: "777777" })).status, 403, "no role-swap bypass");
 });
 
 test("members: PINs are hashed, never stored or returned in the clear; a PIN change is stamped", async () => {
-  const r = await save(users.ad, { name: "New DC", role: "dc", chapter: "Beta", chapters: ["Beta"], pin: "4321" });
+  const r = await save(users.ad, { name: "New DC", role: "dc", chapter: "Beta", chapters: ["Beta"], pin: "432100" });
   assert.equal(r.status, 201);
   const stored = fake.read("members", r.body.member.id);
   assert.equal(stored.pin, undefined);
@@ -41,6 +41,7 @@ test("members: PINs are hashed, never stored or returned in the clear; a PIN cha
   assert.ok(stored.pinChangedAt);
   assert.equal("pinHash" in r.body.member, false);
   assert.equal((await save(users.ad, { name: "Short", role: "dc", chapter: "Beta", pin: "12" })).status, 400);
+  assert.equal((await save(users.ad, { name: "Short", role: "dc", chapter: "Beta", pin: "12345" })).status, 400, "new PINs are 6 digits");
   assert.equal((await save(users.ad, { role: "dc" })).status, 400, "name required");
   assert.equal((await save(users.ad, { id: "dc-beta", name: "Dina Beta", role: "dc", chapter: "Beta", pinHash: "$2a$04$injected" })).status, 201);
   assert.notEqual(fake.read("members", "dc-beta").pinHash, "$2a$04$injected", "a client-sent pinHash is ignored");

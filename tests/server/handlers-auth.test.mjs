@@ -1,5 +1,6 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import * as fake from "../helpers/fake-firestore.mjs";
 import { seedRegion, users, call, PIN, OFFICE_PIN } from "../helpers/region.mjs";
 import { invalidateSnapshotCache } from "../../src/services/firestore.js";
@@ -34,29 +35,49 @@ test("login: the BNI Office account signs in with the office PIN as an Area Dire
   assert.equal((await login("__srdc__", PIN)).status, 401);
 });
 
-test("login: 5 wrong PINs lock the account (even for the right PIN), others unaffected", async () => {
+// The throttle record of one account on one network (see networkTag in handlers.js).
+const netKey = (memberId, ip) => `acctip_${crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16)}_${memberId}`;
+const lockMinutesOf = t => Math.round((Date.parse(t.lockedUntil) - Date.now()) / 60000);
+
+test("login: 5 wrong PINs lock the account on that network (even for the right PIN), not for its owner elsewhere", async () => {
   for (let i = 0; i < 5; i++) await login("dc-alpha", "0000");
   const locked = await login("dc-alpha", PIN);
   assert.equal(locked.status, 429);
   assert.match(locked.error, /for this account/);
   assert.doesNotMatch(locked.error, /incorrect pin/i, "the login screen hides messages mentioning 'incorrect PIN'");
-  assert.equal((await login("dc-beta", PIN)).status, 200);
-  const t = fake.read("loginThrottle", "acct_dc-alpha");
-  fake.seed("loginThrottle", "acct_dc-alpha", { ...t, lockedUntil: new Date(Date.now() - 1000).toISOString() });
+  assert.equal((await login("dc-beta", PIN)).status, 200, "other accounts are unaffected");
+  assert.equal((await login("dc-alpha", PIN, "10.0.0.2")).status, 200, "someone typing wrong PINs on purpose cannot lock the owner out");
+  const key = netKey("dc-alpha", "10.0.0.1");
+  const t = fake.read("loginThrottle", key);
+  fake.seed("loginThrottle", key, { ...t, lockedUntil: new Date(Date.now() - 1000).toISOString() });
   assert.equal((await login("dc-alpha", PIN)).status, 200, "works again once the lock expires");
-  assert.equal(fake.read("loginThrottle", "acct_dc-alpha"), undefined, "a correct PIN clears the account's count");
+  assert.equal(fake.read("loginThrottle", key), undefined, "a correct PIN clears the account's count");
 });
 
 test("login: the lock grows with repeated failures", async () => {
+  const key = netKey("dc-alpha", "10.0.0.1");
   for (let i = 0; i < 10; i++) {
-    const t = fake.read("loginThrottle", "acct_dc-alpha");
-    if (t) fake.seed("loginThrottle", "acct_dc-alpha", { ...t, lockedUntil: null });
-    await login("dc-alpha", "0000", "10.0.0." + i);
+    const t = fake.read("loginThrottle", key);
+    if (t) fake.seed("loginThrottle", key, { ...t, lockedUntil: null });
+    await login("dc-alpha", "0000");
   }
-  const t = fake.read("loginThrottle", "acct_dc-alpha");
-  const minutes = Math.round((Date.parse(t.lockedUntil) - Date.now()) / 60000);
+  const t = fake.read("loginThrottle", key);
   assert.equal(t.failures, 10);
+  const minutes = lockMinutesOf(t);
   assert.ok(minutes >= 59 && minutes <= 60, "10 failures lock for an hour, got " + minutes);
+});
+
+test("login: wrong PINs spread over many networks still lock the account everywhere", async () => {
+  for (let i = 0; i < 24; i++) await login("dc-alpha", "0000", "10.1.0." + i);
+  assert.equal((await login("dc-alpha", PIN, "10.2.0.1")).status, 200, "24 spread-out failures do not lock");
+  for (let i = 0; i < 25; i++) await login("dc-alpha", "0000", "10.3.0." + i);
+  const total = fake.read("loginThrottle", "acct_dc-alpha");
+  assert.equal(total.failures, 25, "the owner's sign-in cleared the earlier count");
+  const minutes = lockMinutesOf(total);
+  assert.ok(minutes >= 29 && minutes <= 30, "25 failures lock for half an hour, got " + minutes);
+  const r = await login("dc-alpha", PIN, "10.4.0.1");
+  assert.equal(r.status, 429);
+  assert.match(r.error, /for this account/);
 });
 
 test("login: 30 wrong PINs from one IP lock that IP; made-up ids create no account records", async () => {
@@ -88,11 +109,12 @@ test("branding is public; everything else needs a session", async () => {
 
 test("BNI Office PIN can be reset only by the Executive Director", async () => {
   for (const u of [users.ad, users.office, users.srdc, users.dcAlpha]) {
-    assert.equal((await call(u, "PUT", "auth/sr-pin", { pin: "5555" })).status, 403);
+    assert.equal((await call(u, "PUT", "auth/sr-pin", { pin: "555555" })).status, 403);
   }
   assert.equal((await call(users.ed, "PUT", "auth/sr-pin", { pin: "12" })).status, 400);
-  assert.equal((await call(users.ed, "PUT", "auth/sr-pin", { pin: "5555" })).status, 200);
-  assert.equal((await login("__srdc__", "5555")).status, 200);
+  assert.equal((await call(users.ed, "PUT", "auth/sr-pin", { pin: "12345" })).status, 400, "new PINs are 6 digits");
+  assert.equal((await call(users.ed, "PUT", "auth/sr-pin", { pin: "555555" })).status, 200);
+  assert.equal((await login("__srdc__", "555555")).status, 200);
   assert.equal((await login("__srdc__", OFFICE_PIN)).status, 401);
   assert.ok(fake.read("meta", "config").srPinChangedAt);
 });
