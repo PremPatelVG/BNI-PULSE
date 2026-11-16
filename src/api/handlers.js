@@ -121,6 +121,42 @@ function cleanWeeklyNumbers(body) {
   return entry;
 }
 
+// New Miyagi members sent by a Length-of-Membership upload (PUT /api/miyagi-new-members).
+// Every record is rebuilt here as a member who has just started the program, so the
+// request cannot set a score, ticks, check-ins or a status of its own.
+const MIYAGI_ADD_LIMIT = 200;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function newMiyagiMembers(list) {
+  if (!Array.isArray(list) || !list.length) throw badRequest("No members to add");
+  if (list.length > MIYAGI_ADD_LIMIT) throw badRequest(`At most ${MIYAGI_ADD_LIMIT} members can be added in one request`);
+  const text = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  const date = value => (ISO_DATE.test(String(value || "")) ? String(value) : "");
+  const today = new Date().toISOString().slice(0, 10);
+  const seen = new Set();
+  return list.map(raw => {
+    const id = String(raw?.id || "");
+    const name = text(raw?.name, 120);
+    const chapter = text(raw?.chapter, 80);
+    if (!/^[a-z0-9_]{3,200}$/.test(id) || !name || !chapter) throw badRequest("Each new member needs an id, a name and a chapter");
+    if (seen.has(id)) throw badRequest(`"${id}" is listed twice`);
+    seen.add(id);
+    const added = date(raw.createdAt) || today;
+    const data = {
+      name, chapter, joinDate: date(raw.joinDate),
+      status: "active", score: 0, checkpoints: {}, checkins: {},
+      lastActivityDate: added, createdAt: added
+    };
+    if (raw.firstName !== undefined || raw.lastName !== undefined) {
+      data.firstName = text(raw.firstName, 80);
+      data.lastName = text(raw.lastName, 80);
+    }
+    if (date(raw.cumulativeStart)) data.cumulativeStart = raw.cumulativeStart;
+    if (text(raw.cumulativeLength, 40)) data.cumulativeLength = text(raw.cumulativeLength, 40);
+    return { id, data };
+  });
+}
+
 // Accounts a Senior Director may create, edit or delete.
 const CHAPTER_ACCOUNT_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
 
@@ -661,6 +697,35 @@ export async function routeApi({ method, segments, body, authorization, query, i
         ? await cachedListCollection(first)
         : await listCollection(first);
     return ok({ rows: first === "attendance" ? await scopeAttendanceRows(user, rows) : filterRowsToScope(user, rows) });
+  }
+
+  // New Miyagi members from a Length-of-Membership upload, added together. The browser
+  // used to save them one at a time: an upload that stopped part-way (page closed, laptop
+  // asleep, connection lost) left every later chapter without its members, and nothing
+  // said so. ADD-ONLY - an id that already exists is left exactly as it is, so nothing
+  // sent here can touch the progress of a member already in the program.
+  if (first === "miyagi-new-members" && !second && method === "PUT") {
+    assertCanWrite(user);
+    const members = newMiyagiMembers(body?.members);
+    members.forEach(m => assertCanWriteChapter(user, m.data.chapter));
+    const db = getDb();
+    const refs = members.map(m => db.collection("miyagiMembers").doc(m.id));
+    const current = await db.getAll(...refs);
+    const batch = db.batch();
+    const added = [], existing = [], perChapter = {};
+    members.forEach((m, i) => {
+      if (current[i].exists) { existing.push(m.id); return; }
+      batch.set(refs[i], m.data);
+      added.push(m.id);
+      perChapter[m.data.chapter] = (perChapter[m.data.chapter] || 0) + 1;
+    });
+    if (added.length) {
+      await batch.commit();
+      invalidateSnapshotCache("miyagiMembers");
+      const chapters = Object.keys(perChapter).sort().map(c => `${c} ${perChapter[c]}`).join(", ");
+      await writeActivity(user, "miyagi_members_added", { memberCount: added.length, chapters: chapters.slice(0, 200) });
+    }
+    return ok({ added, existing });
   }
 
   if (COLLECTION_WRITE_ALLOWLIST.has(first) && second && method === "PUT") {

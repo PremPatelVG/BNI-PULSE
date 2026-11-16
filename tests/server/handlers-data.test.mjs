@@ -119,6 +119,50 @@ test("collections: a 'new member' Miyagi record can never wipe existing progress
   assert.equal(r.body.row.id, "alpha_ravi");
 });
 
+test("miyagi-new-members: adds in one request, never touches a member already there", async () => {
+  fake.seed("miyagiMembers", "alpha_ravi", { chapter: "Alpha", name: "Ravi", checkpoints: { msp: { done: true } }, score: 5, status: "dropped" });
+  const r = await call(users.saAlpha, "PUT", "miyagi-new-members", { members: [
+    { id: "alpha_ravi", name: "Ravi", chapter: "Alpha", joinDate: "2026-09-01" },
+    { id: "alpha_neha_rao", name: "  Neha   Rao ", chapter: "Alpha", joinDate: "2026-08-01", createdAt: "2026-11-16", firstName: "Neha", lastName: "Rao",
+      cumulativeStart: "2026-08-01", cumulativeLength: "0 years (3 months)",
+      // None of these may come from the request: a new member starts from zero.
+      score: 90, status: "graduated", checkpoints: { msp: { done: true } }, checkins: { "3month": {} }, finalBelt: "Black" }
+  ] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { added: ["alpha_neha_rao"], existing: ["alpha_ravi"] });
+  assert.deepEqual(fake.read("miyagiMembers", "alpha_ravi"), { chapter: "Alpha", name: "Ravi", checkpoints: { msp: { done: true } }, score: 5, status: "dropped" }, "existing record left exactly as it was");
+  assert.deepEqual(fake.read("miyagiMembers", "alpha_neha_rao"), {
+    name: "Neha Rao", chapter: "Alpha", joinDate: "2026-08-01", status: "active", score: 0, checkpoints: {}, checkins: {},
+    lastActivityDate: "2026-11-16", createdAt: "2026-11-16", firstName: "Neha", lastName: "Rao", cumulativeStart: "2026-08-01", cumulativeLength: "0 years (3 months)"
+  });
+  const logged = fake.all("activityLog").filter(a => a.action === "miyagi_members_added");
+  assert.deepEqual(logged.map(a => [a.details.memberCount, a.details.chapters, a.userName]), [[1, "Alpha 1", "Alpha SA"]]);
+  // Sending the same list again adds nobody and logs nothing.
+  const again = await call(users.saAlpha, "PUT", "miyagi-new-members", { members: [{ id: "alpha_neha_rao", name: "Neha Rao", chapter: "Alpha" }] });
+  assert.deepEqual(again.body, { added: [], existing: ["alpha_neha_rao"] });
+  assert.equal(fake.all("activityLog").filter(a => a.action === "miyagi_members_added").length, 1);
+});
+
+test("miyagi-new-members: own chapters only, and a bad list adds nobody", async () => {
+  const m = (id, chapter) => ({ id, name: "N " + id, chapter });
+  const count = () => fake.all("miyagiMembers").length;
+  assert.equal((await call(users.viewer, "PUT", "miyagi-new-members", { members: [m("alpha_a", "Alpha")] })).status, 403);
+  assert.equal((await call(null, "PUT", "miyagi-new-members", { members: [m("alpha_a", "Alpha")] })).status, 401);
+  // One row outside the uploader's chapters refuses the whole request.
+  assert.equal((await call(users.saAlpha, "PUT", "miyagi-new-members", { members: [m("alpha_a", "Alpha"), m("beta_b", "Beta")] })).status, 403);
+  assert.equal((await call(users.srdc, "PUT", "miyagi-new-members", { members: [m("beta_b", "Beta")] })).status, 403);
+  for (const members of [undefined, [], "x", [{ id: "alpha_a", chapter: "Alpha" }], [{ id: "Alpha/../x", name: "A", chapter: "Alpha" }], [m("alpha_a", "Alpha"), m("alpha_a", "Alpha")],
+    Array.from({ length: 201 }, (_, i) => m("alpha_m" + i, "Alpha"))]) {
+    assert.equal((await call(users.ad, "PUT", "miyagi-new-members", { members })).status, 400);
+  }
+  assert.equal(count(), 0, "nothing was written by any refused request");
+  const ok = await call(users.srdc, "PUT", "miyagi-new-members", { members: Array.from({ length: 200 }, (_, i) => m("gamma_m" + i, "Gamma")) });
+  assert.equal(ok.body.added.length, 200);
+  assert.equal(count(), 200);
+  // The Miyagi list is cached on the server; the new members must show up straight away.
+  assert.equal((await call(users.srdc, "GET", "miyagiMembers")).body.rows.length, 200);
+});
+
 test("tlr-upload: leadership only, validated, Sr.DC scoped", async () => {
   const rows = [{ name: "Alpha", score: "80" }, { name: "Beta", score: "60" }];
   assert.equal((await call(users.dcAlpha, "POST", "tlr-upload", { monthIso: "2026-10", rows })).status, 403);

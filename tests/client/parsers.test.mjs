@@ -109,6 +109,42 @@ test("Length of Membership: columns, lengths, rejoined members", async () => {
   assert.deepEqual([out[1].chapter, out[1].recentMonths, out[1].cumulativeLength, out[1].cumulativeStart], ["Gamma", 25, "5 years (1 month)", "2021-07-01"]);
 });
 
+test("Length of Membership: the real export shape - merged cells leave a gap after most columns", async () => {
+  const rows = [["Region ► Length of Membership Report"], ["Running User", "", "Run At", "", "Country"], ["BNI Region", "", "2026-11-16T10:39:10", "", "India"], ["Parameters"],
+    ["Regions:", "", "", "", "", "", "Ahmedabad East, Ahmedabad West"],
+    ["Chapter Name", "First Name", "", "Last Name", "", "Cumulative Length", "", "Cumulative Start Date", "", "Recent Length", "", "Recent Start Date"],
+    ["Alpha", "Asha", "", "Patel", "", "0 years (1 month)", "", "2026-10-01T00:00:00", "", "0 years (1 month)", "", "2026-10-01T00:00:00"],
+    // Left BNI and came back: 8 months in total, although the first join was years ago.
+    ["BNI Beta", "KIRAN", "", "MEHTA", "", "0 years (8 months)", "", "2021-08-01T00:00:00", "", "0 years (0 months)", "", "2026-11-01T00:00:00"],
+    ["Gamma", "Ravi", "", "Shah", "", "10 years (9 months)", "", "2015-12-01T00:00:00", "", "0 years (4 months)", "", "2026-07-01T00:00:00"]];
+  const out = await parse("parseLOMRows", rows);
+  assert.deepEqual(out.map(r => [r.chapter, r.name, r.cumulativeLength, r.cumulativeStart, r.recentMonths, r.recentStart]), [
+    ["Alpha", "Asha Patel", "0 years (1 month)", "2026-10-01", 1, "2026-10-01"],
+    ["BNI Beta", "KIRAN MEHTA", "0 years (8 months)", "2021-08-01", 0, "2026-11-01"],
+    ["Gamma", "Ravi Shah", "10 years (9 months)", "2015-12-01", 4, "2026-07-01"]
+  ]);
+});
+
+test("Length of Membership: Cumulative and Recent columns are never taken for each other", async () => {
+  const months = d => page.run(`return monthsSinceDate('${d}');`);
+  let out = await parse("parseLOMRows", [["Chapter Name", "First Name", "Last Name", "Cumulative Start Date", "Recent Length", "Recent Start Date"],
+    ["Alpha", "Asha", "Patel", "2020-01-01", "0 years (2 months)", "2026-09-01"]]);
+  assert.deepEqual([out[0].cumulativeLength, out[0].cumulativeStart, out[0].recentMonths, out[0].recentStart], ["", "2020-01-01", 2, "2026-09-01"]);
+  // A report with only the Recent columns has no Cumulative Start Date.
+  out = await parse("parseLOMRows", [["Chapter Name", "First Name", "Last Name", "Recent Length", "Recent Start Date"],
+    ["Alpha", "Asha", "Patel", "0 years (2 months)", "2026-09-01"]]);
+  assert.deepEqual([out[0].cumulativeStart, out[0].recentMonths, out[0].recentStart], ["", 2, "2026-09-01"]);
+  // Only the Cumulative columns: Recent Length is not read from Cumulative Length. The time
+  // since the Cumulative Start Date stands in - it can make a member look longer-serving, never newer.
+  out = await parse("parseLOMRows", [["Chapter Name", "First Name", "Last Name", "Cumulative Length", "Cumulative Start Date"],
+    ["Alpha", "Asha", "Patel", "0 years (2 months)", "2020-01-01"]]);
+  assert.deepEqual([out[0].recentLength, out[0].recentStart, out[0].recentMonths], ["", "2020-01-01", await months("2020-01-01")]);
+  // A row with a chapter but no name is not a member (the "Name" column is not "Chapter Name").
+  out = await parse("parseLOMRows", [["Chapter Name", "First Name", "Last Name", "Cumulative Length", "Cumulative Start Date", "Recent Length", "Recent Start Date"],
+    ["Alpha", "", "", "", "", "", ""]]);
+  assert.equal(out.length, 0);
+});
+
 test("parseLengthMonths and cleanMemberNameForChapter", async () => {
   const r = await page.run(`return [parseLengthMonths('0 years (11 months)'),parseLengthMonths('3 years (5 months)'),parseLengthMonths('2 years and 4 months'),
     parseLengthMonths('7 months'),parseLengthMonths(14),parseLengthMonths(''),
