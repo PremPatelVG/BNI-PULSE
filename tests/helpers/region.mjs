@@ -15,7 +15,9 @@ const officePinHash = bcrypt.hashSync(OFFICE_PIN, 4);
 export const users = {
   office: { id: "__srdc__", role: "ad", chapter: null, chapters: [] },
   ed: { id: "ed-1", role: "ed", chapter: null, chapters: [] },
-  ad: { id: "ad-1", role: "ad", chapter: null, chapters: [] },
+  // A real session gets its region's chapters on every request (refreshSessionUser);
+  // tests that call services directly need them on the object.
+  ad: { id: "ad-1", role: "ad", chapter: null, chapters: [], area: "ahmedabad", areaChapters: ["Alpha", "Beta", "Gamma"] },
   srdc: { id: "srdc-1", role: "srdc", chapter: "Alpha", chapters: ["Alpha", "Gamma"] },
   srdcBeta: { id: "srdc-2", role: "srdc", chapter: "Beta", chapters: ["Beta"] },
   dcAlpha: { id: "dc-alpha", role: "dc", chapter: "Alpha", chapters: ["Alpha"] },

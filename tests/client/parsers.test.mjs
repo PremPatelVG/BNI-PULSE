@@ -85,6 +85,39 @@ test("TLR: East layout (value several columns after the label, gaps between colu
   assert.deepEqual([p.rows[0].name, p.rows[0].chapterSize, p.rows[0].memberGrowth, p.rows[0].score], ["BNI Beta", "83.00", "27.00", "100"]);
 });
 
+test("TLR: the North Gujarat export (run by the Ahmedabad account, region in the header)", async () => {
+  // Same shape as BNI's North Gujarat Traffic Lights export; chapter names and numbers made up.
+  const pad = (row, n = 14) => row.concat(Array(Math.max(0, n - row.length)).fill(""));
+  const rows = [pad(["Region ► Traffic Lights Report"]), pad(["Running User", "", "Run At", "", "", "Country", "", "", "", "Region"]),
+    pad(["BNI Ahmedabad", "", "2026-11-23T19:14:19", "", "", "India", "", "", "", "North Gujarat"], 12), pad(["Parameters"]),
+    pad(["Region:", "", "", "", "", "", "", "North Gujarat"]), pad(["Year:", "", "", "", "", "", "", "2026"]), pad(["Month:", "", "", "", "", "", "", "November"]),
+    ["Chapter Name", "Chapter Size", "", "Member Growth (6 Months)", "Retention", "", "Referrals", "", "Visitors", "", "Conversion", "Absenteeism", "", "Score"],
+    ["BNI Kappa", "43.00", "", "3.00", "78.00", "", "1.66", "", "1.44", "", "22.22", "6.24", "", "80"],
+    ["BNI Lambda", "40.00", "", "40.00", "0.00", "", "0.46", "", "2.00", "", "285.71", "10.14", "", "55"]];
+  const p = await parse("parseTLRExcelRows", rows);
+  assert.equal(p.monthIso, "2026-11");
+  assert.deepEqual(p.rows.map(r => r.name), ["Kappa", "Lambda"], "the 'BNI Ahmedabad' running-user row is not a chapter");
+  assert.deepEqual([p.rows[1].chapterSize, p.rows[1].memberGrowth, p.rows[1].retention, p.rows[1].conversion, p.rows[1].score], ["40.00", "40.00", "0.00", "285.71", "55"]);
+});
+
+test("TLR: a region's report is matched to that region's chapters only", async () => {
+  // Kappa is a made-up North Gujarat chapter; "Alphas" a made-up closed one in the same
+  // report, whose name partly matches Ahmedabad's Alpha.
+  await page.run(`S.chapters=globalThis.__set___chapters.concat([{name:'Kappa',area:'north-gujarat'}]);`);
+  const rows = [["Parameters"], ["Region:", "North Gujarat"], ["Year:", "2026"], ["Month:", "April"], tlrHeader,
+    ["BNI Kappa", "40", "1", "70", "1", "1", "10", "5", "60"], ["BNI Alphas", "16", "-11", "48", "0.75", "0.52", "15.38", "11.25", "15"]];
+  try {
+    const p = await parse("parseTLRExcelRows", rows);
+    assert.equal(p.area, "north-gujarat");
+    assert.deepEqual(p.rows.map(r => r.name), ["Kappa", "Alphas"], "not taken for the other region's Alpha");
+    // A file that names no dashboard region is matched against every chapter, as before.
+    const q = await parse("parseTLRExcelRows", rows.filter(r => r[0] !== "Region:"));
+    assert.deepEqual(q.rows.map(r => r.name), ["Kappa", "Alpha"]);
+  } finally {
+    await page.run(`S.chapters=globalThis.__set___chapters;`);
+  }
+});
+
 test("TLR: clear errors for the wrong file", async () => {
   await assert.rejects(parse("parseTLRExcelRows", [["Year:", "2026"], ["Month:", "October"], ["Name", "Value"]]), /Chapter Name \.\.\. Score/);
   await assert.rejects(parse("parseTLRExcelRows", [["Year:", ""], ["Month:", "Octember"], tlrHeader, ["Alpha", "1", "1", "1", "1", "1", "1", "1", "1"]]), /Month\/Year/);

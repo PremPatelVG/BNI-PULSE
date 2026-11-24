@@ -12,7 +12,8 @@ test("login: correct PIN returns a session and the public profile only", async (
   const r = await login("dc-alpha", PIN);
   assert.equal(r.status, 200);
   assert.ok(r.body.token);
-  assert.deepEqual(Object.keys(r.body.user).sort(), ["areaDirectorId", "chapter", "chapterReportsTo", "chapters", "id", "name", "reportsTo", "role", "seniorDirectorId"]);
+  assert.deepEqual(Object.keys(r.body.user).sort(), ["area", "areaDirectorId", "chapter", "chapterReportsTo", "chapters", "id", "name", "reportsTo", "role", "seniorDirectorId"]);
+  assert.equal(r.body.user.area, null, "only an Area Director account carries a region");
   assert.equal(r.body.user.name, "Dev Alpha");
 });
 

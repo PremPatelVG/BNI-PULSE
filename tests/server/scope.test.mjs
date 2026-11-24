@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as scope from "../../src/services/scope.js";
 
-const ad = { role: "ad" }, ed = { role: "ed" }, viewer = { role: "viewer" };
+// An Area Director's session carries their region's chapters (handlers.js refreshSessionUser).
+const ad = { role: "ad", area: "ahmedabad", areaChapters: ["Alpha", "Beta", "Gamma"] };
+const adNorth = { role: "ad", area: "north-gujarat", areaChapters: ["Delta"] };
+const office = { id: "__srdc__", role: "ad" }, ed = { role: "ed" }, viewer = { role: "viewer" };
 const srdc = { role: "srdc", chapter: "Alpha", chapters: ["Alpha", "Gamma"] };
 const dc = { role: "dc", chapter: "Alpha", chapters: ["Alpha"] };
 const sa = { role: "sa1", chapter: "Beta" };            // chapters missing: chapter alone counts
@@ -20,8 +23,11 @@ test("role predicates", () => {
   assert.equal(scope.isAreaDirector(null), false);
 });
 
-test("scopedChapterNames: region-wide roles are unrestricted, others get their chapters", () => {
-  assert.equal(scope.scopedChapterNames(ad), null);
+test("scopedChapterNames: ED, BNI Office and viewers are unrestricted, an AD gets their region, others their chapters", () => {
+  assert.deepEqual(scope.scopedChapterNames(ad), ["Alpha", "Beta", "Gamma"]);
+  assert.deepEqual(scope.scopedChapterNames(adNorth), ["Delta"]);
+  assert.deepEqual(scope.scopedChapterNames({ role: "ad" }), [], "an AD whose region was not loaded sees nothing, never everything");
+  assert.equal(scope.scopedChapterNames(office), null, "the BNI Office account runs every region");
   assert.equal(scope.scopedChapterNames(ed), null);
   assert.equal(scope.scopedChapterNames(viewer), null, "viewers read the whole region");
   assert.deepEqual(scope.scopedChapterNames(srdc).sort(), ["Alpha", "Gamma"]);
@@ -34,7 +40,12 @@ test("read / write rights per chapter", () => {
   assert.equal(scope.canReadChapter(dc, "Beta"), false);
   assert.equal(scope.canReadChapter(viewer, "Beta"), true);
   assert.equal(scope.canWriteChapter(viewer, "Alpha"), false, "viewers are read-only");
-  assert.equal(scope.canWriteChapter(ad, "Anything"), true);
+  assert.equal(scope.canWriteChapter(ad, "Alpha"), true);
+  assert.equal(scope.canWriteChapter(ad, "Delta"), false, "an AD cannot write another region's chapter");
+  assert.equal(scope.canWriteChapter(adNorth, "Delta"), true);
+  assert.equal(scope.canReadChapter(adNorth, "Alpha"), false);
+  assert.equal(scope.canWriteChapter(office, "Anything"), true);
+  assert.equal(scope.canWriteChapter(ed, "Anything"), true);
   assert.equal(scope.canWriteChapter(srdc, "Gamma"), true);
   assert.equal(scope.canWriteChapter(srdc, "Beta"), false);
   assert.equal(scope.canWriteChapter(sa, "Beta"), true);
@@ -46,6 +57,8 @@ test("read / write rights per chapter", () => {
 test("filterRowsToScope keeps in-scope and chapter-less rows", () => {
   const rows = [{ chapter: "Alpha" }, { chapter: "Beta" }, { chapter: "Gamma" }, { name: "no chapter" }];
   assert.equal(scope.filterRowsToScope(ad, rows).length, 4);
+  assert.deepEqual(scope.filterRowsToScope(adNorth, rows).map(r => r.chapter || "none"), ["none"]);
+  assert.equal(scope.filterRowsToScope(ed, rows).length, 4);
   assert.deepEqual(scope.filterRowsToScope(dc, rows).map(r => r.chapter || "none"), ["Alpha", "none"]);
   assert.deepEqual(scope.filterRowsToScope(srdc, rows).map(r => r.chapter || "none"), ["Alpha", "Gamma", "none"]);
 });
@@ -59,4 +72,17 @@ test("assert helpers throw errors carrying an HTTP status", () => {
   assert.equal(scope.badRequest("x").status, 400);
   assert.equal(scope.notFound().status, 404);
   assert.equal(scope.forbidden().message, "Insufficient permissions");
+});
+
+test("regions: a missing or unknown area means Ahmedabad; the ED and BNI Office are region-wide", () => {
+  assert.equal(scope.areaOf({}), "ahmedabad");
+  assert.equal(scope.areaOf(null), "ahmedabad");
+  assert.equal(scope.areaOf({ area: "north-gujarat" }), "north-gujarat");
+  assert.equal(scope.areaOf({ area: "somewhere" }), "ahmedabad");
+  assert.equal(scope.isKnownArea("north-gujarat"), true);
+  assert.equal(scope.isKnownArea("Ahmedabad"), false, "ids, not labels");
+  assert.equal(scope.isRegionWide(ed), true);
+  assert.equal(scope.isRegionWide(office), true);
+  assert.equal(scope.isRegionWide(ad), false);
+  assert.equal(scope.isRegionWide(viewer), false, "viewers see every region but are not leadership");
 });

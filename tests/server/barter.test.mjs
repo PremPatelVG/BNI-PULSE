@@ -166,8 +166,9 @@ test("trade history: own for DC/SA, own chapters for Sr.DC, everything for AD; v
   await call(users.dcBeta, "POST", `barter/requests/${req.id}/confirm`, { offeredCheckId: a.id });
   assert.equal((await call(users.dcAlpha, "GET", "barter/trades")).body.trades.length, 1);
   assert.equal((await call(dcGamma, "GET", "barter/trades")).body.trades.length, 0);
+  assert.equal((await call(users.ed, "GET", "barter/trades")).body.scope, "all");
   const t = (await call(users.ad, "GET", "barter/trades")).body;
-  assert.equal(t.scope, "all");
+  assert.equal(t.scope, "region", "an Area Director oversees their own region");
   assert.equal(t.trades[0].aName, "Dev Alpha");
   assert.equal(t.trades[0].bName, "Dina Beta");
   assert.equal(t.trades[0].aOfferedCategory, "CA");

@@ -51,11 +51,21 @@ test("meta PUT: chapter-keyed goals/targets per chapter", async () => {
   assert.equal((await call(users.viewer, "PUT", "meta/chapterGoals", { Alpha: { dcGoal: "x" } })).status, 403);
 });
 
-test("meta PUT: region-wide documents are Area Director only; config/branding admins; PIN never settable", async () => {
-  for (const doc of ["growthSummary", "preCoreGrowth", "monthlyMembers", "tlr"]) {
+test("meta PUT: documents shared by every region are ED / BNI Office only; config/branding admins; PIN never settable", async () => {
+  for (const doc of ["growthSummary", "preCoreGrowth", "monthlyMembers"]) {
     assert.equal((await call(users.srdc, "PUT", "meta/" + doc, { x: 1 })).status, 403, doc);
     assert.equal((await call(users.dcAlpha, "PUT", "meta/" + doc, { x: 1 })).status, 403, doc);
-    assert.equal((await call(users.ad, "PUT", "meta/" + doc, { x: 1 })).status, 200, doc);
+    // An Area Director runs one region; these documents hold every region's chapters.
+    assert.equal((await call(users.ad, "PUT", "meta/" + doc, { x: 1 })).status, 403, doc);
+    assert.equal((await call(users.ed, "PUT", "meta/" + doc, { x: 1 })).status, 200, doc);
+    assert.equal((await call(users.office, "PUT", "meta/" + doc, { x: 1 })).status, 200, doc);
+  }
+  // The TLR and its history are kept one record per region and change only through the
+  // TLR upload - not even the ED / BNI Office write them whole.
+  for (const doc of ["tlr", "tlrHistory"]) {
+    for (const u of [users.srdc, users.dcAlpha, users.ad, users.ed, users.office]) {
+      assert.equal((await call(u, "PUT", "meta/" + doc, { rows: [] })).status, 403, doc + " " + u.id);
+    }
   }
   assert.equal((await call(users.dcAlpha, "PUT", "meta/config", { srCallDay: "Monday" })).status, 403);
   assert.equal((await call(users.srdc, "PUT", "meta/branding", { argLogo: "y" })).status, 200);

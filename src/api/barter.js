@@ -109,15 +109,17 @@ async function board(user, actingChapter) {
   const actingAsDc = isSeniorDirector(user) && actingChapter && (scopedChapterNames(user) || []).includes(actingChapter);
 
   // Who sees the holding DC's name (not just a count):
-  //  - Area/Executive Director & BNI Office: every cheque in the region.
+  //  - Executive Director & BNI Office: every cheque, in every region.
+  //  - Area Director: every cheque in their own region.
   //  - Senior Director (oversight): only cheques held by DCs in the chapters they oversee.
   //  - DC / SA / Senior Director acting as DC: counts only - the board stays anonymous
   //    between chapters so cross-chapter requests can't be reverse-engineered.
   // Prospect names, phones, company and payment are NEVER returned here for anyone.
   const seesHolders = !actingAsDc && (isAreaDirector(user) || isSeniorDirector(user));
   let scope = null;
-  if (!actingAsDc && isSeniorDirector(user) && !isAreaDirector(user)) {
-    scope = new Set(scopedChapterNames(user) || []);
+  const oversight = scopedChapterNames(user);
+  if (!actingAsDc && oversight !== null && (isSeniorDirector(user) || isAreaDirector(user))) {
+    scope = new Set(oversight);
     live = live.filter(c => scope.has(c.chapter));
   }
 
@@ -211,13 +213,14 @@ async function inbox(user) {
 }
 
 // Confirmed trade history. A DC/SA sees only their own trades; a Senior Director sees
-// every trade their assigned chapters were part of (either side); Area/Executive
-// Directors and the BNI Office account see every confirmed trade for oversight -
-// who traded with whom and which category each side offered.
+// every trade their assigned chapters were part of (either side), and an Area Director
+// every trade their region's chapters were part of; the Executive Director and the BNI
+// Office account see every confirmed trade for oversight - who traded with whom and
+// which category each side offered.
 async function trades(user) {
   const db = getDb();
-  const seesAll = isAreaDirector(user);
-  const senior = isSeniorDirector(user);
+  const seesAll = isAreaDirector(user) && scopedChapterNames(user) === null;
+  const senior = isSeniorDirector(user) || (isAreaDirector(user) && !seesAll);
   if (!seesAll && !senior && !TRADE_ROLES.has(user.role)) throw forbidden("No barter trade history for this account");
   const snap = await db.collection("barterRequests").where("status", "==", "confirmed").get();
   let reqs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -260,7 +263,9 @@ async function trades(user) {
       iAmRequester: r.requesterDcId === user.sub, iAmConfirmer: r.confirmedByDcId === user.sub
     });
   }
-  return ok({ trades: out, scope: seesAll ? "all" : senior ? "senior" : "mine" });
+  // "region": an Area Director's oversight view, limited to their own region.
+  const regionAd = isAreaDirector(user) && !seesAll;
+  return ok({ trades: out, scope: seesAll ? "all" : regionAd ? "region" : senior ? "senior" : "mine" });
 }
 
 // ---- writes ------------------------------------------------------------------

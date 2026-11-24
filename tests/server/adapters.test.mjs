@@ -2,6 +2,7 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import * as fake from "../helpers/fake-firestore.mjs";
 import { seedRegion, users, tokenFor, PIN } from "../helpers/region.mjs";
+import { invalidateSnapshotCache } from "../../src/services/firestore.js";
 import netlifyApi, { config as netlifyConfig } from "../../netlify/functions/api.js";
 import apiRouter from "../../src/routes/api.js";
 
@@ -38,6 +39,7 @@ test("Netlify function: client IP reaches the login throttle; 204 has no body; p
   assert.equal(del.status, 204);
   assert.equal(await del.text(), "");
   fake.seed("chapters", "BNI Hera", { name: "BNI Hera", order: 9 });
+  invalidateSnapshotCache("chapters");   // as adding a chapter through the API does
   const put = await netlifyApi(new Request(BASE + "weekly-data/BNI%20Hera/2026-10-06", { method: "PUT", body: JSON.stringify({ visitors: 2 }), headers: { authorization: tokenFor(users.ad) } }), {});
   assert.equal(put.status, 200);
   assert.ok(fake.read("weeklyData", "BNI Hera_2026-10-06"));

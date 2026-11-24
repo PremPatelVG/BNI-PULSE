@@ -12,6 +12,7 @@ import {
   applyTlrForMonth,
   buildSnapshot,
   CHAPTER_KEYED_META_DOCS,
+  chapterNamesInArea,
   cachedListCollection,
   cachedSnapshotCollection,
   currentConfig,
@@ -22,6 +23,11 @@ import {
   invalidateSnapshotCache,
   listCollection,
   loginDirectoryMember,
+  mergeRegionRows,
+  REGION_SPLIT_META,
+  ACTIVITY_READ,
+  chapterAreaLookup,
+  scopeActivityRows,
   scopeAttendanceRows,
   scopeMetaDoc,
   setMetaDoc,
@@ -29,6 +35,7 @@ import {
   writeActivity
 } from "../services/firestore.js";
 import {
+  areaOf,
   assertAdmin,
   assertCanWrite,
   assertCanWriteChapter,
@@ -36,10 +43,13 @@ import {
   filterRowsToScope,
   forbidden,
   isAreaDirector,
+  isKnownArea,
+  isRegionWide,
   isSeniorDirector,
   isViewer,
   notFound,
-  scopedChapterNames
+  scopedChapterNames,
+  SR_LOGIN_ID
 } from "../services/scope.js";
 
 function httpError(status, message) {
@@ -53,7 +63,8 @@ const COLLECTION_WRITE_ALLOWLIST = new Set(["attendance", "renewalsDone", "renew
 const COLLECTION_DELETE_ALLOWLIST = new Set(["renewalsDropped", "visitorPipeline", "miyagiMembers"]);
 
 // Who may write each meta document through PUT /api/meta/:id. Anything not listed here
-// is region-wide and Area Director only, so a new document is locked down by default.
+// is shared by every region and Executive Director / BNI Office only, so a new document
+// is locked down by default.
 // Meta documents only Area/Senior Directors may change.
 const ADMIN_META_DOCS = new Set(["branding", "config"]);
 // Meta documents holding per-chapter rows, merged server-side so a writer can only
@@ -68,7 +79,6 @@ const SCOPED_META_DOCS = {
 // scoping): a writer may only set keys for chapters they can write. Goals are edited by
 // each chapter's own DC/SA as well as by leadership.
 
-const SR_LOGIN_ID = "__srdc__";
 
 // POST /api/activity lets the browser add context to the log (member names, scores...).
 // It used to accept any action name and any details, so anyone could write entries that
@@ -163,23 +173,94 @@ const CHAPTER_ACCOUNT_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
 // The chapter fields a Senior Director may set (what the Settings chapter form sends).
 const SRDC_CHAPTER_FIELDS = new Set(["id", "name", "day", "tenure", "target", "order", "openingMembers"]);
 
+// The region a Senior Director's (or other non-AD caller's) chapters are in - the region
+// of the first chapter on their account. Used when such a caller adds a chapter.
+async function callerChapterArea(user) {
+  const first = memberChapters(user)[0];
+  if (!first) return areaOf(null);
+  const doc = await getDb().collection("chapters").doc(first).get();
+  return areaOf(doc.exists ? doc.data() : null);
+}
+
 function memberChapters(m) {
   if (!m) return [];
   return [...(m.chapters || []), m.chapter].filter(Boolean);
+}
+
+// The regions a leader runs: their own region for an Area Director, the regions of their
+// chapters for a Senior Director, every region (null) for the ED and BNI Office.
+async function callerAreas(user) {
+  if (isRegionWide(user)) return null;
+  if (isAreaDirector(user)) return [areaOf(user)];
+  const areas = new Set();
+  for (const name of new Set(memberChapters(user))) {
+    const doc = await getDb().collection("chapters").doc(name).get();
+    areas.add(areaOf(doc.exists ? doc.data() : null));
+  }
+  return [...areas];
+}
+
+// The weekly team call day is kept per region in meta/config.srCallDays ({ regionId: day }),
+// so each region can move its call whenever it likes without changing the other's. The
+// older single `srCallDay` is Ahmedabad's, from before there was a second region. A leader
+// sets only the regions they run; the ED and BNI Office set any. Those are the only config
+// fields the dashboard writes, so an account that runs one region may change nothing else
+// there (the PIN fields have their own endpoint).
+const CALL_DAYS = new Set(["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]);
+async function assertCanSaveConfig(user, body) {
+  const changes = [];
+  for (const [key, value] of Object.entries(body || {})) {
+    if (key === "srPin" || key === "srPinHash" || key === "srPinChangedAt") continue;   // dropped by the caller
+    if (key === "srCallDays") {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw badRequest("srCallDays must list a day per region");
+      for (const [area, day] of Object.entries(value)) {
+        if (!isKnownArea(area)) throw badRequest("Unknown region");
+        if (!CALL_DAYS.has(day)) throw badRequest("Not a day of the week");
+        changes.push(area);
+      }
+    } else if (key === "srCallDay") {
+      if (!CALL_DAYS.has(value)) throw badRequest("Not a day of the week");
+      changes.push(areaOf(null));
+    } else if (!isRegionWide(user)) {
+      throw forbidden("Only the Executive Director / BNI Office account can change that setting");
+    }
+  }
+  const mine = await callerAreas(user);
+  if (mine && changes.some(area => !mine.includes(area))) {
+    throw forbidden("You can only change the team call day of your own region");
+  }
 }
 
 // Who may write or delete a member account. `roles` lists every role involved - the
 // account's current role and the role being saved - so an account can never be moved
 // past what the caller manages (their own account included).
 //  - Executive Director accounts: only the ED or the BNI Office account.
-//  - Area Director / ED / BNI Office: any other account.
+//  - ED / BNI Office: any other account, in every region.
+//  - Area Director: Senior Director, Chapter Director and SA accounts in their own
+//    region's chapters, and Area Director accounts of their own region (themselves
+//    included). Viewer accounts see every region, so only the ED or BNI Office
+//    manages those. `areas` holds the region of each Area Director account involved
+//    (before and after the save).
 //  - Senior Director: only Chapter Director and SA accounts, in chapters they oversee.
-function assertCanManageMember(user, roles, chapters) {
+function assertCanManageMember(user, roles, chapters, areas = []) {
   const involved = roles.filter(Boolean);
   if (involved.includes("ed") && !(user?.role === "ed" || user?.id === SR_LOGIN_ID)) {
     throw forbidden("Only the Executive Director or the BNI Office account can manage Executive Director accounts");
   }
-  if (isAreaDirector(user)) return;
+  if (isRegionWide(user)) return;
+  if (isAreaDirector(user)) {
+    if (!involved.every(r => r === "srdc" || r === "ad" || CHAPTER_ACCOUNT_ROLES.has(r))) {
+      throw forbidden("Viewer accounts are managed by the Executive Director or the BNI Office account");
+    }
+    if (areas.some(a => a !== user.area)) {
+      throw forbidden("That Area Director account belongs to another region");
+    }
+    const region = new Set(scopedChapterNames(user) || []);
+    if (chapters.some(c => !region.has(c))) {
+      throw forbidden("That account belongs to a chapter outside your region");
+    }
+    return;
+  }
   if (!involved.every(r => CHAPTER_ACCOUNT_ROLES.has(r))) {
     throw forbidden("A Senior Director can only manage Chapter Director and Support Ambassador accounts");
   }
@@ -236,7 +317,9 @@ function publicUser(id, data) {
     reportsTo: data.reportsTo || "",
     chapterReportsTo: data.chapterReportsTo || {},
     seniorDirectorId: data.seniorDirectorId || "",
-    areaDirectorId: data.areaDirectorId || ""
+    areaDirectorId: data.areaDirectorId || "",
+    // The page labels an Area Director's screens with their region.
+    area: data.role === "ad" ? areaOf(data) : null
   };
 }
 
@@ -434,14 +517,13 @@ async function writeScopedMeta(user, docId, body) {
     throw badRequest(`Upload contains ${rejected.length} row(s) outside your chapters`);
   }
 
-  const existingDoc = await getMetaDoc(docId);
-  const existing = Array.isArray(existingDoc?.[listField]) ? existingDoc[listField] : [];
-  const touchedChapters = new Set(incoming.map(row => row?.[chapterField]).filter(Boolean));
-  const preserved = existing.filter(row => !touchedChapters.has(row?.[chapterField]));
-
+  // Each region's rows are in that region's own record: only the records of the regions
+  // whose chapters are in the upload are written (see mergeRegionRows).
   const { [listField]: _ignored, ...rest } = body || {};
-  const meta = await setMetaDoc(docId, { ...rest, [listField]: [...preserved, ...incoming] }, true);
-  await writeActivity(user, "meta_saved", { docId, rowCount: incoming.length });
+  const meta = await mergeRegionRows(docId, { chapterField, incoming, header: rest });
+  const areaOfChapter = await chapterAreaLookup();
+  const areas = [...new Set(incoming.map(row => areaOfChapter(row?.[chapterField])))];
+  await writeActivity(user, "meta_saved", { docId, rowCount: incoming.length }, { area: areas.length === 1 ? areas[0] : null });
   // The stored document is region-wide; the writer gets back only their own chapters.
   return ok({ meta: scopeMetaDoc(user, docId, meta) });
 }
@@ -463,6 +545,10 @@ async function refreshSessionUser(user) {
   user.role = member.role;
   user.chapter = member.chapter || null;
   user.chapters = member.chapters || [];
+  // An Area Director runs one region: their chapters are that region's chapters, read
+  // fresh here so a chapter added to (or moved into) the region is theirs at once.
+  user.area = areaOf(member);
+  if (member.role === "ad") user.areaChapters = await chapterNamesInArea(user.area);
 }
 
 // `ip` is the client's address as seen by the hosting adapter (used only to rate-limit
@@ -500,11 +586,15 @@ export async function routeApi({ method, segments, body, authorization, query, i
   // Region-wide monthly TLR upload. Area Director / BNI Office account only.
   if (first === "tlr-upload" && method === "POST") {
     if (!isAreaDirector(user) && !isSeniorDirector(user)) throw forbidden("Only leadership (Area Director / Senior Director / BNI Office) can upload the TLR");
-    const { monthIso, monthLabel, rows } = body || {};
+    const { monthIso, monthLabel, rows, area } = body || {};
     if (!/^\d{4}-\d{2}$/.test(String(monthIso || ""))) throw badRequest("A valid report month is required");
     if (!Array.isArray(rows) || !rows.length) throw badRequest("No chapter rows in the TLR");
-    const result = await applyTlrForMonth(user, { monthIso, monthLabel, rows });
-    await writeActivity(user, "tlr_report_uploaded", { month: monthIso, chaptersUpdated: result.chaptersUpdated, weeklyEntriesUpdated: result.weeklyEntriesUpdated });
+    if (area != null && area !== "" && !isKnownArea(area)) throw badRequest("Unknown region");
+    // `area` is the region named in the report's "Region:" cell; it decides only where a
+    // row for a chapter that is not on the dashboard (a closed chapter) is kept.
+    const result = await applyTlrForMonth(user, { monthIso, monthLabel, rows, area: area || null });
+    await writeActivity(user, "tlr_report_uploaded", { month: monthIso, chaptersUpdated: result.chaptersUpdated, weeklyEntriesUpdated: result.weeklyEntriesUpdated },
+      { area: result.areas && result.areas.length === 1 ? result.areas[0] : null });
     return ok(result);
   }
 
@@ -546,6 +636,17 @@ export async function routeApi({ method, segments, body, authorization, query, i
       if (notAllowed.length) throw forbidden(`Only the Area Director can change: ${notAllowed.join(", ")}`);
     }
     const { id: _id, ...chapter } = { ...body, name };
+    // The region the chapter belongs to. The ED and BNI Office choose it; an Area Director
+    // (or Senior Director) adds chapters to their own region and cannot move one out.
+    if (chapter.area !== undefined && !isKnownArea(chapter.area)) throw badRequest("Unknown region");
+    if (!isRegionWide(user)) {
+      if (prev) assertCanWriteChapter(user, prev.name);
+      const own = isAreaDirector(user) ? user.area : await callerChapterArea(user);
+      if (chapter.area !== undefined && chapter.area !== areaOf(prev || { area: own })) {
+        throw forbidden("Only the Executive Director or the BNI Office account can move a chapter to another region");
+      }
+      if (!prev) chapter.area = own;
+    }
     await ref.set(chapter, { merge: Boolean(prev) });
     invalidateSnapshotCache("chapters");
     await writeActivity(user, "chapter_saved", { chapterName: name, created: !prev });
@@ -563,7 +664,12 @@ export async function routeApi({ method, segments, body, authorization, query, i
   // to a single DC after a match.
   if (first === "member-contacts" && method === "GET") {
     assertAdmin(user);
-    const members = await listCollection("members");
+    let members = await listCollection("members");
+    // An Area Director gets the numbers of their own region's accounts only.
+    if (isAreaDirector(user) && !isRegionWide(user)) {
+      const region = new Set(scopedChapterNames(user) || []);
+      members = members.filter(m => m.id === user.id || memberChapters(m).some(c => region.has(c)));
+    }
     return ok({ contacts: members.map(m => ({ id: m.id, name: m.name || "", role: m.role || "", chapter: m.chapter || "", chapters: m.chapters || [], phone: m.phone || m.contact || "" })) });
   }
 
@@ -572,6 +678,10 @@ export async function routeApi({ method, segments, body, authorization, query, i
     const { id, pin, pinHash: _rejectedHash, ...member } = body || {};
     if (!member.name) throw badRequest("Member name is required");
     if (member.role === "cd") member.role = "dc";
+    // Only an Area Director account belongs to a region of its own; everyone else's
+    // region follows their chapters.
+    if (member.role !== "ad") delete member.area;
+    else if (member.area !== undefined && !isKnownArea(member.area)) throw badRequest("Unknown region");
     // Support Ambassador logins are one shared account per chapter and are always named
     // "<Chapter> SA" - the name is derived from the chapter, never typed in.
     if (member.role === "sa1" || member.role === "sa2") {
@@ -584,7 +694,9 @@ export async function routeApi({ method, segments, body, authorization, query, i
     const prev = existing && existing.exists ? existing.data() : null;
     assertCanManageMember(user,
       [prev && prev.role, member.role],
-      [...memberChapters(prev), ...memberChapters(member)]);
+      [...memberChapters(prev), ...memberChapters(member)],
+      [prev && prev.role === "ad" ? areaOf(prev) : null,
+        member.role === "ad" ? areaOf({ area: member.area !== undefined ? member.area : prev?.area }) : null].filter(Boolean));
     // The Executive Director's PIN may be set or reset ONLY by the BNI Office master
     // account - not by an Area Director, Senior Director, or another ED. This covers
     // creating an ED account, changing an existing ED's PIN, and the role-swap bypass
@@ -616,7 +728,8 @@ export async function routeApi({ method, segments, body, authorization, query, i
     assertAdmin(user);
     const existing = await getDb().collection("members").doc(second).get();
     if (!existing.exists) throw notFound("Member not found");
-    assertCanManageMember(user, [existing.data().role], memberChapters(existing.data()));
+    assertCanManageMember(user, [existing.data().role], memberChapters(existing.data()),
+      existing.data().role === "ad" ? [areaOf(existing.data())] : []);
     await getDb().collection("members").doc(second).delete();
     invalidateSnapshotCache("members");
     await writeActivity(user, "member_deleted", { memberId: second, memberName: existing.data().name || "" });
@@ -658,6 +771,9 @@ export async function routeApi({ method, segments, body, authorization, query, i
   if (first === "meta" && second && method === "PUT") {
     assertCanWrite(user);
     if (SCOPED_META_DOCS[second]) return writeScopedMeta(user, second, body);
+    // The TLR and its history are kept one record per region and change only through the
+    // TLR upload (POST /api/tlr-upload), which merges by chapter into each region's record.
+    if (REGION_SPLIT_META[second]) throw forbidden("The TLR is changed by uploading the TLR report");
     if (CHAPTER_KEYED_META_DOCS[second]) {
       const chapterOf = CHAPTER_KEYED_META_DOCS[second];
       for (const key of Object.keys(body || {})) {
@@ -667,13 +783,20 @@ export async function routeApi({ method, segments, body, authorization, query, i
       }
     } else if (ADMIN_META_DOCS.has(second)) {
       assertAdmin(user);
-    } else if (!isAreaDirector(user)) {
-      throw forbidden("Only the Area Director / BNI Office account can change region-wide data");
+      if (second === "config") await assertCanSaveConfig(user, body);
+    } else if (!isRegionWide(user)) {
+      // Shared by every region (the TLR, its history, the 12-month imports): an Area
+      // Director runs one region, so only the Executive Director / BNI Office may change
+      // these directly. The dashboard itself never does - the TLR upload merges by chapter.
+      throw forbidden("Only the Executive Director / BNI Office account can change data shared by every region");
     }
-    // srPin is only settable through the dedicated hashed endpoint above.
-    const { srPin: _blockedPin, srPinHash: _blockedHash, ...safeBody } = body || {};
+    // The PIN fields are only settable through the dedicated hashed endpoint above. That
+    // includes srPinChangedAt: a date in the future would sign the BNI Office out for good.
+    const { srPin: _blockedPin, srPinHash: _blockedHash, srPinChangedAt: _blockedChangedAt, ...safeBody } = body || {};
     const meta = await setMetaDoc(second, safeBody, true);
-    await writeActivity(user, "meta_saved", { docId: second });
+    // A change of one region's team call day belongs to that region's activity.
+    const dayAreas = second === "config" && safeBody.srCallDays && typeof safeBody.srCallDays === "object" ? Object.keys(safeBody.srCallDays) : [];
+    await writeActivity(user, "meta_saved", { docId: second }, { area: dayAreas.length === 1 ? dayAreas[0] : null });
     return ok({ meta: scopeMetaDoc(user, second, meta) });
   }
 
@@ -691,11 +814,15 @@ export async function routeApi({ method, segments, body, authorization, query, i
     // The on-demand collections are shared across users, so they go through the same
     // cache as the snapshot. The activity log is unbounded, so it is read newest-first
     // with a hard cap rather than pulling the whole collection and slicing afterwards.
-    const rows = first === "activityLog"
-      ? await cachedListCollection(first, { field: "timestamp", direction: "desc" }, 500)
-      : first === "miyagiMembers"
-        ? await cachedListCollection(first)
-        : await listCollection(first);
+    // Each region's newest entries are kept separately (scopeActivityRows), so twice the
+    // per-region number is read.
+    if (first === "activityLog") {
+      const rows = await cachedListCollection(first, { field: "timestamp", direction: "desc" }, ACTIVITY_READ);
+      return ok({ rows: await scopeActivityRows(user, rows) });
+    }
+    const rows = first === "miyagiMembers"
+      ? await cachedListCollection(first)
+      : await listCollection(first);
     return ok({ rows: first === "attendance" ? await scopeAttendanceRows(user, rows) : filterRowsToScope(user, rows) });
   }
 

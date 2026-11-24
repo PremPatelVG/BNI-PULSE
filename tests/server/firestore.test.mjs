@@ -106,7 +106,7 @@ test("applyTlrForMonth merges by chapter, refreshes that month's entries, and sc
   assert.equal(r.chaptersUpdated, 1, "duplicate rows for one chapter collapse to one");
   const tlr = fake.read("meta", "tlr");
   assert.deepEqual(tlr.rows.map(x => x.name).sort(), ["BNI Alpha", "Beta"], "Beta kept: merge by chapter");
-  assert.equal(tlr.uploadedBy, "Arun Area", "uploader's name, not 'system'");
+  assert.equal(tlr.uploadedBy, undefined, "the shared document's header is not rewritten - who uploaded is in the activity log");
   assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").tlr, 80);
   assert.equal(fake.read("weeklyData", "Alpha_2026-10-06").conversionPct, 26);
   assert.equal(fake.read("weeklyData", "Alpha_2026-09-29").tlr, 0, "other months untouched");

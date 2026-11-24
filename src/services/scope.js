@@ -8,8 +8,37 @@ export const ROLE_SRDC = "srdc";
 export const ROLE_VIEWER = "viewer";
 const CHAPTER_ROLES = new Set(["dc", "cd", "sa1", "sa2"]);
 
-// The Executive Director sits above the Area Director with the same whole-region
-// access, so isAreaDirector() (the "sees and does everything" gate) also matches ED.
+// The BNI Office master account signs in under this fixed id and runs as role "ad".
+export const SR_LOGIN_ID = "__srdc__";
+
+// The dashboard covers more than one BNI region ("area" here, so it is not confused with
+// the older `region` field some chapters carry, e.g. "Ahmedabad West"). Chapters and
+// Area Director accounts carry `area`; a missing value means Ahmedabad, the region the
+// dashboard started with, so existing data needs no change.
+export const AREAS = [
+  { id: "ahmedabad", label: "Ahmedabad" },
+  { id: "north-gujarat", label: "North Gujarat" }
+];
+export const DEFAULT_AREA = "ahmedabad";
+const AREA_IDS = new Set(AREAS.map(a => a.id));
+
+export function isKnownArea(id) {
+  return AREA_IDS.has(id);
+}
+
+export function areaOf(record) {
+  return (record && AREA_IDS.has(record.area)) ? record.area : DEFAULT_AREA;
+}
+
+// The Executive Director and the BNI Office account run every region. An Area Director
+// runs only their own region (see scopedChapterNames).
+export function isRegionWide(user) {
+  return user?.role === ROLE_ED || user?.id === SR_LOGIN_ID;
+}
+
+// The Executive Director sits above the Area Director with the same leadership powers,
+// so isAreaDirector() also matches ED. What chapters those powers reach is decided by
+// scopedChapterNames(): every region for the ED and BNI Office, one region for an AD.
 export function isAreaDirector(user) {
   return user?.role === ROLE_AD || user?.role === ROLE_ED;
 }
@@ -26,10 +55,14 @@ export function isChapterRole(user) {
   return CHAPTER_ROLES.has(user?.role);
 }
 
-// Area Directors and Viewers see the whole region. Everyone else is limited to the
-// chapters stored on their member record. Returning null means "unrestricted".
+// The Executive Director, the BNI Office account and Viewers see every region. An Area
+// Director sees the chapters of their own region: `areaChapters`, filled in from the
+// chapters collection on every request (handlers.js refreshSessionUser) - an AD without
+// it sees nothing, never everything. Everyone else is limited to the chapters stored on
+// their member record. Returning null means "unrestricted".
 export function scopedChapterNames(user) {
-  if (isAreaDirector(user) || isViewer(user)) return null;
+  if (isRegionWide(user) || isViewer(user)) return null;
+  if (user?.role === ROLE_AD) return Array.isArray(user.areaChapters) ? [...user.areaChapters] : [];
   const names = new Set();
   (user?.chapters || []).forEach(name => { if (name) names.add(name); });
   if (user?.chapter) names.add(user.chapter);
@@ -42,11 +75,11 @@ export function canReadChapter(user, chapterName) {
   return allowed.includes(chapterName);
 }
 
-// Viewers are read-only everywhere. Chapter roles may only write inside their own
-// chapters. Area Directors and Senior Directors write anywhere they can read.
+// Viewers are read-only everywhere. Everyone else writes exactly where they can read:
+// chapter roles in their own chapters, Senior Directors in the chapters they oversee,
+// an Area Director in their region, the ED and BNI Office anywhere.
 export function canWriteChapter(user, chapterName) {
   if (!user || isViewer(user)) return false;
-  if (isAreaDirector(user)) return true;
   const allowed = scopedChapterNames(user);
   if (allowed === null) return true;
   return allowed.includes(chapterName);
