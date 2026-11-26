@@ -71,12 +71,20 @@ async function signIn(roleKey, memberId, pin = PIN) {
   page.on("pageerror", e => pageErrors.push(`${memberId}: ${e.message}`));
   await page.setViewport({ width: 1280, height: 900 });
   await page.goto(BASE + "/", { waitUntil: "networkidle0" });
-  await page.waitForFunction(() => document.querySelectorAll("#loginRole option").length > 1);
-  await page.select("#loginRole", roleKey);
-  await page.waitForFunction(id => [...document.querySelectorAll("#loginName option")].some(o => o.value === id), {}, memberId);
-  await page.select("#loginName", memberId);
-  await page.type("#loginPin", pin);
-  await page.click("#loginBtn");
+  if (roleKey === "ed" || roleKey === "__master__") {
+    // The Executive Director and the BNI Office sign in from their shortcut tiles.
+    await page.click(`#loginQuick [data-q="${roleKey === "ed" ? "ed" : "office"}"]`);
+    await page.waitForSelector("#quickPin", { visible: true });
+    await page.type("#quickPin", pin);
+    await page.click("#quickBtn");
+  } else {
+    await page.waitForFunction(() => document.querySelectorAll("#loginRole option").length > 1);
+    await page.select("#loginRole", roleKey);
+    await page.waitForFunction(id => [...document.querySelectorAll("#loginName option")].some(o => o.value === id), {}, memberId);
+    await page.select("#loginName", memberId);
+    await page.type("#loginPin", pin);
+    await page.click("#loginBtn");
+  }
   await page.waitForSelector("#navBar .nt", { visible: true });
   await page.waitForFunction(() => S.chapters.length > 0 && S.weeklyData.length > 0);
   return page;
@@ -387,6 +395,29 @@ test("browser: Miyagi Completed Export CSV sits above the list and saves the fil
     '"<svg onload=""window.__xss=2"">","Beta","2025-10-20","2026-08-15","Blue","60","Sameer Senior"'
   ]);
   await ad.browserContext().close();
+});
+
+test("browser: login page - the BNI Office shortcut asks for the password and says when it is wrong", { skip: NO_BROWSER }, async () => {
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  page.on("pageerror", e => pageErrors.push(`login page: ${e.message}`));
+  await page.setViewport({ width: 1280, height: 900 });
+  await page.goto(BASE + "/", { waitUntil: "networkidle0" });
+  await page.waitForSelector('#loginQuick [data-q="office"]', { visible: true });
+  assert.equal(await page.$eval("#quickPanel", el => el.classList.contains("hidden")), true, "no password box until a tile is clicked");
+  assert.equal(await page.$eval("#loginRegionGroup", el => el.classList.contains("hidden")), true, "one region: nothing to choose");
+  await page.click('#loginQuick [data-q="office"]');
+  await page.waitForSelector("#quickPin", { visible: true });
+  await page.type("#quickPin", "000000");
+  await page.click("#quickBtn");
+  await page.waitForSelector("#quickErr", { visible: true });
+  assert.match(await page.$eval("#quickErr", el => el.textContent), /Invalid password/);
+  assert.equal(await page.$eval("#quickPin", el => el.value), "", "the wrong password is cleared");
+  await page.type("#quickPin", OFFICE_PIN);
+  await page.click("#quickBtn");
+  await page.waitForSelector("#navBar .nt", { visible: true });
+  assert.equal(await page.evaluate(() => S.user.id), "__srdc__");
+  await context.close();
 });
 
 test("browser: no script errors on any page visited", { skip: NO_BROWSER }, () => {

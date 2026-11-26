@@ -22,8 +22,69 @@ body{font-family:'Inter','Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-se
 .loader-t2{font-size:11px;opacity:.4;letter-spacing:2px;text-transform:uppercase;}
 .spin{width:28px;height:28px;border:3px solid rgba(255,255,255,.12);border-top-color:var(--red);border-radius:50%;animation:sp .7s linear infinite;}
 @keyframes sp{to{transform:rotate(360deg);}}
-.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--navy);padding:16px;}
-.login-box{background:var(--card);border-radius:20px;padding:32px 28px;width:100%;max-width:380px;}
+/* Login: brand and the regions on the left, sign-in on the right (one column on phones) */
+.login-wrap{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);min-height:100vh;background:#fff;}
+.lg-hero{position:relative;overflow:hidden;color:#fff;padding:40px 48px;display:flex;flex-direction:column;
+  background:radial-gradient(640px 470px at 94% -8%,rgba(207,32,48,.95) 0%,rgba(207,32,48,.4) 40%,transparent 72%),radial-gradient(560px 360px at -10% 110%,rgba(214,96,52,.45) 0%,transparent 70%),#16161B;}
+.lg-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.lg-brand{display:flex;align-items:center;gap:12px;}
+.lg-mark{flex:none;width:42px;height:42px;border-radius:12px;background:linear-gradient(145deg,#E8414F,#B51A28);display:grid;place-items:center;box-shadow:0 8px 22px rgba(207,32,48,.45);}
+.lg-b1{font-weight:800;font-size:17px;letter-spacing:-.01em;}
+.lg-hero .brand-accent{background:linear-gradient(95deg,#FF8A93 0%,#FF5C67 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:#FF8A93;}
+.lg-b2{font-size:11.5px;color:rgba(255,255,255,.62);margin-top:2px;}
+.lg-logos{display:flex;gap:8px;}
+.lg-logo{background:#fff;border-radius:10px;padding:6px 10px;box-shadow:0 4px 14px rgba(0,0,0,.25);}
+.lg-logo img{display:block;max-height:34px;max-width:96px;object-fit:contain;}
+.lg-net{display:block;width:100%;max-width:580px;height:auto;margin:26px 0 10px;}
+.lg-copy{margin-top:auto;}
+.lg-copy h1{font-size:clamp(32px,3.6vw,52px);line-height:1.05;font-weight:800;letter-spacing:-.035em;margin:0 0 14px;}
+.lg-copy p{font-size:15px;line-height:1.6;color:rgba(255,255,255,.78);max-width:520px;margin:0;}
+.lg-panel{display:flex;align-items:center;justify-content:center;padding:40px 24px;background:#fff;}
+.lg-form{width:100%;max-width:420px;}
+.lg-form h2{font-size:30px;font-weight:800;letter-spacing:-.025em;margin:0 0 6px;color:var(--text);}
+.lg-sub{color:var(--muted);font-size:14px;margin:0 0 22px;}
+.lg-quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.lg-quick.one{grid-template-columns:1fr;}
+.lg-tile{display:flex;align-items:center;gap:11px;text-align:left;background:var(--surface);border:1.5px solid transparent;border-radius:14px;padding:12px;cursor:pointer;font-family:inherit;color:var(--text);transition:border-color .15s,background .15s;min-width:0;}
+.lg-tile:hover{background:#ECEDF1;}
+.lg-tile:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+.lg-tile[aria-pressed="true"]{border-color:var(--red);background:var(--red-soft);}
+.lg-tile b{display:block;font-size:13.5px;}
+.lg-tile small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.35;}
+.lg-av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:700;}
+.lg-av-ed{background:#FDE2D3;color:#9A3412;}
+.lg-av-office{background:#E6E1FB;color:#5B3FC4;}
+.lg-qpanel{margin-top:10px;background:var(--surface);border-radius:14px;padding:14px;}
+.lg-qbtns{display:flex;gap:8px;margin-top:10px;}
+.lg-or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12.5px;margin:22px 0 14px;}
+.lg-or::before,.lg-or::after{content:"";flex:1;height:1px;background:var(--border);}
+.lg-form .fg{margin-bottom:14px;}
+.lg-form label{font-size:12.5px;font-weight:600;color:var(--text);letter-spacing:0;text-transform:none;}
+.lg-form select,.lg-form input{background:var(--surface);border-color:transparent;border-radius:12px;padding:12px 14px;}
+.lg-form select:focus,.lg-form input:focus{border-color:var(--red);background:#fff;}
+.lg-form select:disabled{color:var(--muted);cursor:not-allowed;}
+.lg-seg{display:flex;background:#E9EAEE;border-radius:999px;padding:4px;gap:4px;}
+.lg-seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:10px 12px;font-family:inherit;font-size:13.5px;font-weight:600;color:#3F4350;cursor:pointer;}
+.lg-seg button[aria-pressed="true"]{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(17,24,39,.14);}
+.lg-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--red);color:#fff;border:0;border-radius:999px;padding:14px 18px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-top:6px;box-shadow:0 8px 20px rgba(207,32,48,.26);}
+.lg-btn::after{content:"\2192";font-size:16px;}
+.lg-btn:hover{background:var(--red-dark);}
+.lg-btn:disabled{opacity:.7;cursor:wait;}
+.lg-qbtns .lg-btn{margin-top:0;flex:1;padding:11px 14px;font-size:14px;}
+.lg-ghost{flex:none;background:#fff;border:1.5px solid var(--border);border-radius:999px;padding:10px 18px;font-family:inherit;font-size:14px;font-weight:600;color:var(--text);cursor:pointer;}
+.lg-form .err-msg{font-size:13px;font-weight:600;margin-top:8px;}
+.lg-form .pin-f::placeholder{font-size:14px;letter-spacing:0;color:#9CA3AF;}
+@media (max-width:900px){
+  .login-wrap{grid-template-columns:1fr;}
+  .lg-hero{padding:20px 16px 22px;}
+  .lg-net{display:none;}
+  .lg-copy{margin-top:16px;}
+  .lg-copy h1{font-size:22px;margin:0;}
+  .lg-copy p{display:none;}
+  .lg-panel{padding:24px 16px 40px;align-items:flex-start;}
+  .lg-form h2{font-size:24px;}
+}
+@media (max-width:440px){.lg-quick{grid-template-columns:1fr;}.lg-logo img{max-height:26px;max-width:72px;}}
 .brand{text-align:center;margin-bottom:24px;}
 .brand .b1{font-size:30px;font-weight:900;letter-spacing:-.5px;}.brand .b1 em{color:var(--red);font-style:normal;}
 .brand .b2{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-top:3px;}
@@ -280,9 +341,6 @@ input:focus,select:focus,textarea:focus,.ms-btn:focus{border-color:var(--red);bo
 .ch-card:hover{box-shadow:var(--sh-lg);}
 .role-tag{letter-spacing:.2px;}
 
-/* Login: premium ink backdrop + elevated card */
-.login-wrap{background:radial-gradient(1100px 480px at 50% -12%,#2c2d35 0%,var(--navy) 55%);}
-.login-box{box-shadow:0 24px 60px rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.05);}
 .brand .b1{letter-spacing:-.6px;}
 .brand .b3{background:var(--red-soft);}
 
@@ -303,31 +361,51 @@ input:focus,select:focus,textarea:focus,.ms-btn:focus{border-color:var(--red);bo
 </div>
 
 <div class="login-wrap hidden" id="loginScreen">
-  <div style="display:flex;flex-direction:column;align-items:center;gap:20px;width:100%;max-width:380px;">
-  <!-- Co-branding logos, centered above the sign-in card -->
-  <div style="display:flex;justify-content:center;align-items:center;gap:14px;flex-wrap:wrap;">
-    <div id="loginBNILogoWrap" style="background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 12px rgba(0,0,0,.15);"><img id="loginBNILogo" src="/vendor/bni-ahmedabad-logo.png" alt="BNI Ahmedabad" style="max-height:54px;max-width:140px;object-fit:contain;display:block;"></div>
-    <div id="loginSVLogoWrap" style="background:#fff;border-radius:12px;padding:10px 16px;box-shadow:0 2px 12px rgba(0,0,0,.15);"><img id="loginSVLogo" src="/vendor/sicilian-ventures-logo.png" alt="Sicilian Ventures" style="max-height:54px;max-width:140px;object-fit:contain;display:block;"></div>
-  </div>
-  <div class="login-box" style="margin:0;">
-    <div class="brand">
-      <div class="b1"><span class="brand-accent">Sicilian</span> Growth Tracker</div>
-      <div class="b2">Regional Leadership Dashboard</div>
+  <section class="lg-hero">
+    <div class="lg-top">
+      <div class="lg-brand">
+        <span class="lg-mark" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M7 16v-3"/><path d="M11 16v-6"/><path d="M15 16v-4"/><path d="M19 16V8"/><path d="M5 10l5-4 4 3 5-5"/></svg></span>
+        <div><div class="lg-b1"><span class="brand-accent">Sicilian</span> Growth Tracker</div><div class="lg-b2">Regional Leadership Dashboard</div></div>
+      </div>
+      <div class="lg-logos">
+        <div id="loginBNILogoWrap" class="lg-logo"><img id="loginBNILogo" src="/vendor/bni-ahmedabad-logo.png" alt="BNI Ahmedabad"></div>
+        <div id="loginSVLogoWrap" class="lg-logo"><img id="loginSVLogo" src="/vendor/sicilian-ventures-logo.png" alt="Sicilian Ventures"></div>
+      </div>
     </div>
-    <div class="fg"><label>Login As</label>
-      <select id="loginRole"><option value="">-- Select Role --</option></select>
+    <svg id="loginNet" class="lg-net" viewBox="0 0 560 340" role="img" aria-label="The regions and their chapters"></svg>
+    <div class="lg-copy">
+      <h1>Every chapter. Every week. One clear view.</h1>
+      <p id="loginTagline">Weekly scorecards, visitors, renewals and risk for every BNI chapter.</p>
     </div>
-    <div class="fg"><label>Your Name</label>
-      <select id="loginName" disabled><option value="">-- Select role first --</option></select>
+  </section>
+  <section class="lg-panel">
+    <div class="lg-form">
+      <h2>Welcome back</h2>
+      <p class="lg-sub">Sign in to the Regional Leadership Dashboard.</p>
+      <div class="lg-quick" id="loginQuick"></div>
+      <div class="lg-qpanel hidden" id="quickPanel">
+        <div class="fg hidden" id="quickWhoGroup"><label for="quickWho">Executive Director</label><select id="quickWho"></select></div>
+        <div class="fg" style="margin-bottom:0;"><label for="quickPin" id="quickLabel">Password</label>
+          <input class="pin-f" type="password" id="quickPin" maxlength="12" placeholder="Enter password" onkeydown="if(event.key==='Enter')quickLogin();if(event.key==='Escape')closeQuickLogin();"></div>
+        <div class="err-msg hidden" id="quickErr" role="alert">Invalid password. Try again.</div>
+        <div class="lg-qbtns"><button type="button" class="lg-ghost" onclick="closeQuickLogin()">Cancel</button><button type="button" class="lg-btn" id="quickBtn" onclick="quickLogin()">Sign in</button></div>
+      </div>
+      <div class="lg-or" id="loginOr"><span>or sign in by region</span></div>
+      <div class="fg" id="loginRegionGroup"><label>Region</label><div class="lg-seg" id="loginRegion" role="group" aria-label="Region"></div></div>
+      <div class="fg"><label for="loginRole">Login as</label>
+        <select id="loginRole" disabled><option value="">Select a region first</option></select>
+      </div>
+      <div class="fg"><label for="loginName">Your name</label>
+        <select id="loginName" disabled><option value="">Select your role first</option></select>
+      </div>
+      <div class="fg hidden" id="pinGroup">
+        <label for="loginPin">Password</label>
+        <input class="pin-f" type="password" id="loginPin" maxlength="12" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="err-msg hidden" id="loginErr" role="alert">Invalid password. Try again.</div>
+      <button type="button" class="lg-btn" id="loginBtn" onclick="doLogin()">Sign in</button>
     </div>
-    <div class="fg hidden" id="pinGroup">
-      <label>PIN</label>
-      <input class="pin-f" type="password" id="loginPin" maxlength="6" placeholder="****" onkeydown="if(event.key==='Enter')doLogin()">
-    </div>
-    <div class="err-msg hidden" id="loginErr">Incorrect PIN. Try again.</div>
-    <div class="mt3"><button class="btn btn-navy btn-block" id="loginBtn" onclick="doLogin()">Sign In</button></div>
-  </div>
-  </div>
+  </section>
 </div>
 
 <div id="app" class="hidden">
@@ -2197,7 +2275,7 @@ async function buildLoginDD(){
   // Dedicated unauthenticated endpoint returning names and roles only - no PINs,
   // no hashes, and none of the other member fields.
   const payload=await apiFetch('/auth/login-directory');
-  renderLoginMembers((payload&&payload.members)||[]);
+  renderLoginMembers((payload&&payload.members)||[],{regions:(payload&&payload.regions)||[]});
 }
 
 function isOfflinePreviewParam(){
@@ -2214,41 +2292,37 @@ const LOGIN_ROLE_GROUPS=[
   {key:'sa',label:'Support Ambassador',roles:['sa1','sa2']},
   {key:'viewer',label:'Viewer',roles:['viewer']}
 ];
-// Two-step login: pick a role, then pick a name within that role, then PIN.
+// The regions people sign in under ({id,label,chapters}, from the server) and the one
+// chosen on the login page ('*' while the server names no regions: everyone is listed).
+let LOGIN_REGIONS=[];
+let LOGIN_REGION='';
+const LOGIN_REGION_KEY='loginRegion';
+let LOGIN_OFFLINE=false;
+let QUICK_LOGIN='';
+const LOGIN_ERR_TEXT='Invalid password. Try again.';
+function byLoginName(a,b){return a.name.localeCompare(b.name);}
+function loginInitials(name){return String(name||'').trim().split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';}
+function loginRegionsPhrase(){return LOGIN_REGIONS.length===2?'both regions':LOGIN_REGIONS.length>2?'all regions':'';}
+function loginInRegion(m){return LOGIN_REGION==='*'||!m.areas||!m.areas.length||m.areas.indexOf(LOGIN_REGION)>=0;}
+
+// The login page: shortcut tiles for the Executive Director and the BNI Office (they run
+// every region), then region -> role -> name -> password for everyone else.
 function renderLoginMembers(rawMembers,opts){
+  opts=opts||{};
   const roleSel=document.getElementById('loginRole');
   const sel=document.getElementById('loginName');
   if(!roleSel||!sel)return;
+  LOGIN_OFFLINE=Boolean(opts.offline);
   LOGIN_MEMBERS=(rawMembers||[]).map(function(m){
     m=Object.assign({},m);
     m.name=(m.name||'').trim();
     m.role=(m.role||'').trim().toLowerCase();
     m.chapters=(m.chapters||[]).filter(function(ch){return(ch||'').trim();});
     m.chapter=(m.chapter||m.chapters[0]||'').trim();
+    m.areas=Array.isArray(m.areas)?m.areas:[];
     return m;
   }).filter(function(m){return m.name&&m.role;});
-
-  roleSel.innerHTML='<option value="">-- Select Role --</option>';
-  if(opts&&opts.offline){
-    const warn=document.createElement('option');warn.value='';warn.disabled=true;
-    warn.textContent='(Offline - sign-in unavailable until the server is reachable)';
-    roleSel.appendChild(warn);
-  }
-  LOGIN_ROLE_GROUPS.forEach(function(g){
-    var count=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0;}).length;
-    if(!count)return;
-    var o=document.createElement('option');o.value=g.key;o.textContent=g.label+' ('+count+')';
-    roleSel.appendChild(o);
-  });
-  // BNI Office / master full-access sign-in, offered as its own role choice.
-  if(!opts||!opts.offline){
-    var mo=document.createElement('option');mo.value='__master__';mo.textContent='BNI Office (Full Access)';
-    roleSel.appendChild(mo);
-  }
-
-  sel.innerHTML='<option value="">-- Select role first --</option>';
-  sel.disabled=true;
-  document.getElementById('pinGroup').classList.add('hidden');
+  LOGIN_REGIONS=(opts.regions||[]).filter(function(r){return r&&r.id;});
 
   roleSel.onchange=function(){
     populateLoginNames(roleSel.value);
@@ -2261,22 +2335,64 @@ function renderLoginMembers(rawMembers,opts){
     document.getElementById('loginErr').classList.add('hidden');
     if(v)setTimeout(function(){document.getElementById('loginPin').focus();},50);
   };
+
+  renderLoginQuick();
+  renderLoginNet();
+  // With one region (or none named) there is nothing to choose.
+  var group=document.getElementById('loginRegionGroup');
+  if(LOGIN_REGIONS.length<=1){
+    if(group)group.classList.add('hidden');
+    setLoginRegion(LOGIN_REGIONS.length?LOGIN_REGIONS[0].id:'*');
+  }else{
+    if(group)group.classList.remove('hidden');
+    var saved='';try{saved=localStorage.getItem(LOGIN_REGION_KEY)||'';}catch(e){}
+    setLoginRegion(LOGIN_REGIONS.some(function(r){return r.id===saved;})?saved:'');
+  }
 }
+
+function setLoginRegion(id){
+  if(id!=='*'&&!LOGIN_REGIONS.some(function(r){return r.id===id;}))id='';
+  LOGIN_REGION=id;
+  if(id&&id!=='*'){try{localStorage.setItem(LOGIN_REGION_KEY,id);}catch(e){}}
+  var seg=document.getElementById('loginRegion');
+  if(seg)seg.innerHTML=LOGIN_REGIONS.map(function(r){
+    return '<button type="button" data-region="'+esc(r.id)+'" aria-pressed="'+(r.id===id)+'" onclick="setLoginRegion(this.dataset.region)">'+esc(r.label)+'</button>';
+  }).join('');
+  const roleSel=document.getElementById('loginRole');
+  roleSel.innerHTML='';
+  if(!id){
+    roleSel.disabled=true;
+    roleSel.innerHTML='<option value="">Select a region first</option>';
+  }else{
+    roleSel.disabled=false;
+    roleSel.innerHTML='<option value="">Select your role</option>';
+    if(LOGIN_OFFLINE){
+      const warn=document.createElement('option');warn.value='';warn.disabled=true;
+      warn.textContent='(Offline - sign-in unavailable until the server is reachable)';
+      roleSel.appendChild(warn);
+    }
+    // The Executive Director signs in from the shortcut above, not from a region.
+    LOGIN_ROLE_GROUPS.forEach(function(g){
+      if(g.key==='ed')return;
+      var count=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0&&loginInRegion(m);}).length;
+      if(!count)return;
+      var o=document.createElement('option');o.value=g.key;o.textContent=g.label+' ('+count+')';
+      roleSel.appendChild(o);
+    });
+  }
+  populateLoginNames('');
+  document.getElementById('pinGroup').classList.add('hidden');
+  document.getElementById('loginErr').classList.add('hidden');
+}
+
 function populateLoginNames(roleKey){
   const sel=document.getElementById('loginName');
   if(!sel)return;
-  if(!roleKey){sel.disabled=true;sel.innerHTML='<option value="">-- Select role first --</option>';return;}
-  if(roleKey==='__master__'){
-    sel.disabled=false;
-    sel.innerHTML='<option value="">-- Select --</option><option value="__srdc__">BNI Office Account - Full Access</option>';
-    return;
-  }
-  const g=LOGIN_ROLE_GROUPS.find(function(x){return x.key===roleKey;});
-  if(!g){sel.disabled=true;sel.innerHTML='<option value="">-- Select --</option>';return;}
-  var list=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0;})
-    .sort(function(a,b){return a.name.localeCompare(b.name);});
+  const g=roleKey&&LOGIN_ROLE_GROUPS.find(function(x){return x.key===roleKey;});
+  if(!g){sel.disabled=true;sel.innerHTML='<option value="">Select your role first</option>';return;}
+  var list=LOGIN_MEMBERS.filter(function(m){return g.roles.indexOf(m.role)>=0&&loginInRegion(m);}).sort(byLoginName);
   sel.disabled=false;
-  sel.innerHTML='<option value="">-- Select Name ('+list.length+') --</option>';
+  sel.innerHTML='<option value="">Select your name ('+list.length+')</option>';
   list.forEach(function(m){
     var o=document.createElement('option');o.value=m.id;
     var chapters=(m.chapters&&m.chapters.length)?m.chapters:(m.chapter?[m.chapter]:[]);
@@ -2290,45 +2406,143 @@ function populateLoginNames(roleKey){
   });
 }
 
+// Shortcut tiles: the Executive Director (by name when there is one) and the BNI Office.
+function loginEds(){return LOGIN_MEMBERS.filter(function(m){return m.role==='ed';}).sort(byLoginName);}
+function renderLoginQuick(){
+  var el=document.getElementById('loginQuick');if(!el)return;
+  var eds=loginEds(),where=loginRegionsPhrase(),tiles=[];
+  if(eds.length)tiles.push({key:'ed',title:'Executive Director',initials:eds.length===1?loginInitials(eds[0].name):'ED',
+    sub:(eds.length===1?eds[0].name:eds.length+' accounts')+(where?' - '+where:'')});
+  if(!LOGIN_OFFLINE)tiles.push({key:'office',title:'BNI Office',initials:'BO',sub:'Full access'+(where?' - '+where:'')});
+  el.innerHTML=tiles.map(function(t){
+    return '<button type="button" class="lg-tile" data-q="'+t.key+'" aria-pressed="'+(QUICK_LOGIN===t.key)+'" onclick="openQuickLogin(this.dataset.q)">'
+      +'<span class="lg-av lg-av-'+t.key+'">'+esc(t.initials)+'</span><span><b>'+esc(t.title)+'</b><small>'+esc(t.sub)+'</small></span></button>';
+  }).join('');
+  el.classList.toggle('hidden',!tiles.length);
+  el.classList.toggle('one',tiles.length===1);
+  var or=document.getElementById('loginOr');if(or)or.classList.toggle('hidden',!tiles.length);
+}
+function openQuickLogin(key){
+  if(QUICK_LOGIN===key){closeQuickLogin();return;}
+  QUICK_LOGIN=key;
+  renderLoginQuick();
+  var eds=loginEds();
+  var who=document.getElementById('quickWho');
+  var many=key==='ed'&&eds.length>1;
+  document.getElementById('quickWhoGroup').classList.toggle('hidden',!many);
+  if(many)who.innerHTML=eds.map(function(m){return '<option value="'+esc(m.id)+'">'+esc(m.name)+'</option>';}).join('');
+  document.getElementById('quickLabel').textContent=key==='office'?'BNI Office password'
+    :'Password'+(eds.length===1?' - '+eds[0].name:'');
+  document.getElementById('quickPin').value='';
+  document.getElementById('quickErr').classList.add('hidden');
+  document.getElementById('loginErr').classList.add('hidden');
+  document.getElementById('quickPanel').classList.remove('hidden');
+  setTimeout(function(){document.getElementById('quickPin').focus();},50);
+}
+function closeQuickLogin(){
+  QUICK_LOGIN='';
+  var panel=document.getElementById('quickPanel');if(panel)panel.classList.add('hidden');
+  var pin=document.getElementById('quickPin');if(pin)pin.value='';
+  var err=document.getElementById('quickErr');if(err)err.classList.add('hidden');
+  renderLoginQuick();
+}
+async function quickLogin(){
+  var key=QUICK_LOGIN;if(!key)return;
+  var pin=document.getElementById('quickPin').value;
+  if(!pin){showQuickErr('Enter your password.');return;}
+  var eds=loginEds();
+  var id=key==='office'?'__srdc__':(eds.length>1?document.getElementById('quickWho').value:(eds[0]&&eds[0].id));
+  if(!id){showQuickErr();return;}
+  await signInAs(id,pin,{btn:document.getElementById('quickBtn'),fail:showQuickErr});
+}
+function showQuickErr(detail){
+  var el=document.getElementById('quickErr');
+  el.textContent=detail||LOGIN_ERR_TEXT;
+  el.classList.remove('hidden');
+  var pin=document.getElementById('quickPin');pin.value='';pin.focus();
+}
+
+// The regions and their chapters, drawn on the left of the login page.
+function renderLoginNet(){
+  var svg=document.getElementById('loginNet');
+  var tag=document.getElementById('loginTagline');
+  var regions=LOGIN_REGIONS;
+  if(tag&&regions.length){
+    var names=regions.map(function(r){return 'BNI '+r.label;});
+    tag.textContent='Weekly scorecards, visitors, renewals and risk for '+(names.length>1?names.slice(0,-1).join(', ')+' and '+names[names.length-1]:names[0])+'.';
+  }
+  if(!svg)return;
+  if(!regions.length){svg.innerHTML='';return;}
+  var hubs=regions.length===1?[[280,170]]:regions.map(function(r,i){var t=i/(regions.length-1);return[175+t*245,125+t*120];});
+  var h='';
+  for(var i=1;i<hubs.length;i++){
+    var a=hubs[i-1],b=hubs[i];
+    h+='<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="rgba(255,255,255,.28)" stroke-width="1"/>';
+    h+='<circle cx="'+((a[0]+b[0])/2)+'" cy="'+((a[1]+b[1])/2)+'" r="3.5" fill="#E5E7EB"/>';
+  }
+  regions.forEach(function(r,ri){
+    var c=hubs[ri],n=Math.max(1,Math.min(Number(r.chapters)||1,16));
+    var big=(Number(r.chapters)||0)>8,rMin=big?58:42,rMax=big?112:70;
+    for(var k=0;k<n;k++){
+      var ang=(k/n)*Math.PI*2+ri*0.7+((k*37)%11)/40;
+      var rad=rMin+(rMax-rMin)*(((k*0.618)%1));
+      var x=(c[0]+Math.cos(ang)*rad).toFixed(1),y=(c[1]+Math.sin(ang)*rad).toFixed(1);
+      h+='<line x1="'+c[0]+'" y1="'+c[1]+'" x2="'+x+'" y2="'+y+'" stroke="rgba(255,255,255,.22)" stroke-width="1"/>';
+      h+='<circle cx="'+x+'" cy="'+y+'" r="3.5" fill="#E5E7EB"/>';
+    }
+    h+='<circle cx="'+c[0]+'" cy="'+c[1]+'" r="14" fill="none" stroke="rgba(255,99,110,.45)" stroke-width="1.5"/>';
+    h+='<circle cx="'+c[0]+'" cy="'+c[1]+'" r="8" fill="#FF5C67"/>';
+    h+='<text x="'+(c[0]+20)+'" y="'+(c[1]+5)+'" fill="#fff" font-size="13" font-weight="700" font-family="inherit" paint-order="stroke" stroke="#16161B" stroke-width="4" stroke-linejoin="round">'+esc(r.label)+'</text>';
+  });
+  svg.innerHTML=h;
+}
+
 async function doLogin(){
   const nv=document.getElementById('loginName').value;
   const pin=document.getElementById('loginPin').value;
-  if(!nv||!pin){toast('Select name and enter PIN');return;}
+  if(!nv||!pin){toast('Select your name and enter your password');return;}
+  await signInAs(nv,pin,{btn:document.getElementById('loginBtn'),fail:showLoginErr});
+}
+// Signs in as one account (the BNI Office is '__srdc__'); `o.fail(detail)` shows the error.
+async function signInAs(memberId,pin,o){
   let m=null;
   if(S.localPreview){
     // Offline demo data only; no real records are reachable in this mode.
-    if(pin!==PREVIEW_MEMBER_PIN){showLoginErr();return;}
-    m=SEED_LOGIN_MEMBERS.find(function(x){return x.id===nv;});
-    if(!m){showLoginErr();return;}
+    if(pin!==PREVIEW_MEMBER_PIN){o.fail();return;}
+    m=SEED_LOGIN_MEMBERS.find(function(x){return x.id===memberId;});
+    if(!m){o.fail();return;}
     m=Object.assign({},m);
   }else{
     // The server is the only authority on credentials. There is no local fallback:
     // if it cannot verify the PIN, sign-in fails.
-    const btn=document.getElementById('loginBtn');
+    const btn=o.btn,label=btn?btn.textContent:'';
     if(btn){btn.disabled=true;btn.textContent='Signing in...';}
     try{
-      const payload=await apiFetch('/auth/login',{method:'POST',body:{memberId:nv,pin:pin}});
-      if(!payload||!payload.user||!payload.token){showLoginErr();return;}
+      const payload=await apiFetch('/auth/login',{method:'POST',body:{memberId:memberId,pin:pin}});
+      if(!payload||!payload.user||!payload.token){o.fail();return;}
       setAuthToken(payload.token);
       m=payload.user;
     }catch(e){
       console.warn('Login failed:',e);
-      showLoginErr(e&&e.message&&!/incorrect pin/i.test(e.message)?e.message:'');
+      // A wrong password comes back as 401 (which the request layer words as an expired
+      // session): say "Invalid password". Other answers (too many tries, server down) as sent.
+      o.fail(e&&e.status!==401&&e.message&&!/incorrect pin/i.test(e.message)?e.message:'');
       return;
     }finally{
-      if(btn){btn.disabled=false;btn.textContent='Sign In';}
+      if(btn){btn.disabled=false;btn.textContent=label;}
     }
   }
-  S.user={id:nv,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',chapterReportsTo:m.chapterReportsTo||{},seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
+  S.user={id:memberId,name:m.name,role:m.role,chapter:m.chapter,chapters:m.chapters||[m.chapter],reportsTo:m.reportsTo||'',chapterReportsTo:m.chapterReportsTo||{},seniorDirectorId:m.seniorDirectorId||'',areaDirectorId:m.areaDirectorId||''};
   ensureUserChapterScope();
   document.getElementById('loginPin').value='';
   document.getElementById('loginErr').classList.add('hidden');
+  closeQuickLogin();
   startApp();
 }
 function showLoginErr(detail){
   const el=document.getElementById('loginErr');
   el.classList.remove('hidden');
-  if(detail)el.textContent=detail;
+  el.textContent=detail||LOGIN_ERR_TEXT;
   document.getElementById('loginPin').value='';
   document.getElementById('loginPin').focus();
 }
@@ -2343,6 +2557,7 @@ function logout(){
   S.user=null;S.dcView=null;
   hide('app');show('loginScreen');
   document.getElementById('loginPin').value='';
+  closeQuickLogin();
   document.getElementById('pinGroup').classList.add('hidden');
   var lr=document.getElementById('loginRole');if(lr)lr.value='';
   var ln=document.getElementById('loginName');if(ln){ln.value='';ln.disabled=true;ln.innerHTML='<option value="">-- Select role first --</option>';}

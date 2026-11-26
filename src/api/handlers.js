@@ -35,6 +35,8 @@ import {
   writeActivity
 } from "../services/firestore.js";
 import {
+  AREAS,
+  DEFAULT_AREA,
   areaOf,
   assertAdmin,
   assertCanWrite,
@@ -467,10 +469,25 @@ async function login(body, ip) {
 // the narrowest possible projection, never credentials.
 // Unauthenticated, so it must stay cheap: served from the shared snapshot cache rather
 // than re-reading every member document on each visit to the login page.
+// The login page asks for the region first, so each person carries the regions they work
+// in (`areas`; empty for the Executive Director and Viewers, who work in every region),
+// and the regions in use come with their number of chapters.
 async function loginDirectory() {
-  const members = await cachedSnapshotCollection("members");
+  const [members, chapters] = await Promise.all([cachedSnapshotCollection("members"), cachedSnapshotCollection("chapters")]);
+  const chapterArea = new Map(chapters.filter(c => c.name).map(c => [c.name, areaOf(c)]));
+  const areasOf = member => {
+    if (member.role === "ad") return [areaOf(member)];
+    if (member.role === "ed" || member.role === "viewer") return [];
+    const names = [...(member.chapters || []), member.chapter].filter(Boolean);
+    if (!names.length) return [];
+    const areas = [...new Set(names.map(name => chapterArea.get(name)).filter(Boolean))];
+    return areas.length ? areas : [DEFAULT_AREA];
+  };
+  const chapterCount = {};
+  chapters.forEach(c => { if (c.name) chapterCount[areaOf(c)] = (chapterCount[areaOf(c)] || 0) + 1; });
   return ok({
-    members: members.map(member => ({ id: member.id, ...loginDirectoryMember(member) }))
+    members: members.map(member => ({ id: member.id, ...loginDirectoryMember(member), areas: areasOf(member) })),
+    regions: AREAS.filter(a => chapterCount[a.id]).map(a => ({ id: a.id, label: a.label, chapters: chapterCount[a.id] }))
   });
 }
 
